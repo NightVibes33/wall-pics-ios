@@ -180,6 +180,7 @@ Future<void> main() async {
       };
 
       const skipFirebaseInit = bool.fromEnvironment('SKIP_FIREBASE_INIT');
+      const sideloadBuild = Env.sideloadBuild;
       final SentryConfig sentryConfig = _resolveSentryConfig();
 
       // Kick off Firebase in background — does NOT block runApp.
@@ -276,7 +277,11 @@ Future<void> main() async {
       // main() so in practice it completes during or before Persistence init.
       await FirebaseInit.readyFuture;
 
-      await PurchasesService.instance.configureEarly();
+      if (!sideloadBuild) {
+        await PurchasesService.instance.configureEarly();
+      } else {
+        logger.w('Skipping purchases initialization for sideload build.');
+      }
 
       runApp(
         // SentryWidget(
@@ -327,7 +332,11 @@ Future<void> _initFirebase() async {
 }
 
 Future<void> _deferredStartup({required bool firebaseInitialized}) async {
-  await MobileAds.instance.initialize();
+  if (!Env.sideloadBuild) {
+    await MobileAds.instance.initialize();
+  } else {
+    logger.w('Skipping MobileAds initialization for sideload build.');
+  }
   await _configureAnalyticsRuntime(firebaseInitialized: firebaseInitialized);
 }
 

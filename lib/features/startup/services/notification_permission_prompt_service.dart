@@ -3,6 +3,7 @@ import 'package:Prism/core/analytics/events/events.dart';
 import 'package:Prism/core/di/injection.dart';
 import 'package:Prism/core/persistence/data_sources/settings_local_data_source.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
+import 'package:Prism/env/env.dart';
 import 'package:Prism/logger/logger.dart';
 import 'package:Prism/notifications/topic_subscription.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -18,6 +19,7 @@ class NotificationPermissionPromptService {
   SettingsLocalDataSource get _settings => getIt<SettingsLocalDataSource>();
 
   Future<void> maybePromptAfterValueAction(BuildContext context, {required String sourceTag}) async {
+    if (Env.sideloadBuild) return;
     if (!_settings.isOpen || !context.mounted) {
       return;
     }

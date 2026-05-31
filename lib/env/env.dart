@@ -42,4 +42,7 @@ class Env {
     'LOCAL_PERSISTENCE_BACKEND',
     defaultValue: 'shared_prefs',
   );
+
+  // Distribution
+  static const bool sideloadBuild = bool.fromEnvironment('SIDELOAD_BUILD');
 }

@@ -67,6 +67,7 @@ class PurchasesService {
   /// is ready before any code—including RevenueCat UI internals—accesses it.
   /// No-op if already configured or if API key is empty.
   Future<void> configureEarly() async {
+    if (Env.sideloadBuild) return;
     if (_configured) return;
     final String apiKey = _resolveApiKey();
     if (apiKey.isEmpty) return;
@@ -85,6 +86,7 @@ class PurchasesService {
 
   /// Ensures RevenueCat is configured and logged in as the given user.
   Future<void> ensureConfigured(String userId) async {
+    if (Env.sideloadBuild) return;
     final targetUserId = userId.trim();
     if (!_configured) {
       if (kDebugMode) {
@@ -223,6 +225,12 @@ class PurchasesService {
   /// Checks canonical + grandfathered paid entitlements; updates local user state in local persistence.
   /// Returns the new premium value. Only updates when we successfully fetch CustomerInfo.
   Future<bool> checkAndPersistPremium({SubscriptionConversionContext? conversionContext}) async {
+    if (Env.sideloadBuild) {
+      app_state.prismUser.premium = false;
+      app_state.prismUser.subscriptionTier = SubscriptionTier.free.value;
+      app_state.persistPrismUser();
+      return false;
+    }
     await ensureConfigured(app_state.prismUser.id);
 
     try {
@@ -265,13 +273,22 @@ class PurchasesService {
   }
 
   Future<CustomerInfo> purchase(Package package) async {
+    if (Env.sideloadBuild) {
+      throw PlatformException(code: 'sideload_build', message: 'Purchases are disabled in sideload builds.');
+    }
     final result = await Purchases.purchase(PurchaseParams.package(package));
     return result.customerInfo;
   }
 
-  Future<CustomerInfo> restore() => Purchases.restorePurchases();
+  Future<CustomerInfo> restore() {
+    if (Env.sideloadBuild) {
+      throw PlatformException(code: 'sideload_build', message: 'Purchases are disabled in sideload builds.');
+    }
+    return Purchases.restorePurchases();
+  }
 
   Future<Offerings?> getOfferings() async {
+    if (Env.sideloadBuild) return null;
     try {
       return await Purchases.getOfferings();
     } on PlatformException catch (e) {
@@ -281,6 +298,7 @@ class PurchasesService {
   }
 
   Future<Offering?> getCurrentOfferingForPlacement(String placementIdentifier) async {
+    if (Env.sideloadBuild) return null;
     final String placement = placementIdentifier.trim();
     if (placement.isEmpty) {
       return null;

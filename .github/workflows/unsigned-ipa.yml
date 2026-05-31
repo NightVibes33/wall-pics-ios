@@ -81,7 +81,10 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           podfile = Path('Podfile')
-          podfile.write_text(podfile.read_text().replace(":tag => '12.9.0'", ":tag => '12.12.0'"))
+          contents = podfile.read_text()
+          contents = contents.replace("use_frameworks!", "use_frameworks! :linkage => :static")
+          contents = contents.replace(":tag => '12.9.0'", ":tag => '12.12.0'")
+          podfile.write_text(contents)
           PY
           rm -f Podfile.lock
           pod install --repo-update
@@ -94,6 +97,7 @@ jobs:
           if [ -n "$WALL_PICS_CATALOG_BASE_URL" ]; then
             DART_DEFINES="$DART_DEFINES --dart-define=WALL_PICS_CATALOG_BASE_URL=$WALL_PICS_CATALOG_BASE_URL"
           fi
+          DART_DEFINES="$DART_DEFINES --dart-define=SKIP_FIREBASE_INIT=true --dart-define=SIDELOAD_BUILD=true"
           flutter build ios --release --no-codesign $DART_DEFINES
 
       - name: Package unsigned IPA
@@ -110,6 +114,9 @@ jobs:
             echo "Unexpected display name: $DISPLAY_NAME"
             exit 1
           fi
+
+          echo "Embedded framework count:"
+          find "$APP_PATH/Frameworks" -maxdepth 1 -name '*.framework' -print 2>/dev/null | wc -l
 
           rm -rf build/unsigned build/WallPics-unsigned.ipa
           mkdir -p build/unsigned/Payload

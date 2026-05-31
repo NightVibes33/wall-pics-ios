@@ -5,6 +5,7 @@ import 'package:Prism/analytics/analytics_service.dart';
 import 'package:Prism/core/analytics/events/events.dart';
 import 'package:Prism/core/error/failure.dart';
 import 'package:Prism/core/utils/result.dart';
+import 'package:Prism/env/env.dart';
 import 'package:Prism/features/ads/domain/entities/ads_entity.dart';
 import 'package:Prism/features/ads/domain/repositories/ads_repository.dart';
 import 'package:Prism/logger/logger.dart';
@@ -26,6 +27,10 @@ class AdsRepositoryImpl implements AdsRepository {
 
   @override
   Future<Result<AdsEntity>> createRewardedAd() async {
+    if (Env.sideloadBuild) {
+      _state = AdsEntity.empty;
+      return Result.success(_state);
+    }
     if (_state.loadingAd || _state.adLoaded) {
       return Result.success(_state);
     }
@@ -89,6 +94,10 @@ class AdsRepositoryImpl implements AdsRepository {
 
   @override
   Future<Result<AdsEntity>> showRewardedAd() async {
+    if (Env.sideloadBuild) {
+      _state = _state.copyWith(adLoaded: false, adFailed: true);
+      return Result.error(const ValidationFailure('Ads are disabled in sideload builds'));
+    }
     _state = _state.copyWith(adLoaded: false, adFailed: false);
     final ad = _rewardedAd;
     if (ad == null) {
