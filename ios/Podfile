@@ -1,0 +1,87 @@
+platform :ios, '15.0'
+
+# CocoaPods analytics sends network stats synchronously affecting flutter build latency.
+ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+
+project 'Runner', {
+  'Debug' => :debug,
+  'Profile' => :release,
+  'Release' => :release,
+}
+
+def flutter_root
+  generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
+  unless File.exist?(generated_xcode_build_settings_path)
+    raise "#{generated_xcode_build_settings_path} must exist. If you're running pod install manually, make sure flutter pub get is executed first"
+  end
+
+  File.foreach(generated_xcode_build_settings_path) do |line|
+    matches = line.match(/FLUTTER_ROOT\=(.*)/)
+    return matches[1].strip if matches
+  end
+  raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings_path}. Try deleting Generated.xcconfig, then run flutter pub get"
+end
+
+require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_root)
+
+flutter_ios_podfile_setup
+
+target 'Runner' do
+  use_frameworks!
+
+  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+  # Use precompiled Firestore binaries to reduce iOS build times.
+  # Keep this tag aligned with the Firebase iOS SDK version resolved by firebase_core.
+  pod 'FirebaseFirestore',
+      :git => 'https://github.com/invertase/firestore-ios-sdk-frameworks.git',
+      :tag => '12.9.0'
+end
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+    target.build_configurations.each do |config|
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+    end
+  end
+
+  # Patch FunctionsContext.swift: replace `async let` with sequential `await` to fix
+  # swift_task_dealloc / asyncLet_finish_after_task_completion crash on iOS 26.
+  functions_context = File.join(
+    installer.sandbox.pod_dir('FirebaseFunctions'),
+    'FirebaseFunctions/Sources/Internal/FunctionsContext.swift'
+  )
+  if File.exist?(functions_context)
+    content = File.read(functions_context)
+    original = "    async let authToken = auth?.getToken(forcingRefresh: false)\n" \
+               "    async let appCheckToken = getAppCheckToken(options: options)\n" \
+               "    async let limitedUseAppCheckToken = getLimitedUseAppCheckToken(options: options)\n" \
+               "\n" \
+               "    // Only `authToken` is throwing, but the formatter script removes the `try`\n" \
+               "    // from `try authToken` and puts it in front of the initializer call.\n" \
+               "    return try await FunctionsContext(\n" \
+               "      authToken: authToken,\n" \
+               "      fcmToken: messaging?.fcmToken,\n" \
+               "      appCheckToken: appCheckToken,\n" \
+               "      limitedUseAppCheckToken: limitedUseAppCheckToken\n" \
+               "    )"
+    patched = "    // iOS 26 workaround: sequential await instead of async let to avoid\n" \
+              "    // swift_task_dealloc / asyncLet_finish_after_task_completion crash.\n" \
+              "    let authToken = try await auth?.getToken(forcingRefresh: false)\n" \
+              "    let appCheckToken = await getAppCheckToken(options: options)\n" \
+              "    let limitedUseAppCheckToken = await getLimitedUseAppCheckToken(options: options)\n" \
+              "    return FunctionsContext(\n" \
+              "      authToken: authToken,\n" \
+              "      fcmToken: messaging?.fcmToken,\n" \
+              "      appCheckToken: appCheckToken,\n" \
+              "      limitedUseAppCheckToken: limitedUseAppCheckToken\n" \
+              "    )"
+    if content.include?(original)
+      File.chmod(0644, functions_context)
+      File.write(functions_context, content.sub(original, patched))
+      puts 'Patched FunctionsContext.swift for iOS 26 async let crash'
+    else
+      puts 'WARNING: FunctionsContext.swift patch not applied - content mismatch'
+    end
+  end
+end
