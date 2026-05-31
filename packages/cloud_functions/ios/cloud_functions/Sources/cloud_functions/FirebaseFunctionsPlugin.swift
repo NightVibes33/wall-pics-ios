@@ -19,6 +19,7 @@ extension FlutterError: Error {}
 
 let kFLTFirebaseFunctionsChannelName = "plugins.flutter.io/firebase_functions"
 
+@objc(FirebaseFunctionsPlugin)
 public class FirebaseFunctionsPlugin: NSObject, FLTFirebasePluginProtocol, FlutterPlugin,
   CloudFunctionsHostApi {
   func call(arguments: [String: Any?], completion: @escaping (Result<Any?, any Error>) -> Void) {

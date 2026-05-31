@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 import sys
+import json
 from pathlib import Path
 
 FIREBASE_MODULES = {
@@ -26,6 +27,8 @@ FIREBASE_CLASS_MARKERS = (
     "CloudFirestore",
     "CloudFunctions",
     "FirebaseAnalytics",
+    "FirebaseFirestore",
+    "FirebaseFunctions",
     "FirebaseAuth",
     "FLTFirebase",
     "FirebaseMessaging",
@@ -52,12 +55,47 @@ def should_drop_line(line: str) -> bool:
     return any(marker in line for marker in FIREBASE_CLASS_MARKERS)
 
 
+def strip_plugin_dependencies(project_root: Path) -> int:
+    dependencies_path = project_root / ".flutter-plugins-dependencies"
+    if not dependencies_path.exists():
+        print(f"plugin dependencies not found: {dependencies_path}")
+        return 0
+
+    payload = json.loads(dependencies_path.read_text(encoding="utf-8"))
+    plugins = payload.get("plugins")
+    if not isinstance(plugins, dict):
+        return 0
+
+    ios_plugins = plugins.get("ios")
+    if not isinstance(ios_plugins, list):
+        return 0
+
+    retained = []
+    removed = 0
+    for plugin in ios_plugins:
+        if isinstance(plugin, dict) and plugin.get("name") in FIREBASE_MODULES:
+            removed += 1
+            continue
+        retained.append(plugin)
+
+    if removed:
+        plugins["ios"] = retained
+        dependencies_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+    return removed
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         print("usage: strip_ios_firebase_registrant.py <GeneratedPluginRegistrant.m>", file=sys.stderr)
         return 2
 
     path = Path(sys.argv[1])
+    project_root = path.resolve().parents[2]
+    dependency_removed = strip_plugin_dependencies(project_root)
+    if dependency_removed:
+        print(f"Removed {dependency_removed} Firebase iOS plugins from {project_root / '.flutter-plugins-dependencies'}")
+
     if not path.exists():
         print(f"registrant not found: {path}", file=sys.stderr)
         return 1
