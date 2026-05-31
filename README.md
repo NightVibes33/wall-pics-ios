@@ -1,6 +1,6 @@
-# <div align="center"><img src="android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png" alt="icon" width=30> Prism</div>
+# <div align="center"><img src="android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png" alt="icon" width=30> Wall Pics</div>
 
-<div align="center">Prism is a beautiful open-source wallpapers and home screen setups app for Android and iOS. It is built with Dart on top of Google's Flutter Framework.
+<div align="center">Wall Pics is a direct iOS build of the open-source Prism wallpapers and home screen setups app. It is built from Prism's Dart/Flutter source tree, not a native-inspired rewrite.
 
 
 ![flutter](https://img.shields.io/badge/Flutter-Framework-green?logo=flutter)
@@ -17,7 +17,7 @@
 </div>
 <a href='https://play.google.com/store/apps/details?id=com.hash.prism&pcampaignid=pcampaignidMKT-Other-global-all-co-prtnr-py-PartBadge-Mar2515-1'><img alt='Prism UI Mockup' src='demo/Prism_Mockup.png'/></a>
 
-<b>Prism</b> brings you exclusive wallpapers & setups straight to your Android device.
+<b>Wall Pics</b> brings you exclusive wallpapers & setups straight to your iPhone.
 With unlimited downloads and favourites, you can be sure to never miss the best wallpapers & setups.
 
 Our main goal is to create an unimaginable self-sustainable experience where people can share their walls and setups with the world, and everyone can like, download, and apply them.
@@ -75,8 +75,8 @@ Our main goal is to create an unimaginable self-sustainable experience where peo
 - Multiple style presets to guide the generation
 - Share or set generated wallpapers instantly
 
-<b>Introducing Prism Premium -</b>
-Now get access to more premium and exclusive stuff by buying Prism Premium.
+<b>Introducing Wall Pics Premium -</b>
+Now get access to more premium and exclusive stuff by buying Wall Pics Premium.
 
 - Support development of the app
 - Be a part of exclusive giveaways
@@ -95,6 +95,10 @@ Also, we regularly organize giveaways, share exclusive setups and wallpapers on 
 
 You can also report bugs, upload your setups/walls on our telegram channel
 [https://t.me/PrismWallpapers](https://t.me/PrismWallpapers)
+
+## Wall Pics direct-build note
+
+This repository keeps Prism's Flutter app as the source of truth. Wall Pics changes are limited to iOS branding, bundle/signing configuration, release workflows, and App Store metadata unless a feature is explicitly being ported.
 
 ## List of Contents
 

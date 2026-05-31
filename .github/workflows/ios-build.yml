@@ -1,0 +1,98 @@
+name: iOS Build
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-26-intel
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode 26
+        run: |
+          if ls /Applications/Xcode_26*.app >/dev/null 2>&1; then
+            latest_xcode="$(ls -d /Applications/Xcode_26*.app | sort -V | tail -n 1)"
+            sudo xcode-select -s "$latest_xcode/Contents/Developer"
+          fi
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Read Flutter version
+        id: flutter_version
+        run: |
+          FLUTTER_VERSION="$(python3 -c 'import json; print(json.load(open(".fvmrc"))["flutter"])')"
+          echo "version=$FLUTTER_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ steps.flutter_version.outputs.version }}
+          channel: stable
+          cache: true
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Install CocoaPods
+        run: sudo gem install cocoapods --no-document
+
+      - name: Prepare Firebase stubs for unsigned CI
+        run: |
+          cat > lib/firebase_options.dart <<'DART'
+          import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
+
+          class DefaultFirebaseOptions {
+            static FirebaseOptions get currentPlatform => const FirebaseOptions(
+              apiKey: 'stub',
+              appId: '1:000000000000:ios:0000000000000000000000',
+              messagingSenderId: '000000000000',
+              projectId: 'wall-pics-stub',
+              iosBundleId: 'com.nightvibes.prism',
+            );
+          }
+          DART
+          cat > ios/Runner/GoogleService-Info.plist <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>GOOGLE_APP_ID</key>
+            <string>1:000000000000:ios:0000000000000000000000</string>
+            <key>CLIENT_ID</key>
+            <string>stub.apps.googleusercontent.com</string>
+            <key>REVERSED_CLIENT_ID</key>
+            <string>com.googleusercontent.apps.stub</string>
+            <key>API_KEY</key>
+            <string>stub</string>
+            <key>GCM_SENDER_ID</key>
+            <string>000000000000</string>
+            <key>PROJECT_ID</key>
+            <string>wall-pics-stub</string>
+            <key>BUNDLE_ID</key>
+            <string>com.nightvibes.prism</string>
+          </dict>
+          </plist>
+          PLIST
+
+      - name: Build iOS app without codesigning
+        run: |
+          DART_DEFINES="$(./tool/dart_defines_from_env.sh)"
+          flutter build ios --release --no-codesign $DART_DEFINES --dart-define=SKIP_FIREBASE_INIT=true
+
+      - name: Verify Wall Pics app bundle
+        run: |
+          APP_PATH="build/ios/iphoneos/Runner.app"
+          test -d "$APP_PATH"
+          DISPLAY_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP_PATH/Info.plist")"
+          BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
+          if [ "$DISPLAY_NAME" != "Wall Pics" ]; then
+            echo "Unexpected display name: $DISPLAY_NAME"
+            exit 1
+          fi
+          if [ "$BUNDLE_ID" != "com.nightvibes.prism" ]; then
+            echo "Unexpected bundle id: $BUNDLE_ID"
+            exit 1
+          fi
