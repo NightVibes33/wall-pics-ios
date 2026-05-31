@@ -45,7 +45,7 @@ class PurchaseConstants {
       'Replacement%20Thumbnails%2Fprism%20mock.png?alt=media&token=a86d1386-dbb5-493f-8399-ff0160b1a86a';
 
   /// Privacy Policy URL for paywall footer.
-  static const String privacyPolicyUrl = 'https://github.com/Hash-Studios/Prism/blob/master/PRIVACY.md';
+  static const String privacyPolicyUrl = 'https://github.com/NightVibes33/wall-pics-ios/blob/main/PRIVACY.md';
 
   /// Terms of Use / EULA URL for paywall footer (Apple standard EULA).
   static const String termsOfUseUrl = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';

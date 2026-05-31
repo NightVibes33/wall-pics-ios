@@ -59,7 +59,7 @@ class _AboutScreenState extends State<AboutScreen> {
 
   Future<List<Contributor>> printStream() async {
     final github = GitHub();
-    final Stream<Contributor> contri = github.repositories.listContributors(RepositorySlug("Hash-Studios", "Prism"));
+    final Stream<Contributor> contri = github.repositories.listContributors(RepositorySlug("NightVibes33", "wall-pics-ios"));
     final List<Contributor> listContri = [];
     await for (final value in contri) {
       listContri.add(value);
@@ -90,7 +90,7 @@ class _AboutScreenState extends State<AboutScreen> {
             Padding(padding: const EdgeInsets.all(8.0), child: Image.asset("assets/images/prism.webp", height: 70)),
             const SizedBox(height: 10),
             Text(
-              "Prism Wallpapers",
+              "Wall Pics",
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium!.copyWith(color: Theme.of(context).colorScheme.secondary),
             ),
@@ -106,7 +106,7 @@ class _AboutScreenState extends State<AboutScreen> {
             ),
             const SizedBox(height: 10),
             Text(
-              "A feature-rich wallpaper and setup manager for Android.",
+              "A phone-first wallpaper and Live Photos app for iOS.",
               textAlign: TextAlign.center,
               style: Theme.of(
                 context,
@@ -116,19 +116,7 @@ class _AboutScreenState extends State<AboutScreen> {
             const Wrap(
               alignment: WrapAlignment.center,
               children: [
-                ActionButton(icon: JamIcons.github, text: "GITHUB", link: "https://www.github.com/Hash-Studios/Prism"),
-                ActionButton(
-                  icon: JamIcons.star_full,
-                  text: "RATE",
-                  link: "https://play.google.com/store/apps/details?id=com.hash.prism",
-                ),
-                ActionButton(icon: JamIcons.twitter, text: "TWITTER", link: "https://twitter.com/PrismWallpapers"),
-                ActionButton(
-                  icon: JamIcons.instagram,
-                  text: "INSTAGRAM",
-                  link: "https://www.instagram.com/prismwallpapers",
-                ),
-                ActionButton(icon: JamIcons.paper_plane, text: "TELEGRAM", link: "http://t.me/PrismWallpapers"),
+                ActionButton(icon: JamIcons.github, text: "GITHUB", link: "https://www.github.com/NightVibes33/wall-pics-ios"),
               ],
             ),
             const SizedBox(height: 10),

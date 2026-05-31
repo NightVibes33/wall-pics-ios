@@ -65,7 +65,7 @@ class PrismList extends StatelessWidget {
         ListTile(
           leading: const Icon(JamIcons.share_alt),
           title: Text(
-            "Share Prism!",
+            "Share Wall Pics!",
             style: TextStyle(
               color: Theme.of(context).colorScheme.secondary,
               fontWeight: FontWeight.w500,
@@ -92,11 +92,11 @@ class PrismList extends StatelessWidget {
               fontFamily: "Proxima Nova",
             ),
           ),
-          subtitle: const Text("Read Prism's Privacy Policy.", style: TextStyle(fontSize: 12)),
+          subtitle: const Text("Read Wall Pics' Privacy Policy.", style: TextStyle(fontSize: 12)),
           onTap: () async {
             _trackAction(AnalyticsActionValue.actionChipTapped, sourceContext: 'profile_prism_list_privacy');
             final bool launched = await launchUrl(
-              Uri.parse("https://github.com/Hash-Studios/Prism/tree/master/PRIVACY.md"),
+              Uri.parse("https://github.com/NightVibes33/wall-pics-ios/blob/main/PRIVACY.md"),
             );
             _trackExternalLink(
               LinkDestinationValue.github,
@@ -246,8 +246,8 @@ class PrismList extends StatelessWidget {
               final MailOptions mailOptions = MailOptions(
                 body:
                     '----x-x-x----<br>Device info -<br><br>Android version: Android $release<br>SDK Number: SDK $sdkInt<br>Device Manufacturer: $manufacturer<br>Device Model: $model<br>----x-x-x----<br><br>Enter the bug/issue below -<br><br>',
-                subject: '[BUG REPORT::PRISM] - $encryptedZipKey',
-                recipients: ['hash.studios.inc@gmail.com'],
+                subject: '[BUG REPORT::WALL PICS] - $encryptedZipKey',
+                recipients: ['nightvibes33@users.noreply.github.com'],
                 isHTML: true,
                 attachments: [encryptedZipPath],
                 appSchema: 'com.google.android.gm',
@@ -257,8 +257,8 @@ class PrismList extends StatelessWidget {
                 final MailOptions mailOptions = MailOptions(
                   body:
                       '----x-x-x----<br>Device info -<br><br>Android version: Android $release<br>SDK Number: SDK $sdkInt<br>Device Manufacturer: $manufacturer<br>Device Model: $model<br>----x-x-x----<br><br>Enter the bug/issue below -<br><br>',
-                  subject: '[BUG REPORT::PRISM]',
-                  recipients: ['hash.studios.inc@gmail.com'],
+                  subject: '[BUG REPORT::WALL PICS]',
+                  recipients: ['nightvibes33@users.noreply.github.com'],
                   isHTML: true,
                   attachments: [zipPath],
                 );

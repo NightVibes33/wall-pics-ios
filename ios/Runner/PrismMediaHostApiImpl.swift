@@ -23,7 +23,7 @@ final class PrismMediaHostApiImpl: PrismMediaHostApi {
       do {
         let data = try self.resolveImageData(link: request.link, isLocalFile: false)
         let ext = URL(string: request.link)?.pathExtension.lowercased() ?? ""
-        let resolvedExt = ["jpg", "jpeg", "png", "webp", "gif"].contains(ext) ? ext : "jpg"
+        let resolvedExt = ["jpg", "jpeg", "png", "webp", "gif", "mp4", "mov"].contains(ext) ? ext : "jpg"
         let dir = try self.downloadsDirectory()
         let filename = "\(request.filenameWithoutExtension).\(resolvedExt)"
         let dest = dir.appendingPathComponent(filename)
@@ -76,7 +76,7 @@ final class PrismMediaHostApiImpl: PrismMediaHostApi {
 
   private func downloadsDirectory() throws -> URL {
     let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-    let dir = docs.appendingPathComponent("PrismDownloads", isDirectory: true)
+    let dir = docs.appendingPathComponent("WallPicsDownloads", isDirectory: true)
     if !FileManager.default.fileExists(atPath: dir.path) {
       try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     }

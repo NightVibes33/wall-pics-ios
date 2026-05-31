@@ -9,7 +9,9 @@ import 'package:Prism/core/wallpaper/wallpaper_variants.dart';
 import 'package:Prism/features/prism_feed/data/dtos/prism_wall_doc_dto.dart';
 import 'package:Prism/features/prism_feed/data/mappers/prism_wall_doc_mapper.dart';
 import 'package:Prism/features/prism_feed/domain/repositories/prism_wallpaper_repository.dart';
+import 'package:Prism/features/category_feed/domain/entities/feed_item_entity.dart';
 import 'package:Prism/features/user_blocks/domain/repositories/user_block_repository.dart';
+import 'package:Prism/features/wallpics_catalog/data/wallpics_catalog_data_source.dart';
 import 'package:Prism/logger/logger.dart';
 import 'package:injectable/injectable.dart';
 
@@ -37,6 +39,21 @@ class PrismWallpaperRepositoryImpl implements PrismWallpaperRepository {
     }
 
     logger.d('[PrismWallpaperRepository] fetchFeed', fields: <String, Object?>{'refresh': refresh});
+
+    try {
+      final wallpicsPage = await WallpicsCatalogDataSource.instance.fetchHomePage(refresh: refresh);
+      final localWalls = wallpicsPage.items
+          .whereType<PrismFeedItem>()
+          .map((item) => item.wallpaper)
+          .toList(growable: false);
+      if (localWalls.isNotEmpty) {
+        _hasMore = wallpicsPage.hasMore;
+        logger.i('[PrismWallpaperRepository] fetchFeed wallpics catalog success', fields: <String, Object?>{'count': localWalls.length});
+        return Result.success(localWalls);
+      }
+    } catch (error, stackTrace) {
+      logger.w('[PrismWallpaperRepository] Wallpics catalog unavailable; falling back to Firestore', error: error, stackTrace: stackTrace);
+    }
 
     try {
       final Set<String> blocked = await _blockedCreatorEmails(waitForInitialLoad: true);
@@ -151,6 +168,15 @@ class PrismWallpaperRepositoryImpl implements PrismWallpaperRepository {
 
   @override
   Future<Result<PrismWallpaper?>> fetchById(String id) async {
+    try {
+      final local = await WallpicsCatalogDataSource.instance.fetchById(id);
+      if (local != null) {
+        return Result.success(local);
+      }
+    } catch (error, stackTrace) {
+      logger.w('[PrismWallpaperRepository] Wallpics fetchById fallback to Firestore', error: error, stackTrace: stackTrace);
+    }
+
     try {
       final List<_PrismRow> results = await _firestoreClient.query<_PrismRow>(
         FirestoreQuerySpec(

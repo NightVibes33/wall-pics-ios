@@ -9,8 +9,8 @@ const String currentAppVersion = '3.0.8';
 const String currentAppVersionCode = '332';
 const String defaultObsoleteAppVersion = '2.6.0';
 
-const String defaultBannerText = 'Join our Telegram';
-const String defaultBannerUrl = 'https://t.me/PrismWallpapers';
+const String defaultBannerText = 'Wall Pics on GitHub';
+const String defaultBannerUrl = 'https://github.com/NightVibes33/wall-pics-ios';
 const bool defaultBannerTextOn = true;
 
 const bool defaultAiEnabled = true;

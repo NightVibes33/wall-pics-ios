@@ -1,0 +1,52 @@
+name: Deploy Catalog Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - assets/catalog/**
+      - .github/workflows/deploy-catalog-pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: catalog-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare catalog site
+        run: |
+          mkdir -p pages/catalog
+          cp assets/catalog/wallpics_regular.json pages/catalog/wallpics_regular.json
+          cp assets/catalog/wallpics_live.json pages/catalog/wallpics_live.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          regular = json.loads(Path('pages/catalog/wallpics_regular.json').read_text())
+          live = json.loads(Path('pages/catalog/wallpics_live.json').read_text())
+          Path('pages/index.json').write_text(json.dumps({
+              'generated_at': regular.get('generated_at'),
+              'regular': 'catalog/wallpics_regular.json',
+              'live': 'catalog/wallpics_live.json',
+              'regular_count': len(regular.get('wallpapers', [])),
+              'live_count': len(live.get('wallpapers', [])),
+          }, indent=2) + '\n')
+          PY
+          touch pages/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages
+      - id: deployment
+        uses: actions/deploy-pages@v4

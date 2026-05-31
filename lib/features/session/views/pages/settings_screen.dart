@@ -765,8 +765,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         '----x-x-x----<br>Device info -<br><br>Android version: Android $release<br>SDK Number: SDK $sdkInt<br>Device Manufacturer: $manufacturer<br>Device Model: $model<br>----x-x-x----<br><br>Enter the bug/issue below -<br><br>';
     final MailOptions mailOptions = MailOptions(
       body: deviceBody,
-      subject: '[BUG REPORT::PRISM] - $encryptedZipKey',
-      recipients: ['hash.studios.inc@gmail.com'],
+      subject: '[BUG REPORT::WALL PICS] - $encryptedZipKey',
+      recipients: ['nightvibes33@users.noreply.github.com'],
       isHTML: true,
       attachments: [encryptedZipPath],
       appSchema: 'com.google.android.gm',
@@ -775,8 +775,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (response != MailerResponse.android) {
       final MailOptions fallback = MailOptions(
         body: deviceBody,
-        subject: '[BUG REPORT::PRISM]',
-        recipients: ['hash.studios.inc@gmail.com'],
+        subject: '[BUG REPORT::WALL PICS]',
+        recipients: ['nightvibes33@users.noreply.github.com'],
         isHTML: true,
         attachments: [zipPath],
       );

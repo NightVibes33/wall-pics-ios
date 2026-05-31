@@ -8,6 +8,8 @@ class CategoryEntity {
     required this.searchType,
     required this.image,
     required this.image2,
+    this.wallpicsSlug,
+    this.wallpicsContentType,
   });
 
   final String name;
@@ -15,4 +17,6 @@ class CategoryEntity {
   final CategorySearchType searchType;
   final String image;
   final String image2;
+  final String? wallpicsSlug;
+  final String? wallpicsContentType;
 }

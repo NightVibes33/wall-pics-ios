@@ -87,9 +87,14 @@ jobs:
           pod install --repo-update
 
       - name: Build unsigned device app
+        env:
+          WALL_PICS_CATALOG_BASE_URL: ${{ secrets.WALL_PICS_CATALOG_BASE_URL }}
         run: |
           DART_DEFINES="$(./tool/dart_defines_from_env.sh)"
-          flutter build ios --release --no-codesign $DART_DEFINES --dart-define=SKIP_FIREBASE_INIT=true
+          if [ -n "$WALL_PICS_CATALOG_BASE_URL" ]; then
+            DART_DEFINES="$DART_DEFINES --dart-define=WALL_PICS_CATALOG_BASE_URL=$WALL_PICS_CATALOG_BASE_URL"
+          fi
+          flutter build ios --release --no-codesign $DART_DEFINES
 
       - name: Package unsigned IPA
         run: |

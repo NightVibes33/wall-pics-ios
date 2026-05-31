@@ -333,7 +333,7 @@ Future<void> _deferredStartup({required bool firebaseInitialized}) async {
 
 SentryConfig _resolveSentryConfig() {
   const String fallbackEnvironment = kReleaseMode ? 'production' : 'staging';
-  final String fallbackRelease = 'Prism@${app_state.currentAppVersion}+${app_state.currentAppVersionCode}';
+  final String fallbackRelease = 'WallPics@${app_state.currentAppVersion}+${app_state.currentAppVersionCode}';
   return SentryConfig.fromEnvironment(
     fallbackEnvironment: fallbackEnvironment,
     fallbackRelease: fallbackRelease,
@@ -685,7 +685,7 @@ class _MyAppState extends State<_MyApp> with WidgetsBindingObserver {
       await localNotification.createNotificationChannel(
         "recommendations",
         "Recommendations",
-        "Get notifications for recommendations from Prism.",
+        "Get notifications for recommendations from Wall Pics.",
         true,
       );
       await localNotification.createNotificationChannel(

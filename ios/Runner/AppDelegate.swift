@@ -12,9 +12,11 @@ import UIKit
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    let messenger = engineBridge.applicationRegistrar.messenger()
     PrismMediaHostApiSetup.setUp(
-      binaryMessenger: engineBridge.applicationRegistrar.messenger(),
+      binaryMessenger: messenger,
       api: PrismMediaHostApiImpl()
     )
+    WallpicsLivePhotoSaver.register(binaryMessenger: messenger)
   }
 }

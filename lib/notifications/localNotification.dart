@@ -46,7 +46,7 @@ class LocalNotification {
     const AndroidNotificationChannelGroup androidNotificationChannelGroup = AndroidNotificationChannelGroup(
       channelGroupId,
       'Notifications',
-      description: 'All Prism Notifications',
+      description: 'All Wall Pics Notifications',
     );
     await androidImplementation.createNotificationChannelGroup(androidNotificationChannelGroup);
 
@@ -133,7 +133,7 @@ class LocalNotification {
       title: (activeNotifications.length + 1) == 1
           ? '1 wall downloaded.'
           : '${int.parse(activeNotifications[0].title![0]) + 1} walls downloaded.',
-      body: "Tap to open Prism.",
+      body: "Tap to open Wall Pics.",
       notificationDetails: platformChannelSpecifics,
       payload: "downloaded",
     );

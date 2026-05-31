@@ -17,6 +17,7 @@
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		A11A00012F00000100A1A1A1 /* PrismMediaApi.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11A00032F00000100A1A1A1 /* PrismMediaApi.swift */; };
 		A11A00022F00000100A1A1A1 /* PrismMediaHostApiImpl.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11A00042F00000100A1A1A1 /* PrismMediaHostApiImpl.swift */; };
+		A11A00062F00000100A1A1A1 /* WallpicsLivePhotoSaver.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11A00072F00000100A1A1A1 /* WallpicsLivePhotoSaver.swift */; };
 		AB12CD352F00FEED00A1B2C3 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = AB12CD342F00FEED00A1B2C3 /* PrivacyInfo.xcprivacy */; };
 		BDEF4D482F75E279000D5834 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = BDEF4D472F75E279000D5834 /* AppIcon.icon */; };
 		C15845A222C3C334C3EA4BB9 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 5B930EBC7C844BB5EBE88886 /* GoogleService-Info.plist */; };
@@ -68,6 +69,7 @@
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A11A00032F00000100A1A1A1 /* PrismMediaApi.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrismMediaApi.swift; sourceTree = "<group>"; };
 		A11A00042F00000100A1A1A1 /* PrismMediaHostApiImpl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrismMediaHostApiImpl.swift; sourceTree = "<group>"; };
+		A11A00072F00000100A1A1A1 /* WallpicsLivePhotoSaver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WallpicsLivePhotoSaver.swift; sourceTree = "<group>"; };
 		AA15469276B281169B70FCEB /* Pods-Runner.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.debug.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"; sourceTree = "<group>"; };
 		AB12CD342F00FEED00A1B2C3 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		BDEF4D472F75E279000D5834 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
@@ -150,6 +152,7 @@
 				1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */,
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
 				A11A00042F00000100A1A1A1 /* PrismMediaHostApiImpl.swift */,
+				A11A00072F00000100A1A1A1 /* WallpicsLivePhotoSaver.swift */,
 				7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */,
 				A11A00052F00000100A1A1A1 /* Pigeon */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
@@ -386,6 +389,7 @@
 			files = (
 				A11A00012F00000100A1A1A1 /* PrismMediaApi.swift in Sources */,
 				A11A00022F00000100A1A1A1 /* PrismMediaHostApiImpl.swift in Sources */,
+				A11A00062F00000100A1A1A1 /* WallpicsLivePhotoSaver.swift in Sources */,
 				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
 				7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */,

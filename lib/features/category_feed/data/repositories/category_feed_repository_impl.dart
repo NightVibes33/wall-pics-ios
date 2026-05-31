@@ -12,6 +12,7 @@ import 'package:Prism/features/category_feed/domain/entities/feed_item_entity.da
 import 'package:Prism/features/category_feed/domain/repositories/category_feed_repository.dart';
 import 'package:Prism/features/pexels_feed/domain/repositories/pexels_wallpaper_repository.dart';
 import 'package:Prism/features/prism_feed/domain/repositories/prism_wallpaper_repository.dart';
+import 'package:Prism/features/wallpics_catalog/data/wallpics_catalog_data_source.dart';
 import 'package:Prism/features/wallhaven_feed/domain/repositories/wallhaven_wallpaper_repository.dart';
 import 'package:Prism/logger/logger.dart';
 import 'package:injectable/injectable.dart';
@@ -44,6 +45,8 @@ class CategoryFeedRepositoryImpl implements CategoryFeedRepository {
             searchType: def.searchType,
             image: def.imageUrl,
             image2: def.secondaryImageUrl,
+            wallpicsSlug: def.wallpicsSlug,
+            wallpicsContentType: def.wallpicsContentType,
           ),
         )
         .toList(growable: false);
@@ -69,6 +72,16 @@ class CategoryFeedRepositoryImpl implements CategoryFeedRepository {
       late final bool hasMore;
       switch (category.source) {
         case WallpaperSource.prism:
+          final wallpicsPage = await WallpicsCatalogDataSource.instance.fetchCategoryFeed(
+            category: category,
+            refresh: refresh,
+          );
+          if (wallpicsPage != null) {
+            items = wallpicsPage.items;
+            hasMore = wallpicsPage.hasMore;
+            break;
+          }
+
           final result = await _prismRepository.fetchFeed(refresh: refresh);
           if (result.isFailure || result.data == null) {
             return await _cachedOrFailure(
@@ -227,6 +240,13 @@ class CategoryFeedRepositoryImpl implements CategoryFeedRepository {
 
   String _scopeFor(CategoryEntity category) {
     final normalized = category.name.trim().toLowerCase().replaceAll(RegExp('[^a-z0-9]+'), '_');
+    final wallpicsPart = [category.wallpicsContentType, category.wallpicsSlug]
+        .where((part) => part != null && part.trim().isNotEmpty)
+        .map((part) => part!.trim().toLowerCase().replaceAll(RegExp('[^a-z0-9]+'), '_'))
+        .join('.');
+    if (wallpicsPart.isNotEmpty) {
+      return '${category.source.wireValue}.${category.searchType.name}.$wallpicsPart.$normalized';
+    }
     return '${category.source.wireValue}.${category.searchType.name}.$normalized';
   }
 }

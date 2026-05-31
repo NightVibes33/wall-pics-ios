@@ -278,6 +278,29 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     );
   }
 
+  bool _isWallpicsLivePhoto(WallpaperDetailEntity entity) {
+    return entity.when(
+      prism: (wallpaper) => wallpaper.aiMetadata?['wallpicsContentType'] == 'live_wallpaper',
+      wallhaven: (_) => false,
+      pexels: (_) => false,
+    );
+  }
+
+  String? _wallpicsLiveStillUrl(WallpaperDetailEntity entity) {
+    return entity.when(
+      prism: (wallpaper) {
+        final metadata = wallpaper.aiMetadata;
+        final staticStill = metadata?['wallpicsStaticThumbnailUrl']?.toString().trim() ?? '';
+        if (staticStill.isNotEmpty) return staticStill;
+        final preview = metadata?['wallpicsPreviewUrl']?.toString().trim() ?? '';
+        if (preview.isNotEmpty) return preview;
+        return wallpaper.thumbnailUrl.trim().isEmpty ? null : wallpaper.thumbnailUrl.trim();
+      },
+      wallhaven: (_) => null,
+      pexels: (_) => null,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return MultiBlocListener(
@@ -1057,12 +1080,19 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
 
   Widget _buildActionButtons(BuildContext context, WallpaperDetailLoaded state) {
     final entity = state.entity;
-    final url = state.screenshotTaken && state.imageFile != null ? state.imageFile!.path : entity.fullUrl;
+    final isLivePhoto = _isWallpicsLivePhoto(entity);
+    final liveStillUrl = isLivePhoto ? _wallpicsLiveStillUrl(entity) : null;
+    final url = isLivePhoto ? entity.fullUrl : (state.screenshotTaken && state.imageFile != null ? state.imageFile!.path : entity.fullUrl);
     final List<Widget> actions = <Widget>[
       _SheetActionTapScale(
-        child: DownloadButton(colorChanged: state.colorChanged, link: url, sourceContext: _getSourceContext(state)),
+        child: DownloadButton(
+          colorChanged: state.colorChanged,
+          link: url,
+          sourceContext: _getSourceContext(state),
+          livePhotoStillUrl: liveStillUrl,
+        ),
       ),
-      if (!hideSetWallpaperUi)
+      if (!hideSetWallpaperUi && !isLivePhoto)
         _SheetActionTapScale(
           child: SetWallpaperButton(
             colorChanged: state.colorChanged,
@@ -1074,7 +1104,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
       _SheetActionTapScale(
         child: ShareButton(id: entity.id, source: entity.source, url: entity.fullUrl, thumbUrl: entity.thumbnailUrl),
       ),
-      _SheetActionTapScale(child: EditButton(url: entity.fullUrl)),
+      if (!isLivePhoto) _SheetActionTapScale(child: EditButton(url: entity.fullUrl)),
     ];
     final String? reportWallDocId = switch (entity) {
       PrismDetailEntity(:final wallpaper) => wallpaper.firestoreDocumentId,
@@ -1364,7 +1394,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
   }
 
   String sourceDisplayName(WallpaperSource source) => switch (source) {
-    WallpaperSource.prism => 'Prism',
+    WallpaperSource.prism => 'Wall Pics',
     WallpaperSource.wallhaven => 'Wallhaven',
     WallpaperSource.pexels => 'Pexels',
     WallpaperSource.downloaded => 'Downloaded',

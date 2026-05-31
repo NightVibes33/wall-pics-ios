@@ -9,6 +9,8 @@ class CategoryDefinition {
     required this.searchType,
     required this.imageUrl,
     required this.secondaryImageUrl,
+    this.wallpicsSlug,
+    this.wallpicsContentType,
   });
 
   final String name;
@@ -16,4 +18,6 @@ class CategoryDefinition {
   final CategorySearchType searchType;
   final String imageUrl;
   final String secondaryImageUrl;
+  final String? wallpicsSlug;
+  final String? wallpicsContentType;
 }

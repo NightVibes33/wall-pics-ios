@@ -7,6 +7,7 @@ import 'package:Prism/core/coins/coin_policy.dart';
 import 'package:Prism/core/coins/coins_service.dart';
 import 'package:Prism/core/platform/pigeon/prism_media_api.g.dart';
 import 'package:Prism/core/platform/wallpaper_capability.dart';
+import 'package:Prism/core/platform/wallpics_live_photo_saver.dart';
 import 'package:Prism/core/purchases/paywall_orchestrator.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:Prism/core/utils/status.dart';
@@ -29,6 +30,7 @@ class DownloadButton extends StatefulWidget {
     this.isPremiumContent = false,
     this.contentId,
     this.sourceContext,
+    this.livePhotoStillUrl,
     super.key,
   });
 
@@ -37,6 +39,7 @@ class DownloadButton extends StatefulWidget {
   final bool isPremiumContent;
   final String? contentId;
   final String? sourceContext;
+  final String? livePhotoStillUrl;
 
   @override
   State<DownloadButton> createState() => _DownloadButtonState();
@@ -481,6 +484,18 @@ class _DownloadButtonState extends State<DownloadButton> {
     }
   }
 
+  bool _isLivePhotoVideo(String link) {
+    final path = Uri.tryParse(link)?.path.toLowerCase() ?? link.toLowerCase();
+    return path.endsWith('.mp4') || path.endsWith('.mov');
+  }
+
+  String _filenameBaseFromUrl(String link) {
+    final uri = Uri.tryParse(link);
+    final rawName = uri != null && uri.pathSegments.isNotEmpty ? uri.pathSegments.last : link.split('/').last;
+    final withoutQuery = rawName.split('?').first;
+    return withoutQuery.replaceFirst(RegExp(r'\.[A-Za-z0-9]+$'), '');
+  }
+
   Future<bool> _performDownload() async {
     final String link = widget.link?.trim() ?? '';
     if (link.isEmpty) {
@@ -493,8 +508,19 @@ class _DownloadButtonState extends State<DownloadButton> {
     }
 
     try {
+      var savedLivePhoto = false;
       logger.d(link);
-      if (link.contains('com.hash.prism')) {
+      if (_isLivePhotoVideo(link) && (widget.livePhotoStillUrl?.trim().isNotEmpty ?? false)) {
+        final message = await WallpicsLivePhotoSaver.save(
+          videoUrl: link,
+          stillUrl: widget.livePhotoStillUrl!.trim(),
+        ).timeout(const Duration(seconds: 45));
+        if (message != null) {
+          toasts.error(message);
+          return false;
+        }
+        savedLivePhoto = true;
+      } else if (link.contains('com.hash.prism')) {
         final SaveMediaRequest request = SaveMediaRequest(link: link, isLocalFile: true, kind: SaveMediaKind.wallpaper);
         final OperationResult result = await PrismMediaHostApi()
             .saveMedia(request)
@@ -506,7 +532,7 @@ class _DownloadButtonState extends State<DownloadButton> {
       } else {
         final DownloadRequest request = DownloadRequest(
           link: link,
-          filenameWithoutExtension: link.split('/').last.replaceAll('.jpg', '').replaceAll('.png', ''),
+          filenameWithoutExtension: _filenameBaseFromUrl(link),
         );
         final OperationResult result = await PrismMediaHostApi()
             .enqueueDownload(request)
@@ -530,7 +556,9 @@ class _DownloadButtonState extends State<DownloadButton> {
           sourceTag: 'notifications.permission_after_download',
         );
       }
-      toasts.codeSend(hideSetWallpaperUi ? 'Saved to Photos.' : 'Wall downloaded in Pictures/Prism!');
+      toasts.codeSend(
+        savedLivePhoto ? 'Live Photo saved to Photos.' : (hideSetWallpaperUi ? 'Saved to Photos.' : 'Wall downloaded in Pictures/Wall Pics!'),
+      );
       return true;
     } on PlatformException catch (e) {
       if (e.code == 'channel-error') {
