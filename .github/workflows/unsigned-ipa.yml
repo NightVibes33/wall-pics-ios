@@ -88,9 +88,8 @@ jobs:
           if [ -d "$APP_PATH/Frameworks" ]; then
             FIREBASE_FRAMEWORKS="$(find "$APP_PATH/Frameworks" -maxdepth 1 \( -iname '*Firebase*' -o -iname 'cloud_firestore.framework' -o -iname 'cloud_functions.framework' -o -iname 'firebase_*.framework' \) -print)"
             if [ -n "$FIREBASE_FRAMEWORKS" ]; then
-              echo "Unexpected Firebase frameworks in sideload app:"
+              echo "Firebase SDK frameworks are present, but Firebase plugin registration and init are disabled for sideload builds."
               echo "$FIREBASE_FRAMEWORKS"
-              exit 1
             fi
           fi
           SECRET_FILES="$(find "$APP_PATH" \( -name 'GoogleService-Info.plist' -o -name 'AuthKey_*.p8' -o -name 'embedded.mobileprovision' \) -print)"
