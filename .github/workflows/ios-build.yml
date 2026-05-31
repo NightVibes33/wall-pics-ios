@@ -81,7 +81,8 @@ jobs:
       - name: Refresh iOS pod lock
         run: |
           cd ios
-          pod update Firebase/Functions --repo-update
+          rm -f Podfile.lock
+          pod install --repo-update
 
       - name: Build iOS app without codesigning
         run: |
