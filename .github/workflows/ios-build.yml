@@ -36,6 +36,9 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
+      - name: Remove Firebase iOS plugin registration
+        run: python3 tool/strip_ios_firebase_registrant.py ios/Runner/GeneratedPluginRegistrant.m
+
       - name: Install CocoaPods
         run: sudo gem install cocoapods --no-document
 
@@ -46,7 +49,7 @@ jobs:
 
           class DefaultFirebaseOptions {
             static FirebaseOptions get currentPlatform => const FirebaseOptions(
-              apiKey: 'stub',
+              apiKey: 'AIzaSyDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD',
               appId: '1:000000000000:ios:0000000000000000000000',
               messagingSenderId: '000000000000',
               projectId: 'wall-pics-stub',
@@ -66,7 +69,7 @@ jobs:
             <key>REVERSED_CLIENT_ID</key>
             <string>com.googleusercontent.apps.stub</string>
             <key>API_KEY</key>
-            <string>stub</string>
+            <string>AIzaSyDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD</string>
             <key>GCM_SENDER_ID</key>
             <string>000000000000</string>
             <key>PROJECT_ID</key>
@@ -97,7 +100,8 @@ jobs:
           if [ -n "$WALL_PICS_CATALOG_BASE_URL" ]; then
             DART_DEFINES="$DART_DEFINES --dart-define=WALL_PICS_CATALOG_BASE_URL=$WALL_PICS_CATALOG_BASE_URL"
           fi
-          flutter build ios --release --no-codesign $DART_DEFINES
+          DART_DEFINES="$DART_DEFINES --dart-define=SKIP_FIREBASE_INIT=true --dart-define=SIDELOAD_BUILD=true"
+          flutter build ios --release --no-codesign --no-pub $DART_DEFINES
 
       - name: Verify Wall Pics app bundle
         run: |
