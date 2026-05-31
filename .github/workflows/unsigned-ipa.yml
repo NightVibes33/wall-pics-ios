@@ -81,10 +81,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           podfile = Path('Podfile')
-          contents = podfile.read_text()
-          contents = contents.replace("use_frameworks!", "use_frameworks! :linkage => :static")
-          contents = contents.replace(":tag => '12.9.0'", ":tag => '12.12.0'")
-          podfile.write_text(contents)
+          podfile.write_text(podfile.read_text().replace(":tag => '12.9.0'", ":tag => '12.12.0'"))
           PY
           rm -f Podfile.lock
           pod install --repo-update
@@ -115,8 +112,20 @@ jobs:
             exit 1
           fi
 
+          if [ -d "$APP_PATH/Frameworks" ]; then
+            while IFS= read -r -d '' binary; do
+              codesign --force --sign - --timestamp=none "$binary"
+            done < <(find "$APP_PATH/Frameworks" -type f -name '*.dylib' -print0)
+            while IFS= read -r -d '' framework; do
+              codesign --force --sign - --timestamp=none "$framework"
+            done < <(find "$APP_PATH/Frameworks" -maxdepth 1 -type d -name '*.framework' -print0)
+          fi
+          codesign --force --sign - --timestamp=none "$APP_PATH"
+
           echo "Embedded framework count:"
           find "$APP_PATH/Frameworks" -maxdepth 1 -name '*.framework' -print 2>/dev/null | wc -l
+          echo "Framework signature count:"
+          find "$APP_PATH/Frameworks" -maxdepth 2 -name '_CodeSignature' -print 2>/dev/null | wc -l
 
           rm -rf build/unsigned build/WallPics-unsigned.ipa
           mkdir -p build/unsigned/Payload
