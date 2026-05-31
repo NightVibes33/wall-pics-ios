@@ -77,6 +77,12 @@ jobs:
           </plist>
           PLIST
 
+
+      - name: Refresh iOS pod lock
+        run: |
+          cd ios
+          pod update Firebase/Functions --repo-update
+
       - name: Build iOS app without codesigning
         run: |
           DART_DEFINES="$(./tool/dart_defines_from_env.sh)"

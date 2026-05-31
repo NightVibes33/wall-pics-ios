@@ -59,6 +59,12 @@ jobs:
       - name: Install CocoaPods
         run: sudo gem install cocoapods --no-document
 
+
+      - name: Refresh iOS pod lock
+        run: |
+          cd ios
+          pod update Firebase/Functions --repo-update
+
       - name: Build Flutter iOS artifacts without codesigning
         run: |
           DART_DEFINES="$(./tool/dart_defines_from_env.sh)"
