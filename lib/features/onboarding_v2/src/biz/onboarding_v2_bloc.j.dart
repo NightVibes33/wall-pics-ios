@@ -32,9 +32,9 @@ part 'onboarding_v2_state.dart';
 @injectable
 class OnboardingV2Bloc extends Bloc<OnboardingV2Event, OnboardingV2State> {
   OnboardingV2Bloc(
-    this._fetchStarterPackUseCase,
+    FetchStarterPackUseCase _fetchStarterPackUseCase,
     this._saveInterestsUseCase,
-    this._followStarterPackUseCase,
+    FollowStarterPackUseCase _followStarterPackUseCase,
     this._completeOnboardingUseCase,
     this._firstWallpaperService,
     this._categoryFeedRepository,
@@ -57,9 +57,7 @@ class OnboardingV2Bloc extends Bloc<OnboardingV2Event, OnboardingV2State> {
     on<_AiGenerationStepContinued>(_onAiGenerationStepContinued);
   }
 
-  final FetchStarterPackUseCase _fetchStarterPackUseCase;
   final SaveInterestsUseCase _saveInterestsUseCase;
-  final FollowStarterPackUseCase _followStarterPackUseCase;
   final CompleteOnboardingV2UseCase _completeOnboardingUseCase;
   final FirstWallpaperService _firstWallpaperService;
   final CategoryFeedRepository _categoryFeedRepository;
@@ -92,31 +90,8 @@ class OnboardingV2Bloc extends Bloc<OnboardingV2Event, OnboardingV2State> {
       );
     }
 
-    final starterPackResult = await _fetchStarterPackUseCase(const FetchStarterPackParams());
-    final List<OnboardingCreatorVm> creatorVms = starterPackResult.fold(
-      onSuccess: (entities) {
-        final sorted = [...entities]..sort((a, b) => a.rank.compareTo(b.rank));
-        final autoSelectedEmails = sorted.take(OnboardingV2Config.minFollows).map((e) => e.email).toSet();
-        return sorted
-            .map(
-              (e) => OnboardingCreatorVm(
-                userId: e.userId,
-                email: e.email,
-                name: e.name,
-                photoUrl: e.photoUrl,
-                previewUrls: e.previewUrls,
-                rank: e.rank,
-                isSelected: autoSelectedEmails.contains(e.email),
-                bio: e.bio,
-                followerCount: e.followerCount,
-              ),
-            )
-            .toList();
-      },
-      onFailure: (_) => <OnboardingCreatorVm>[],
-    );
-
-    final autoSelectedEmails = creatorVms.where((c) => c.isSelected).map((c) => c.email).toList(growable: false);
+    const List<OnboardingCreatorVm> creatorVms = <OnboardingCreatorVm>[];
+    const List<String> autoSelectedEmails = <String>[];
 
     final wallpaperVm = await _firstWallpaperService.recommendForOnboarding(<String>[]);
 
@@ -153,7 +128,7 @@ class OnboardingV2Bloc extends Bloc<OnboardingV2Event, OnboardingV2State> {
     final isPremium = app_state.prismUser.premium;
 
     if (skipInterests && skipStarterPack) {
-      // All steps already done — set skip flags then go to paywall (or complete if premium)
+      // All active onboarding steps are already done; go to paywall or finish.
       emit(state.copyWith(isAuthLoading: false, skipInterests: true, skipStarterPack: true, navRequest: null));
       if (isPremium) {
         await _finishOnboarding(emit, didPurchase: true);
@@ -164,9 +139,10 @@ class OnboardingV2Bloc extends Bloc<OnboardingV2Event, OnboardingV2State> {
       emit(
         state.copyWith(
           isAuthLoading: false,
-          step: OnboardingV2Step.starterPack,
+          step: OnboardingV2Step.aiGenerate,
           skipInterests: true,
-          skipStarterPack: false,
+          skipStarterPack: true,
+          aiData: _pickRandomAiPrompt(const <String>[]),
           navRequest: null,
         ),
       );
@@ -176,7 +152,7 @@ class OnboardingV2Bloc extends Bloc<OnboardingV2Event, OnboardingV2State> {
           isAuthLoading: false,
           step: OnboardingV2Step.interests,
           skipInterests: false,
-          skipStarterPack: skipStarterPack,
+          skipStarterPack: true,
           navRequest: null,
         ),
       );
@@ -210,12 +186,14 @@ class OnboardingV2Bloc extends Bloc<OnboardingV2Event, OnboardingV2State> {
     }
 
     final refreshedWallpaper = await _firstWallpaperService.recommendForOnboarding(selectedInterests);
+    final aiData = _pickRandomAiPrompt(selectedInterests);
 
-    final nextStep = state.skipStarterPack ? OnboardingV2Step.aiGenerate : OnboardingV2Step.starterPack;
     emit(
       state.copyWith(
         actionStatus: ActionStatus.success,
-        step: nextStep,
+        step: OnboardingV2Step.aiGenerate,
+        skipStarterPack: true,
+        aiData: aiData,
         wallpaperData: OnboardingWallpaperData(
           wallpaper: refreshedWallpaper ?? state.wallpaperData.wallpaper,
           status: FirstWallpaperStatus.idle,
@@ -243,50 +221,16 @@ class OnboardingV2Bloc extends Bloc<OnboardingV2Event, OnboardingV2State> {
   }
 
   Future<void> _onStarterPackConfirmed(_StarterPackConfirmed event, Emitter<OnboardingV2State> emit) async {
-    logger.d(
-      'starterPackConfirmed — canContinue=${state.starterPackData.canContinue} isClosed=$isClosed',
-      tag: 'OnboardingV2Bloc',
+    final aiData = _pickRandomAiPrompt(state.interestsData.selected);
+    emit(
+      state.copyWith(
+        actionStatus: ActionStatus.success,
+        step: OnboardingV2Step.aiGenerate,
+        skipStarterPack: true,
+        aiData: aiData,
+        navRequest: null,
+      ),
     );
-    if (!state.starterPackData.canContinue) {
-      logger.d('canContinue=false, aborting', tag: 'OnboardingV2Bloc');
-      return;
-    }
-    emit(state.copyWith(actionStatus: ActionStatus.inProgress, failure: null, navRequest: null));
-    logger.d('emitted inProgress', tag: 'OnboardingV2Bloc');
-
-    final selectedCreators = state.starterPackData.creators
-        .where((c) => c.isSelected)
-        .map((c) => OnboardingCreatorFollowParams.creator(userId: c.userId, email: c.email, name: c.name))
-        .toList();
-    logger.d('selectedCreators count=${selectedCreators.length}', tag: 'OnboardingV2Bloc');
-
-    final result = await _followStarterPackUseCase(FollowStarterPackParams(creators: selectedCreators));
-    logger.d(
-      'followStarterPackUseCase result isSuccess=${result.isSuccess} isClosed=$isClosed',
-      tag: 'OnboardingV2Bloc',
-    );
-
-    if (result.isFailure) {
-      logger.d('followStarterPackUseCase failure — ${result.failure}', tag: 'OnboardingV2Bloc');
-      emit(state.copyWith(actionStatus: ActionStatus.failure, failure: result.failure));
-      return;
-    }
-
-    if (state.skipInterests) {
-      // Interests was skipped → wallpaper must also be skipped → go directly to paywall
-      logger.d('starterPackConfirmed — skipInterests=true, going directly to paywall', tag: 'OnboardingV2Bloc');
-      emit(state.copyWith(actionStatus: ActionStatus.success, navRequest: null));
-      if (app_state.prismUser.premium) {
-        await _finishOnboarding(emit, didPurchase: true);
-      } else {
-        emit(state.copyWith(navRequest: OnboardingV2NavRequest.openPaywall));
-      }
-    } else {
-      logger.d('starterPackConfirmed — emitting step=aiGenerate', tag: 'OnboardingV2Bloc');
-      final aiData = _pickRandomAiPrompt(state.interestsData.selected);
-      emit(state.copyWith(actionStatus: ActionStatus.success, step: OnboardingV2Step.aiGenerate, aiData: aiData));
-      logger.d('emitted aiGenerate step, current state.step=${state.step}', tag: 'OnboardingV2Bloc');
-    }
   }
 
   Future<void> _onFirstWallpaperActionRequested(
@@ -364,7 +308,7 @@ class OnboardingV2Bloc extends Bloc<OnboardingV2Event, OnboardingV2State> {
     final OnboardingV2Step? prevStep = switch (state.step) {
       OnboardingV2Step.interests => OnboardingV2Step.auth,
       OnboardingV2Step.starterPack => state.skipInterests ? OnboardingV2Step.auth : OnboardingV2Step.interests,
-      OnboardingV2Step.aiGenerate => state.skipStarterPack ? OnboardingV2Step.interests : OnboardingV2Step.starterPack,
+      OnboardingV2Step.aiGenerate => state.skipInterests ? OnboardingV2Step.auth : OnboardingV2Step.interests,
       OnboardingV2Step.firstWallpaper => OnboardingV2Step.aiGenerate,
       OnboardingV2Step.auth => null,
     };

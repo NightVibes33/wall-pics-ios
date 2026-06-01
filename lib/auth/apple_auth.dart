@@ -8,6 +8,7 @@ import 'package:Prism/core/coins/coins_service.dart';
 import 'package:Prism/core/monitoring/sentry_user_scope.dart';
 import 'package:Prism/core/purchases/purchases_service.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
+import 'package:Prism/env/env.dart';
 import 'package:Prism/logger/logger.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
@@ -18,6 +19,18 @@ class AppleAuth {
 
   Future<String> signInWithApple() async {
     logger.i('signInWithApple start', tag: 'AppleAuth');
+    if (Env.sideloadBuild) {
+      await analytics.track(
+        const AuthLoginResultEvent(
+          method: AuthMethodValue.apple,
+          result: EventResultValue.cancelled,
+          reason: AnalyticsReasonValue.unknown,
+          sourceContext: 'apple_auth_sideload_disabled',
+        ),
+      );
+      logger.w('Apple sign-in is disabled for unsigned sideload builds.', tag: 'AppleAuth');
+      return signInCancelledResult;
+    }
     try {
       final AuthorizationCredentialAppleID appleCredential = await SignInWithApple.getAppleIDCredential(
         scopes: <AppleIDAuthorizationScopes>[AppleIDAuthorizationScopes.email, AppleIDAuthorizationScopes.fullName],

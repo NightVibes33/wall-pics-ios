@@ -2,7 +2,6 @@ import 'package:Prism/features/onboarding_v2/src/biz/onboarding_v2_bloc.j.dart';
 import 'package:Prism/features/onboarding_v2/src/theme/onboarding_theme.dart';
 import 'package:Prism/features/onboarding_v2/src/views/widgets/interest_category_tile.dart';
 import 'package:Prism/features/onboarding_v2/src/views/widgets/onboarding_frame.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -13,18 +12,7 @@ class F1InterestsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocConsumer<OnboardingV2Bloc, OnboardingV2State>(
-      listenWhen: (prev, curr) => prev.starterPackData.creators.isEmpty && curr.starterPackData.creators.isNotEmpty,
-      listener: (context, state) {
-        for (final creator in state.starterPackData.creators) {
-          if (creator.photoUrl.isNotEmpty) {
-            precacheImage(CachedNetworkImageProvider(creator.photoUrl), context);
-          }
-          for (final url in creator.previewUrls) {
-            precacheImage(CachedNetworkImageProvider(url), context);
-          }
-        }
-      },
+    return BlocBuilder<OnboardingV2Bloc, OnboardingV2State>(
       buildWhen: (prev, curr) => prev.interestsData != curr.interestsData,
       builder: (context, state) {
         final interestsData = state.interestsData;

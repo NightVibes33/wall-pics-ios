@@ -99,7 +99,7 @@ class OnboardingBackground extends StatelessWidget {
 // Responsibilities:
 //   • Initial scale-reveal (1.18 → 1.0) on mount.
 //   • Blur sigma animation per step:
-//       auth → 0, interests → 40, starterPack → 70, firstWallpaper → 0.
+//       auth → 0, interests → 40, aiGenerate → 40, firstWallpaper → 0.
 //   • Cross-fade between wallpaperPrimary and wallpaperFinal on the
 //     firstWallpaper step.
 // ---------------------------------------------------------------------------
@@ -175,7 +175,7 @@ class _OnboardingStepBackgroundState extends State<OnboardingStepBackground> wit
   static double _sigmaFor(OnboardingV2Step step) => switch (step) {
     OnboardingV2Step.auth => 0,
     OnboardingV2Step.interests => 40,
-    OnboardingV2Step.starterPack => 70,
+    OnboardingV2Step.starterPack => 40,
     OnboardingV2Step.aiGenerate => 40,
     OnboardingV2Step.firstWallpaper => 0,
   };
@@ -217,7 +217,7 @@ class _OnboardingStepBackgroundState extends State<OnboardingStepBackground> wit
             return Stack(
               fit: StackFit.expand,
               children: [
-                // Primary image — shown on auth / interests / starterPack.
+                // Primary image — shown before the first wallpaper step.
                 AnimatedOpacity(
                   duration: OnboardingMotion.normal,
                   opacity: _showFinal ? 0.0 : 1.0,

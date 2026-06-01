@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:Prism/auth/apple_auth.dart';
 import 'package:Prism/auth/google_auth.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
+import 'package:Prism/env/env.dart';
 import 'package:Prism/logger/logger.dart';
 import 'package:Prism/theme/jam_icons_icons.dart';
 import 'package:Prism/theme/toasts.dart' as toasts;
@@ -235,7 +236,7 @@ void googleSignInPopUp(BuildContext context, VoidCallback func) {
         },
         child: const Text('GOOGLE', style: TextStyle(fontSize: 16.0, color: Colors.white)),
       ),
-      if (Platform.isIOS || Platform.isMacOS)
+      if ((Platform.isIOS || Platform.isMacOS) && !Env.sideloadBuild)
         MaterialButton(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
           color: Colors.black,

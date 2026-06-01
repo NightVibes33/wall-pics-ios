@@ -11,12 +11,12 @@ import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:Prism/core/state/auth_runtime.dart';
 import 'package:Prism/core/utils/edge_to_edge_overlay_style.dart';
 import 'package:Prism/core/utils/status.dart';
+import 'package:Prism/env/env.dart';
 import 'package:Prism/features/onboarding_v2/src/biz/onboarding_v2_bloc.j.dart';
 import 'package:Prism/features/onboarding_v2/src/theme/onboarding_theme.dart';
 import 'package:Prism/features/onboarding_v2/src/utils/onboarding_v2_config.dart';
 import 'package:Prism/features/onboarding_v2/src/views/pages/f0_auth_page.dart';
 import 'package:Prism/features/onboarding_v2/src/views/pages/f1_interests_page.dart';
-import 'package:Prism/features/onboarding_v2/src/views/pages/f2_starter_pack_page.dart';
 import 'package:Prism/features/onboarding_v2/src/views/pages/f3_ai_generate_page.dart';
 import 'package:Prism/features/onboarding_v2/src/views/pages/f3_first_wallpaper_page.dart';
 import 'package:Prism/features/onboarding_v2/src/views/widgets/onboarding_background.dart';
@@ -55,7 +55,6 @@ class _OnboardingV2ShellState extends State<OnboardingV2Shell> {
   static const List<Widget> _pages = [
     F0AuthPage(),
     F1InterestsPage(),
-    F2StarterPackPage(),
     F3AiGeneratePage(),
     F3FirstWallpaperPage(),
   ];
@@ -175,7 +174,7 @@ class _OnboardingV2ShellState extends State<OnboardingV2Shell> {
       case OnboardingV2Step.interests:
         _bloc.add(const OnboardingV2Event.interestsConfirmed());
       case OnboardingV2Step.starterPack:
-        _bloc.add(const OnboardingV2Event.starterPackConfirmed());
+        _bloc.add(OnboardingV2Event.aiGenerationRequested(targetSize: _targetSizeForDevice()));
       case OnboardingV2Step.aiGenerate:
         // Success auto-advances via the shell listener; CTA always triggers or re-triggers generation.
         _bloc.add(OnboardingV2Event.aiGenerationRequested(targetSize: _targetSizeForDevice()));
@@ -211,8 +210,14 @@ class _OnboardingV2ShellState extends State<OnboardingV2Shell> {
   }
 
   Widget _pageFor(OnboardingV2Step step) {
-    final idx = OnboardingV2Step.values.indexOf(step).clamp(0, _pages.length - 1);
-    return KeyedSubtree(key: ValueKey(step), child: _pages[idx]);
+    final Widget page = switch (step) {
+      OnboardingV2Step.auth => _pages[0],
+      OnboardingV2Step.interests => _pages[1],
+      OnboardingV2Step.starterPack => _pages[2],
+      OnboardingV2Step.aiGenerate => _pages[2],
+      OnboardingV2Step.firstWallpaper => _pages[3],
+    };
+    return KeyedSubtree(key: ValueKey(step), child: page);
   }
 
   @override
@@ -452,15 +457,13 @@ class _Progress extends StatelessWidget {
   Widget build(BuildContext context) {
     final visible =
         step == OnboardingV2Step.interests ||
-        step == OnboardingV2Step.starterPack ||
         step == OnboardingV2Step.aiGenerate ||
         step == OnboardingV2Step.firstWallpaper;
 
     final progressStep = switch (step) {
       OnboardingV2Step.interests => 1,
-      OnboardingV2Step.starterPack => 2,
-      OnboardingV2Step.aiGenerate => 3,
-      _ => 4,
+      OnboardingV2Step.starterPack || OnboardingV2Step.aiGenerate => 2,
+      _ => 3,
     };
 
     final color = step == OnboardingV2Step.firstWallpaper ? wallpaperColor : OnboardingColors.progressActive;
@@ -477,7 +480,7 @@ class _Progress extends StatelessWidget {
             scaleX: sx,
             scaleY: sy,
             alignment: Alignment.topCenter,
-            child: OnboardingProgressIndicator(step: progressStep, totalSteps: 4, color: color),
+            child: OnboardingProgressIndicator(step: progressStep, totalSteps: 3, color: color),
           ),
         ),
       ),
@@ -510,7 +513,7 @@ class _Headline extends StatelessWidget {
     // Applying padding here would squeeze "Your screen," onto a second line.
     OnboardingV2Step.auth => 0,
     OnboardingV2Step.interests => OnboardingLayout.step2TitleX,
-    OnboardingV2Step.starterPack => OnboardingLayout.step3TitleX,
+    OnboardingV2Step.starterPack => OnboardingLayout.step4TitleX,
     OnboardingV2Step.aiGenerate => OnboardingLayout.step4TitleX,
     OnboardingV2Step.firstWallpaper => OnboardingLayout.step4TitleX,
   };
@@ -518,7 +521,7 @@ class _Headline extends StatelessWidget {
   static String _headlineText(OnboardingV2Step step) => switch (step) {
     OnboardingV2Step.auth => 'Your screen,\nreimagined.',
     OnboardingV2Step.interests => 'Pick your vibe',
-    OnboardingV2Step.starterPack => 'Find your people',
+    OnboardingV2Step.starterPack => 'Create your\nfirst wallpaper',
     OnboardingV2Step.aiGenerate => 'Create your\nfirst wallpaper',
     OnboardingV2Step.firstWallpaper => 'Make it yours',
   };
@@ -572,7 +575,8 @@ class _CtaButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final isLoading = switch (step) {
       OnboardingV2Step.auth => state.isAuthLoading,
-      OnboardingV2Step.interests || OnboardingV2Step.starterPack => state.actionStatus == ActionStatus.inProgress,
+      OnboardingV2Step.interests => state.actionStatus == ActionStatus.inProgress,
+      OnboardingV2Step.starterPack => state.aiData.status == AiGenerateStatus.loading,
       OnboardingV2Step.aiGenerate => state.aiData.status == AiGenerateStatus.loading,
       OnboardingV2Step.firstWallpaper => state.wallpaperData.status == FirstWallpaperStatus.loading,
     };
@@ -580,13 +584,13 @@ class _CtaButton extends StatelessWidget {
     final isEnabled = switch (step) {
       OnboardingV2Step.auth => true,
       OnboardingV2Step.interests => state.interestsData.canContinue,
-      OnboardingV2Step.starterPack => state.starterPackData.canContinue,
+      OnboardingV2Step.starterPack => true,
       OnboardingV2Step.aiGenerate => true,
       OnboardingV2Step.firstWallpaper => true,
     };
 
     if (step == OnboardingV2Step.auth) {
-      final bool showApple = Platform.isIOS || Platform.isMacOS;
+      final bool showApple = (Platform.isIOS || Platform.isMacOS) && !Env.sideloadBuild;
       final double buttonHeight = OnboardingLayout.authCtaHeight * sy;
       final double totalHeight = showApple
           ? (OnboardingLayout.authCtaHeight * 2 + OnboardingLayout.authCtaGap) * sy
@@ -618,7 +622,7 @@ class _CtaButton extends StatelessWidget {
         final selected = state.interestsData.selected.length;
         return selected < OnboardingV2Config.minInterests ? 'continue ($selected selected)' : 'continue';
       }(),
-      OnboardingV2Step.starterPack => 'continue',
+      OnboardingV2Step.starterPack => 'generate my wallpaper',
       OnboardingV2Step.aiGenerate => 'generate my wallpaper',
       OnboardingV2Step.firstWallpaper => 'set as wallpaper',
     };
@@ -756,7 +760,7 @@ class _BottomText extends StatelessWidget {
 
   String _helperText() => switch (step) {
     OnboardingV2Step.interests => 'select at least 3 categories to personalize your feed',
-    OnboardingV2Step.starterPack => 'we are suggesting you follow these 3 creators',
+    OnboardingV2Step.starterPack => 'your first wallpaper, generated by AI',
     OnboardingV2Step.aiGenerate => switch (aiGenerateStatus) {
       AiGenerateStatus.success => 'looking good! tap "use this wallpaper" to continue',
       AiGenerateStatus.failure => 'something went wrong — tap generate to try again',
