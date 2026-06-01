@@ -33,5 +33,8 @@ CATALOG_BASE="${CATALOG_BASE%/}"
 
 echo "Validating Prism catalog endpoint"
 curl -fsSL --retry 3 --retry-delay 2 "$CATALOG_BASE/prism_index.json" | python3 -c 'import json,sys; json.load(sys.stdin)'
-curl -fsSIL --retry 3 --retry-delay 2 "$CATALOG_BASE/prism_category_trees.json" >/dev/null
-curl -fsSIL --retry 3 --retry-delay 2 "$CATALOG_BASE/prism_regular.json" >/dev/null
+curl -fsSL --retry 3 --retry-delay 2 "$CATALOG_BASE/prism_category_lite.json" | python3 -c 'import json,sys; json.load(sys.stdin)'
+curl -fsSL --retry 3 --retry-delay 2 "$CATALOG_BASE/prism_category_trees.json" | python3 -c 'import json,sys; json.load(sys.stdin)'
+curl -fsSL --retry 3 --retry-delay 2 "$CATALOG_BASE/prism_category_ids.json" | python3 -c 'import json,sys; json.load(sys.stdin)'
+curl -fsSL --retry 3 --retry-delay 2 "$CATALOG_BASE/prism_item_locations.json" | python3 -c 'import json,sys; json.load(sys.stdin)'
+curl -fsSL --retry 3 --retry-delay 2 "$CATALOG_BASE/prism_regular_page_001.json" | python3 -c 'import json,sys; json.load(sys.stdin)'

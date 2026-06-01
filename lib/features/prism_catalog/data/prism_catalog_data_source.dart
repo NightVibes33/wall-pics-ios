@@ -18,6 +18,10 @@ class PrismCatalogDataSource {
   static final PrismCatalogDataSource instance = PrismCatalogDataSource._();
 
   static const int _pageSize = 24;
+  static const int _catalogShardSize = 100;
+  static const Duration _metadataTimeout = Duration(seconds: 10);
+  static const Duration _pageTimeout = Duration(seconds: 8);
+  static const Duration _searchIndexTimeout = Duration(seconds: 25);
   static const String regularContentType = 'regular_wallpaper';
   static const String liveContentType = 'live_wallpaper';
   static const String matchingContentType = 'matching_wallpaper';
@@ -41,6 +45,19 @@ class PrismCatalogDataSource {
     liveDiyTemplateContentType: 'prism_live_diy_templates.json',
     stickerContentType: 'prism_stickers.json',
     aiFilterContentType: 'prism_ai_filters.json',
+  };
+  static const Map<String, String> _catalogPagePrefixesByContentType = <String, String>{
+    regularContentType: 'prism_regular',
+    liveContentType: 'prism_live',
+    matchingContentType: 'prism_matching',
+    doubleContentType: 'prism_double',
+    parallaxContentType: 'prism_parallax',
+    profilePictureContentType: 'prism_profile_pictures',
+    chargingAnimationContentType: 'prism_charging_animations',
+    diyTemplateContentType: 'prism_diy_templates',
+    liveDiyTemplateContentType: 'prism_live_diy_templates',
+    stickerContentType: 'prism_stickers',
+    aiFilterContentType: 'prism_ai_filters',
   };
   static const Map<String, String> _contentTypeLabels = <String, String>{
     regularContentType: 'For You',
@@ -76,44 +93,49 @@ class PrismCatalogDataSource {
     '4': parallaxContentType,
   };
 
-  final Map<String, Future<_PrismCatalog>> _catalogFutures = <String, Future<_PrismCatalog>>{};
+  final Map<String, Future<_PrismCatalogPage>> _pageFutures = <String, Future<_PrismCatalogPage>>{};
   final Map<String, int> _offsets = <String, int>{};
+  Future<List<Map<String, dynamic>>>? _categoryRowsFuture;
+  Future<Map<String, Map<String, List<String>>>>? _categoryIdsFuture;
+  Future<Map<String, Map<String, int>>>? _itemLocationsFuture;
+  Future<List<_SearchIndexEntry>>? _searchIndexFuture;
 
   bool supports(CategoryEntity category) {
     final slug = category.catalogSlug?.trim();
     final type = category.catalogContentType?.trim();
-    return slug != null && slug.isNotEmpty && type != null && _catalogFilesByContentType.containsKey(type);
+    return slug != null && slug.isNotEmpty && type != null && _catalogPagePrefixesByContentType.containsKey(type);
   }
 
   Future<CategoryFeedPage?> fetchCategoryFeed({required CategoryEntity category, required bool refresh}) async {
     if (!supports(category)) return null;
 
-    final catalog = await _catalogFor(category.catalogContentType!);
+    final contentType = category.catalogContentType!.trim();
     final slug = category.catalogSlug!.trim();
-    final scope = _scope(slug: slug, contentType: category.catalogContentType!);
-    final start = refresh ? 0 : (_offsets[scope] ?? 0);
-    final matches = catalog.itemsForSlug(slug);
-    final page = matches.skip(start).take(_pageSize).toList(growable: false);
-    _offsets[scope] = start + page.length;
+    final scope = _scope(slug: slug, contentType: contentType);
 
-    return CategoryFeedPage(
-      items: page.map((item) => PrismFeedItem(id: item.id, wallpaper: item.toWallpaper())).toList(growable: false),
-      hasMore: start + page.length < matches.length,
-      nextCursor: (start + page.length).toString(),
+    if (slug == 'for-you') {
+      return _fetchSequentialPageFeed(contentType: contentType, scope: scope, refresh: refresh);
+    }
+
+    final categoryIds = await _categoryIdsFor(contentType, slug);
+    final start = refresh ? 0 : (_offsets[scope] ?? 0);
+    final pageIds = categoryIds.skip(start).take(_pageSize).toList(growable: false);
+    final items = await _itemsByIds(contentType: contentType, ids: pageIds);
+    final nextOffset = start + pageIds.length;
+    _offsets[scope] = nextOffset;
+
+    return _toFeedPage(
+      items,
+      hasMore: nextOffset < categoryIds.length,
+      nextOffset: nextOffset,
     );
   }
 
-  Future<CategoryFeedPage> fetchHomePage({required bool refresh}) async {
-    final catalog = await _loadRegular();
-    final scope = _scope(slug: 'for-you', contentType: regularContentType);
-    final start = refresh ? 0 : (_offsets[scope] ?? 0);
-    final matches = catalog.itemsForSlug('for-you');
-    final page = matches.skip(start).take(_pageSize).toList(growable: false);
-    _offsets[scope] = start + page.length;
-    return CategoryFeedPage(
-      items: page.map((item) => PrismFeedItem(id: item.id, wallpaper: item.toWallpaper())).toList(growable: false),
-      hasMore: start + page.length < matches.length,
-      nextCursor: (start + page.length).toString(),
+  Future<CategoryFeedPage> fetchHomePage({required bool refresh}) {
+    return _fetchSequentialPageFeed(
+      contentType: regularContentType,
+      scope: _scope(slug: 'for-you', contentType: regularContentType),
+      refresh: refresh,
     );
   }
 
@@ -137,10 +159,7 @@ class PrismCatalogDataSource {
       seen.add('${entry.key}:for-you');
     }
 
-    final raw = await _loadCatalogJson('prism_category_trees.json');
-    final payload = jsonDecode(raw) as Map<String, dynamic>;
-    final rawCategories = payload['categories'];
-    final rows = rawCategories is List ? rawCategories.whereType<Map>().map(_asMap).toList() : <Map<String, dynamic>>[];
+    final rows = List<Map<String, dynamic>>.of(await _loadCategoryRows());
     rows.sort((a, b) {
       final aParent = _string(a['parent_slug']).isEmpty ? 0 : 1;
       final bParent = _string(b['parent_slug']).isEmpty ? 0 : 1;
@@ -155,7 +174,7 @@ class PrismCatalogDataSource {
       final name = _string(row['name']).trim();
       final slug = _string(row['slug']).trim();
       final contentType = _contentTypeForCategory(row);
-      if (name.isEmpty || slug.isEmpty || !_catalogFilesByContentType.containsKey(contentType)) {
+      if (name.isEmpty || slug.isEmpty || !_catalogPagePrefixesByContentType.containsKey(contentType)) {
         continue;
       }
       final key = '$contentType:$slug';
@@ -253,67 +272,340 @@ class PrismCatalogDataSource {
 
     final scope = 'search.$normalizedQuery';
     final start = refresh ? 0 : (_offsets[scope] ?? 0);
-    final ranked = <_RankedPrismItem>[];
-    for (final contentType in _catalogFilesByContentType.keys) {
-      final catalog = await _catalogFor(contentType);
-      for (final item in catalog.items) {
-        final score = _scoreSearchMatch(item, normalizedQuery);
-        if (score > 0) {
-          ranked.add(_RankedPrismItem(item: item, score: score));
+    final needed = start + _pageSize;
+    final rankedRefs = await _rankedCategoryReferences(normalizedQuery);
+
+    if (rankedRefs.length < needed) {
+      var ordinal = rankedRefs.length;
+      final searchIndex = await _loadSearchIndex();
+      for (final entry in searchIndex) {
+        final score = _scoreSearchEntry(entry, normalizedQuery);
+        if (score <= 0) {
+          continue;
         }
+        rankedRefs.add(
+          _RankedItemReference(
+            contentType: entry.contentType,
+            id: entry.id,
+            page: entry.page,
+            score: score,
+            ordinal: ordinal++,
+            createdAt: entry.createdAt,
+          ),
+        );
       }
+      rankedRefs.sort(_compareRankedReferences);
     }
-    ranked.sort((a, b) {
-      final scoreCompare = b.score.compareTo(a.score);
-      if (scoreCompare != 0) {
-        return scoreCompare;
-      }
-      final aCreated = a.item.createdAt?.millisecondsSinceEpoch ?? 0;
-      final bCreated = b.item.createdAt?.millisecondsSinceEpoch ?? 0;
-      return bCreated.compareTo(aCreated);
-    });
 
-    final deduped = _dedupeItems(ranked.map((entry) => entry.item));
-    final page = deduped.skip(start).take(_pageSize).toList(growable: false);
-    _offsets[scope] = start + page.length;
+    final deduped = _dedupeReferences(rankedRefs);
+    final pageRefs = deduped.skip(start).take(_pageSize).toList(growable: false);
+    final items = await _itemsByReferences(pageRefs);
+    final nextOffset = start + pageRefs.length;
+    _offsets[scope] = nextOffset;
 
-    return CategoryFeedPage(
-      items: page.map((item) => PrismFeedItem(id: item.id, wallpaper: item.toWallpaper())).toList(growable: false),
-      hasMore: start + page.length < deduped.length,
-      nextCursor: (start + page.length).toString(),
+    return _toFeedPage(
+      items,
+      hasMore: nextOffset < deduped.length,
+      nextOffset: nextOffset,
     );
   }
 
   Future<PrismWallpaper?> fetchById(String id) async {
     final trimmed = id.trim();
     if (trimmed.isEmpty) return null;
-    for (final contentType in _catalogFilesByContentType.keys) {
-      final item = (await _catalogFor(contentType)).byId(trimmed);
+
+    final locationsByContentType = await _loadItemLocations();
+    for (final contentType in _catalogPagePrefixesByContentType.keys) {
+      final page = locationsByContentType[contentType]?[trimmed];
+      if (page == null) {
+        continue;
+      }
+      final item = (await _loadCatalogPage(contentType, page)).byId(trimmed);
       if (item != null) return item.toWallpaper();
     }
     return null;
   }
 
-  Future<_PrismCatalog> _catalogFor(String contentType) {
-    final fileName = _catalogFilesByContentType[contentType] ?? _catalogFilesByContentType[regularContentType]!;
-    return _catalogFutures[contentType] ??= _loadCatalog(fileName, contentType);
+  Future<CategoryFeedPage> _fetchSequentialPageFeed({
+    required String contentType,
+    required String scope,
+    required bool refresh,
+  }) async {
+    final start = refresh ? 0 : (_offsets[scope] ?? 0);
+    var absoluteOffset = start;
+    var remaining = _pageSize;
+    var itemCount = 0;
+    var lastHasMore = true;
+    final items = <_PrismItem>[];
+
+    while (remaining > 0 && lastHasMore) {
+      final pageNumber = (absoluteOffset ~/ _catalogShardSize) + 1;
+      final localOffset = absoluteOffset % _catalogShardSize;
+      final catalogPage = await _loadCatalogPage(contentType, pageNumber);
+      itemCount = catalogPage.itemCount;
+      lastHasMore = catalogPage.hasMore;
+
+      final pageItems = catalogPage.items.skip(localOffset).take(remaining).toList(growable: false);
+      if (pageItems.isEmpty) {
+        break;
+      }
+      items.addAll(pageItems);
+      absoluteOffset += pageItems.length;
+      remaining -= pageItems.length;
+    }
+
+    _offsets[scope] = absoluteOffset;
+    return _toFeedPage(
+      items,
+      hasMore: absoluteOffset < itemCount && (lastHasMore || items.isNotEmpty),
+      nextOffset: absoluteOffset,
+    );
   }
 
-  Future<_PrismCatalog> _loadRegular() => _catalogFor(regularContentType);
+  CategoryFeedPage _toFeedPage(List<_PrismItem> items, {required bool hasMore, required int nextOffset}) {
+    return CategoryFeedPage(
+      items: items.map((item) => PrismFeedItem(id: item.id, wallpaper: item.toWallpaper())).toList(growable: false),
+      hasMore: hasMore,
+      nextCursor: nextOffset.toString(),
+    );
+  }
 
-  Future<_PrismCatalog> _loadLive() => _catalogFor(liveContentType);
+  Future<List<Map<String, dynamic>>> _loadCategoryRows() {
+    return _categoryRowsFuture ??= _loadCategoryRowsInternal();
+  }
 
-  Future<_PrismCatalog> _loadCatalog(String fileName, String fallbackType) async {
-    final raw = await _loadCatalogJson(fileName);
+  Future<List<Map<String, dynamic>>> _loadCategoryRowsInternal() async {
+    try {
+      return await _loadCategoryRowsFromFile('prism_category_lite.json');
+    } catch (_) {
+      return _loadCategoryRowsFromFile('prism_category_trees.json');
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadCategoryRowsFromFile(String fileName) async {
+    final raw = await _loadCatalogJson(fileName, timeout: _metadataTimeout);
     final payload = jsonDecode(raw) as Map<String, dynamic>;
-    final contentType = payload['content_type']?.toString() ?? fallbackType;
+    final rawCategories = payload['categories'];
+    return rawCategories is List
+        ? rawCategories.whereType<Map>().map(_asMap).toList(growable: false)
+        : <Map<String, dynamic>>[];
+  }
+
+  Future<List<String>> _categoryIdsFor(String contentType, String slug) async {
+    final categoryIds = await _loadCategoryIds();
+    return categoryIds[contentType]?[slug] ?? const <String>[];
+  }
+
+  Future<Map<String, Map<String, List<String>>>> _loadCategoryIds() {
+    return _categoryIdsFuture ??= _loadCategoryIdsInternal();
+  }
+
+  Future<Map<String, Map<String, List<String>>>> _loadCategoryIdsInternal() async {
+    final raw = await _loadCatalogJson(
+      'prism_category_ids.json',
+      timeout: _metadataTimeout,
+      allowGeneratedFallback: false,
+    );
+    final payload = jsonDecode(raw) as Map<String, dynamic>;
+    final contentTypes = _asMap(payload['content_types']);
+    return <String, Map<String, List<String>>>{
+      for (final contentTypeEntry in contentTypes.entries)
+        contentTypeEntry.key: <String, List<String>>{
+          for (final categoryEntry in _asMap(contentTypeEntry.value).entries)
+            categoryEntry.key: _strings(categoryEntry.value),
+        },
+    };
+  }
+
+  Future<Map<String, Map<String, int>>> _loadItemLocations() {
+    return _itemLocationsFuture ??= _loadItemLocationsInternal();
+  }
+
+  Future<Map<String, Map<String, int>>> _loadItemLocationsInternal() async {
+    final raw = await _loadCatalogJson(
+      'prism_item_locations.json',
+      timeout: _metadataTimeout,
+      allowGeneratedFallback: false,
+    );
+    final payload = jsonDecode(raw) as Map<String, dynamic>;
+    final contentTypes = _asMap(payload['content_types']);
+    return <String, Map<String, int>>{
+      for (final contentTypeEntry in contentTypes.entries)
+        contentTypeEntry.key: <String, int>{
+          for (final itemEntry in _asMap(contentTypeEntry.value).entries)
+            if (_int(itemEntry.value) != null) itemEntry.key: _int(itemEntry.value)!,
+        },
+    };
+  }
+
+  Future<List<_SearchIndexEntry>> _loadSearchIndex() {
+    return _searchIndexFuture ??= _loadSearchIndexInternal();
+  }
+
+  Future<List<_SearchIndexEntry>> _loadSearchIndexInternal() async {
+    final raw = await _loadCatalogJson(
+      'prism_search_index.json',
+      timeout: _searchIndexTimeout,
+      allowGeneratedFallback: false,
+    );
+    final payload = jsonDecode(raw) as Map<String, dynamic>;
+    final rawItems = payload['items'];
+    if (rawItems is! List) {
+      return const <_SearchIndexEntry>[];
+    }
+    return rawItems.whereType<Map>().map((item) => _SearchIndexEntry.fromJson(_asMap(item))).toList(growable: false);
+  }
+
+  Future<_PrismCatalogPage> _loadCatalogPage(String contentType, int page) {
+    final prefix = _catalogPagePrefixesByContentType[contentType];
+    if (prefix == null || page <= 0) {
+      return Future<_PrismCatalogPage>.error(
+        ArgumentError.value(contentType, 'contentType', 'Unsupported catalog type'),
+      );
+    }
+    final cacheKey = '$contentType.$page';
+    return _pageFutures[cacheKey] ??= _loadCatalogPageFile(prefix: prefix, fallbackType: contentType, page: page);
+  }
+
+  Future<_PrismCatalogPage> _loadCatalogPageFile({
+    required String prefix,
+    required String fallbackType,
+    required int page,
+  }) async {
+    final fileName = '${prefix}_page_${page.toString().padLeft(3, '0')}.json';
+    final raw = await _loadCatalogJson(fileName, timeout: _pageTimeout, allowGeneratedFallback: false);
+    final payload = jsonDecode(raw) as Map<String, dynamic>;
+    final contentType = _string(payload['content_type']).isNotEmpty ? _string(payload['content_type']) : fallbackType;
     final rawItems = payload['wallpapers'];
     final items = rawItems is List
         ? _dedupeItems(rawItems.whereType<Map>().map((item) => _PrismItem.fromJson(_asMap(item), contentType)))
         : <_PrismItem>[];
-    return _PrismCatalog(items);
+    return _PrismCatalogPage(
+      items: items,
+      itemCount: _int(payload['item_count']) ?? items.length,
+      hasMore: payload['has_more'] == true,
+    );
   }
 
+  Future<List<_PrismItem>> _itemsByIds({required String contentType, required List<String> ids}) async {
+    if (ids.isEmpty) {
+      return const <_PrismItem>[];
+    }
+    final locations = await _loadItemLocations();
+    final pages = locations[contentType] ?? const <String, int>{};
+    final refs = <_RankedItemReference>[
+      for (var index = 0; index < ids.length; index++)
+        if (pages[ids[index]] != null)
+          _RankedItemReference(
+            contentType: contentType,
+            id: ids[index],
+            page: pages[ids[index]],
+            score: 0,
+            ordinal: index,
+            createdAt: null,
+          ),
+    ];
+    return _itemsByReferences(refs);
+  }
+
+  Future<List<_PrismItem>> _itemsByReferences(List<_RankedItemReference> refs) async {
+    if (refs.isEmpty) {
+      return const <_PrismItem>[];
+    }
+
+    final locationsByContentType = await _loadItemLocations();
+    final byPage = <String, Map<int, List<_RankedItemReference>>>{};
+    for (final ref in refs) {
+      final page = ref.page ?? locationsByContentType[ref.contentType]?[ref.id];
+      if (page == null) {
+        continue;
+      }
+      byPage
+          .putIfAbsent(ref.contentType, () => <int, List<_RankedItemReference>>{})
+          .putIfAbsent(page, () => <_RankedItemReference>[])
+          .add(ref);
+    }
+
+    final itemsByKey = <String, _PrismItem>{};
+    await Future.wait<void>([
+      for (final contentTypeEntry in byPage.entries)
+        for (final pageEntry in contentTypeEntry.value.entries)
+          () async {
+            final catalogPage = await _loadCatalogPage(contentTypeEntry.key, pageEntry.key);
+            for (final ref in pageEntry.value) {
+              final item = catalogPage.byId(ref.id);
+              if (item != null) {
+                itemsByKey['${ref.contentType}:${ref.id}'] = item;
+              }
+            }
+          }(),
+    ]);
+
+    return refs
+        .map((ref) => itemsByKey['${ref.contentType}:${ref.id}'])
+        .whereType<_PrismItem>()
+        .toList(growable: false);
+  }
+
+  Future<List<_RankedItemReference>> _rankedCategoryReferences(String normalizedQuery) async {
+    final rows = await _loadCategoryRows();
+    final categoryIds = await _loadCategoryIds();
+    final hits = <_RankedCategory>[];
+
+    for (final row in rows) {
+      final name = _string(row['name']).trim();
+      final slug = _string(row['slug']).trim();
+      final contentType = _contentTypeForCategory(row);
+      if (name.isEmpty || slug.isEmpty || !_catalogPagePrefixesByContentType.containsKey(contentType)) {
+        continue;
+      }
+      final score = _scoreSearchFields(
+        normalizedQuery: normalizedQuery,
+        name: name,
+        slug: slug,
+        categories: const <String>[],
+        categorySlugs: const <String>[],
+        tags: const <String>[],
+      );
+      if (score > 0) {
+        hits.add(
+          _RankedCategory(
+            contentType: contentType,
+            slug: slug,
+            score: score + 1000,
+            position: _int(row['position']) ?? 999999,
+          ),
+        );
+      }
+    }
+
+    hits.sort((a, b) {
+      final scoreCompare = b.score.compareTo(a.score);
+      if (scoreCompare != 0) return scoreCompare;
+      return a.position.compareTo(b.position);
+    });
+
+    var ordinal = 0;
+    final refs = <_RankedItemReference>[];
+    final locations = await _loadItemLocations();
+    for (final hit in hits) {
+      final ids = categoryIds[hit.contentType]?[hit.slug] ?? const <String>[];
+      final pages = locations[hit.contentType] ?? const <String, int>{};
+      for (final id in ids) {
+        refs.add(
+          _RankedItemReference(
+            contentType: hit.contentType,
+            id: id,
+            page: pages[id],
+            score: hit.score,
+            ordinal: ordinal++,
+            createdAt: null,
+          ),
+        );
+      }
+    }
+    return _dedupeReferences(refs)..sort(_compareRankedReferences);
+  }
 
   String get _remoteCatalogBaseUrl {
     final configured = Env.normalize(Env.prismCatalogBaseUrl);
@@ -328,23 +620,32 @@ class PrismCatalogDataSource {
     return '$trimmed/v1/catalog';
   }
 
-  Future<String> _loadCatalogJson(String fileName) async {
+  Future<String> _loadCatalogJson(
+    String fileName, {
+    Duration timeout = _metadataTimeout,
+    bool allowGeneratedFallback = true,
+  }) async {
+    Object? remoteError;
     final remoteBase = _remoteCatalogBaseUrl;
     if (remoteBase.isNotEmpty) {
       final base = remoteBase.endsWith('/') ? remoteBase.substring(0, remoteBase.length - 1) : remoteBase;
       try {
-        final response = await http.get(Uri.parse('$base/$fileName')).timeout(const Duration(seconds: 8));
+        final response = await http.get(Uri.parse('$base/$fileName')).timeout(timeout);
         if (response.statusCode >= 200 && response.statusCode < 300 && _looksLikeJson(response.body)) {
           return response.body;
         }
-      } catch (_) {
-        // Bundled metadata remains the offline fallback. Large catalogs are remote-only.
+        remoteError = StateError('Catalog request failed for $fileName with HTTP ${response.statusCode}');
+      } catch (error) {
+        remoteError = error;
       }
     }
 
     try {
       return await rootBundle.loadString('assets/catalog/$fileName');
-    } catch (_) {
+    } catch (bundleError) {
+      if (!allowGeneratedFallback) {
+        throw StateError('Missing required catalog asset $fileName: ${remoteError ?? bundleError}');
+      }
       final contentType = _contentTypeForCatalogFile(fileName);
       if (contentType != null) {
         return jsonEncode(<String, Object?>{
@@ -371,7 +672,7 @@ class PrismCatalogDataSource {
       if (fileName == 'prism_index.json') {
         return jsonEncode(<String, Object?>{'sections': <Object?>[]});
       }
-      rethrow;
+      throw StateError('Missing catalog asset $fileName: ${remoteError ?? bundleError}');
     }
   }
 
@@ -402,42 +703,96 @@ class PrismCatalogDataSource {
       }
     }
     final type = _string(row['type']).trim();
-    if (_catalogFilesByContentType.containsKey(type)) {
+    if (_catalogPagePrefixesByContentType.containsKey(type)) {
       return type;
     }
     return _numericCategoryTypes[type] ?? regularContentType;
   }
 }
 
-class _PrismCatalog {
-  _PrismCatalog(this.items) : _byId = <String, _PrismItem>{for (final item in items) item.id: item};
+class _PrismCatalogPage {
+  _PrismCatalogPage({
+    required this.items,
+    required this.itemCount,
+    required this.hasMore,
+  }) : _byId = <String, _PrismItem>{for (final item in items) item.id: item};
 
   final List<_PrismItem> items;
+  final int itemCount;
+  final bool hasMore;
   final Map<String, _PrismItem> _byId;
 
-  List<_PrismItem> itemsForSlug(String slug) {
-    if (slug == 'for-you') return items;
-    return items.where((item) => item.categorySlugs.contains(slug)).toList(growable: false);
-  }
-
   _PrismItem? byId(String id) => _byId[id];
-
-  String get firstPreviewUrl {
-    for (final item in items) {
-      final preview = item.previewUrl.trim().isNotEmpty ? item.previewUrl : item.thumbnailUrl;
-      if (preview.trim().isNotEmpty) {
-        return preview;
-      }
-    }
-    return '';
-  }
 }
 
-class _RankedPrismItem {
-  const _RankedPrismItem({required this.item, required this.score});
+class _RankedCategory {
+  const _RankedCategory({
+    required this.contentType,
+    required this.slug,
+    required this.score,
+    required this.position,
+  });
 
-  final _PrismItem item;
+  final String contentType;
+  final String slug;
   final int score;
+  final int position;
+}
+
+class _RankedItemReference {
+  const _RankedItemReference({
+    required this.contentType,
+    required this.id,
+    required this.page,
+    required this.score,
+    required this.ordinal,
+    required this.createdAt,
+  });
+
+  final String contentType;
+  final String id;
+  final int? page;
+  final int score;
+  final int ordinal;
+  final DateTime? createdAt;
+}
+
+class _SearchIndexEntry {
+  const _SearchIndexEntry({
+    required this.id,
+    required this.contentType,
+    required this.page,
+    required this.name,
+    required this.slug,
+    required this.categoryNames,
+    required this.categorySlugs,
+    required this.tags,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String contentType;
+  final int? page;
+  final String name;
+  final String slug;
+  final List<String> categoryNames;
+  final List<String> categorySlugs;
+  final List<String> tags;
+  final DateTime? createdAt;
+
+  factory _SearchIndexEntry.fromJson(Map<String, dynamic> json) {
+    return _SearchIndexEntry(
+      id: _string(json['id']),
+      contentType: _string(json['content_type']),
+      page: _int(json['page']),
+      name: _string(json['name']),
+      slug: _string(json['slug']),
+      categoryNames: _strings(json['categories']),
+      categorySlugs: _strings(json['category_slugs']),
+      tags: _strings(json['tags']),
+      createdAt: DateTime.tryParse(_string(json['created_at']))?.toUtc(),
+    );
+  }
 }
 
 class _PrismItem {
@@ -634,39 +989,66 @@ String _normalizeForSearch(String value) {
       .replaceAll(RegExp(r'\s+'), ' ');
 }
 
-int _scoreSearchMatch(_PrismItem item, String normalizedQuery) {
+int _scoreSearchEntry(_SearchIndexEntry entry, String normalizedQuery) {
+  return _scoreSearchFields(
+    normalizedQuery: normalizedQuery,
+    name: entry.name,
+    slug: entry.slug,
+    categories: entry.categoryNames,
+    categorySlugs: entry.categorySlugs,
+    tags: entry.tags,
+  );
+}
+
+int _scoreSearchFields({
+  required String normalizedQuery,
+  required String name,
+  required String slug,
+  required Iterable<String> categories,
+  required Iterable<String> categorySlugs,
+  required Iterable<String> tags,
+  String description = '',
+}) {
   final tokens = normalizedQuery.split(' ').where((token) => token.isNotEmpty).toList(growable: false);
   if (tokens.isEmpty) {
     return 0;
   }
 
-  final name = _normalizeForSearch(item.name);
-  final slug = _normalizeForSearch(item.slug);
-  final description = _normalizeForSearch(item.description);
-  final categories = item.categoryNames.map(_normalizeForSearch).where((value) => value.isNotEmpty).toList();
-  final categorySlugs = item.categorySlugs.map(_normalizeForSearch).where((value) => value.isNotEmpty).toList();
-  final tags = item.tags.map(_normalizeForSearch).where((value) => value.isNotEmpty).toList();
-  final fields = <String>[name, slug, description, ...categories, ...categorySlugs, ...tags];
+  final normalizedName = _normalizeForSearch(name);
+  final normalizedSlug = _normalizeForSearch(slug);
+  final normalizedDescription = _normalizeForSearch(description);
+  final normalizedCategories = categories.map(_normalizeForSearch).where((value) => value.isNotEmpty).toList();
+  final normalizedCategorySlugs = categorySlugs.map(_normalizeForSearch).where((value) => value.isNotEmpty).toList();
+  final normalizedTags = tags.map(_normalizeForSearch).where((value) => value.isNotEmpty).toList();
+  final fields = <String>[
+    normalizedName,
+    normalizedSlug,
+    normalizedDescription,
+    ...normalizedCategories,
+    ...normalizedCategorySlugs,
+    ...normalizedTags,
+  ].where((value) => value.isNotEmpty).toList(growable: false);
   final haystack = fields.join(' ');
 
-  if (name == normalizedQuery || slug == normalizedQuery) {
+  if (normalizedName == normalizedQuery || normalizedSlug == normalizedQuery) {
     return 10000;
   }
-  if (categories.any((value) => value == normalizedQuery) || categorySlugs.any((value) => value == normalizedQuery)) {
+  if (normalizedCategories.any((value) => value == normalizedQuery) ||
+      normalizedCategorySlugs.any((value) => value == normalizedQuery)) {
     return 9000;
   }
-  if (tags.any((value) => value == normalizedQuery)) {
+  if (normalizedTags.any((value) => value == normalizedQuery)) {
     return 8000;
   }
-  if (name.startsWith(normalizedQuery) || slug.startsWith(normalizedQuery)) {
+  if (normalizedName.startsWith(normalizedQuery) || normalizedSlug.startsWith(normalizedQuery)) {
     return 7000;
   }
-  if (categories.any((value) => value.startsWith(normalizedQuery)) ||
-      categorySlugs.any((value) => value.startsWith(normalizedQuery)) ||
-      tags.any((value) => value.startsWith(normalizedQuery))) {
+  if (normalizedCategories.any((value) => value.startsWith(normalizedQuery)) ||
+      normalizedCategorySlugs.any((value) => value.startsWith(normalizedQuery)) ||
+      normalizedTags.any((value) => value.startsWith(normalizedQuery))) {
     return 6000;
   }
-  if (name.contains(normalizedQuery) || slug.contains(normalizedQuery)) {
+  if (normalizedName.contains(normalizedQuery) || normalizedSlug.contains(normalizedQuery)) {
     return 5000;
   }
   if (fields.any((value) => value.contains(normalizedQuery))) {
@@ -678,6 +1060,33 @@ int _scoreSearchMatch(_PrismItem item, String normalizedQuery) {
     return 2500 + matchingTokens;
   }
   return 0;
+}
+
+List<_RankedItemReference> _dedupeReferences(Iterable<_RankedItemReference> refs) {
+  final seen = <String>{};
+  final deduped = <_RankedItemReference>[];
+  for (final ref in refs) {
+    final key = '${ref.contentType}:${ref.id}';
+    if (ref.id.trim().isEmpty || !seen.add(key)) {
+      continue;
+    }
+    deduped.add(ref);
+  }
+  return deduped;
+}
+
+int _compareRankedReferences(_RankedItemReference a, _RankedItemReference b) {
+  final scoreCompare = b.score.compareTo(a.score);
+  if (scoreCompare != 0) {
+    return scoreCompare;
+  }
+  final aCreated = a.createdAt?.millisecondsSinceEpoch ?? 0;
+  final bCreated = b.createdAt?.millisecondsSinceEpoch ?? 0;
+  final createdCompare = bCreated.compareTo(aCreated);
+  if (createdCompare != 0) {
+    return createdCompare;
+  }
+  return a.ordinal.compareTo(b.ordinal);
 }
 
 Map<String, dynamic> _asMap(Object? value) {

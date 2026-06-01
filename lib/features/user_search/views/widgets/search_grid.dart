@@ -8,6 +8,7 @@ import 'package:Prism/features/category_feed/domain/entities/feed_item_entity.da
 import 'package:Prism/features/category_feed/views/widgets/wallpaper_tile.dart';
 import 'package:Prism/features/prism_catalog/data/prism_catalog_data_source.dart';
 import 'package:Prism/logger/logger.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 class SearchGrid extends StatefulWidget {
@@ -21,7 +22,10 @@ class SearchGrid extends StatefulWidget {
 
 class _SearchGridState extends State<SearchGrid> {
   final GlobalKey<RefreshIndicatorState> _refreshKey = GlobalKey<RefreshIndicatorState>();
+  static const Duration _thumbnailPrecacheTimeout = Duration(seconds: 3);
+
   final List<PrismFeedItem> _items = <PrismFeedItem>[];
+  final Set<String> _prefetchedThumbnailUrls = <String>{};
   late Future<void> _initialLoad;
   bool _hasMore = false;
   bool _loadingMore = false;
@@ -49,6 +53,10 @@ class _SearchGridState extends State<SearchGrid> {
   Future<void> _load({required bool refresh}) async {
     final page = await PrismCatalogDataSource.instance.search(query: widget.query, refresh: refresh);
     final incoming = page.items.whereType<PrismFeedItem>().toList(growable: false);
+    if (!mounted) {
+      return;
+    }
+    await _precacheThumbnails(incoming);
     if (!mounted) {
       return;
     }
@@ -96,7 +104,11 @@ class _SearchGridState extends State<SearchGrid> {
     }
     setState(() => _loadingMore = true);
     analytics.track(
-      SearchPaginationRequestedEvent(provider: SearchProviderValue.prismCatalog, queryLength: _queryLength, page: _currentPage + 1),
+      SearchPaginationRequestedEvent(
+        provider: SearchProviderValue.prismCatalog,
+        queryLength: _queryLength,
+        page: _currentPage + 1,
+      ),
     );
     try {
       await _load(refresh: false);
@@ -108,6 +120,22 @@ class _SearchGridState extends State<SearchGrid> {
         setState(() => _loadingMore = false);
       }
     }
+  }
+
+  Future<void> _precacheThumbnails(Iterable<PrismFeedItem> items) async {
+    final futures = <Future<void>>[];
+    for (final item in items) {
+      final url = item.thumbnailUrl.trim();
+      if (url.isEmpty || !_prefetchedThumbnailUrls.add(url)) {
+        continue;
+      }
+      futures.add(
+        precacheImage(CachedNetworkImageProvider(url), context)
+            .timeout(_thumbnailPrecacheTimeout)
+            .catchError((Object _) {}),
+      );
+    }
+    await Future.wait<void>(futures);
   }
 
   @override
