@@ -35,7 +35,7 @@ jobs:
           WALLPICS_ENV: ${{ secrets.WALLPICS_ENV }}
         run: |
           if [ -n "$WALLPICS_ENV" ]; then
-            printf '%s\n' "$WALLPICS_ENV" > .env
+            printf '%s\n' "$WALLPICS_ENV" | awk -F= '$1 != "GH_TOKEN" { print }' > .env
           fi
 
       - name: Flutter pub get

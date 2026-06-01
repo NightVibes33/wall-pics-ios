@@ -49,6 +49,8 @@ class GoogleAuth {
     try {
       await _ensureGoogleSignInInitialized();
       final GoogleSignInAccount googleAccount = await googleSignIn.authenticate();
+      final GoogleSignInAuthentication googleAuthentication = googleAccount.authentication;
+      final String identityToken = (googleAuthentication.idToken ?? '').trim();
       final String providerUserId = googleAccount.id.trim().isNotEmpty ? googleAccount.id : googleAccount.email;
       final String resolvedEmail = googleAccount.email.trim();
       final String resolvedDisplayName = _resolvedDisplayName(googleAccount.displayName, resolvedEmail);
@@ -70,6 +72,7 @@ class GoogleAuth {
         providerUserId: providerUserId,
         email: resolvedEmail,
         displayName: resolvedDisplayName,
+        identityToken: identityToken,
         photoUrl: resolvedPhotoUrl,
       );
       app_state.prismUser = user;

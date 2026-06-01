@@ -19,6 +19,9 @@ class Env {
   static const String ghRepoSetups = String.fromEnvironment('GH_REPO_SETUPS');
   static const String ghRepoUsers = String.fromEnvironment('GH_REPO_USERS');
 
+  // Production backend. The app calls this public API; GitHub tokens live only on the server.
+  static const String userStoreApiBaseUrl = String.fromEnvironment('USER_STORE_API_BASE_URL');
+
   // RevenueCat
   static const String rcApiKey = String.fromEnvironment('RC_API_KEY');
   static const String rcAndroidApiKey = String.fromEnvironment('RC_ANDROID_API_KEY');

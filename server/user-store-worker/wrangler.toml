@@ -1,0 +1,16 @@
+name = "wall-pics-user-store"
+main = "src/index.ts"
+compatibility_date = "2026-05-31"
+
+[vars]
+# Public values only. Set real values in Cloudflare dashboard or with wrangler secret put.
+# CORS_ORIGIN can be "*" for native app calls, or a specific web origin if reused on web.
+CORS_ORIGIN = "*"
+
+# Required secrets:
+# wrangler secret put GITHUB_TOKEN
+# wrangler secret put GITHUB_OWNER
+# wrangler secret put GITHUB_REPO
+# wrangler secret put SESSION_SECRET
+# wrangler secret put GOOGLE_CLIENT_ID
+# wrangler secret put APPLE_BUNDLE_ID

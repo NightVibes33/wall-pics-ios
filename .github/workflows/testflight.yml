@@ -42,7 +42,7 @@ jobs:
             echo "Missing WALLPICS_ENV secret with Prism dart-defines"
             exit 1
           fi
-          printf '%s\n' "$WALLPICS_ENV" > .env
+          printf '%s\n' "$WALLPICS_ENV" | awk -F= '$1 != "GH_TOKEN" { print }' > .env
 
       - name: Install CocoaPods
         run: sudo gem install cocoapods --no-document

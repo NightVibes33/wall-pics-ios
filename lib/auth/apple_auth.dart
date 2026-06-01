@@ -28,6 +28,7 @@ class AppleAuth {
         throw StateError('Apple sign-in returned no stable user id.');
       }
 
+      final String identityToken = (appleCredential.identityToken ?? '').trim();
       final String email = (appleCredential.email ?? '').trim();
       final String displayName = _resolvedDisplayName(
         givenName: appleCredential.givenName,
@@ -40,6 +41,7 @@ class AppleAuth {
         providerUserId: providerUserId,
         email: email,
         displayName: displayName,
+        identityToken: identityToken,
         photoUrl: app_state.defaultProfilePhotoUrl,
       );
       app_state.prismUser = user;
