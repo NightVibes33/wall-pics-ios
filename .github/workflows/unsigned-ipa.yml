@@ -30,6 +30,14 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Write optional app env
+        env:
+          WALLPICS_ENV: ${{ secrets.WALLPICS_ENV }}
+        run: |
+          if [ -n "$WALLPICS_ENV" ]; then
+            printf '%s\n' "$WALLPICS_ENV" > .env
+          fi
+
       - name: Flutter pub get
         run: flutter pub get
 
@@ -78,7 +86,11 @@ jobs:
               codesign --force --sign - --timestamp=none "$framework"
             done < <(find "$APP_PATH/Frameworks" -maxdepth 1 -type d -name '*.framework' -print0)
           fi
-          codesign --force --sign - --timestamp=none "$APP_PATH"
+          if [ -f ios/Runner/Runner.entitlements ]; then
+            codesign --force --sign - --entitlements ios/Runner/Runner.entitlements --timestamp=none "$APP_PATH"
+          else
+            codesign --force --sign - --timestamp=none "$APP_PATH"
+          fi
 
           echo "Embedded framework count:"
           find "$APP_PATH/Frameworks" -maxdepth 1 -name '*.framework' -print 2>/dev/null | wc -l

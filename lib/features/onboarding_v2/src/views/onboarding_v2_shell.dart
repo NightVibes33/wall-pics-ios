@@ -1,11 +1,14 @@
+import 'dart:io' show Platform;
 import 'dart:ui';
 
+import 'package:Prism/auth/apple_auth.dart';
 import 'package:Prism/auth/google_auth.dart';
 import 'package:Prism/core/audio/app_sound_manager.dart';
 import 'package:Prism/core/di/injection.dart';
 import 'package:Prism/core/purchases/paywall_orchestrator.dart';
 import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
+import 'package:Prism/core/state/auth_runtime.dart';
 import 'package:Prism/core/utils/edge_to_edge_overlay_style.dart';
 import 'package:Prism/core/utils/status.dart';
 import 'package:Prism/features/onboarding_v2/src/biz/onboarding_v2_bloc.j.dart';
@@ -33,6 +36,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:palette_generator/palette_generator.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+enum _AuthProvider { google, apple }
+
 @RoutePage(name: 'OnboardingV2ShellRoute')
 class OnboardingV2Shell extends StatefulWidget {
   const OnboardingV2Shell({super.key});
@@ -45,6 +50,7 @@ class _OnboardingV2ShellState extends State<OnboardingV2Shell> {
   late final OnboardingV2Bloc _bloc;
   late final TapGestureRecognizer _legalTap;
   bool _imagesPrecached = false;
+  _AuthProvider? _loadingAuthProvider;
 
   static const List<Widget> _pages = [
     F0AuthPage(),
@@ -113,25 +119,53 @@ class _OnboardingV2ShellState extends State<OnboardingV2Shell> {
     }
   }
 
-  Future<void> _handleGoogleSignIn() async {
+  Future<void> _handleAuthSignIn({
+    required _AuthProvider provider,
+    required Future<String> Function() signIn,
+    required String cancelledResult,
+  }) async {
+    if (_loadingAuthProvider != null) {
+      return;
+    }
+    setState(() => _loadingAuthProvider = provider);
     _bloc.add(const OnboardingV2Event.authLoadingChanged(isLoading: true));
     try {
-      final result = await app_state.gAuth.signInWithGoogle();
+      final String result = await signIn();
       if (!mounted) return;
-      if (result == GoogleAuth.signInCancelledResult) {
+      if (result == cancelledResult) {
         app_state.prismUser.loggedIn = false;
-        app_state.persistPrismUser();
+        await app_state.persistPrismUser();
         toasts.error('Sign in cancelled.');
         _bloc.add(const OnboardingV2Event.authLoadingChanged(isLoading: false));
       } else {
         app_state.prismUser.loggedIn = true;
-        app_state.persistPrismUser();
+        await app_state.persistPrismUser();
         _bloc.add(const OnboardingV2Event.authCompleted());
       }
     } catch (_) {
       if (mounted) toasts.error('Something went wrong, please try again!');
       _bloc.add(const OnboardingV2Event.authLoadingChanged(isLoading: false));
+    } finally {
+      if (mounted) {
+        setState(() => _loadingAuthProvider = null);
+      }
     }
+  }
+
+  Future<void> _handleGoogleSignIn() {
+    return _handleAuthSignIn(
+      provider: _AuthProvider.google,
+      signIn: app_state.gAuth.signInWithGoogle,
+      cancelledResult: GoogleAuth.signInCancelledResult,
+    );
+  }
+
+  Future<void> _handleAppleSignIn() {
+    return _handleAuthSignIn(
+      provider: _AuthProvider.apple,
+      signIn: globalAppleAuth.signInWithApple,
+      cancelledResult: AppleAuth.signInCancelledResult,
+    );
   }
 
   void _handleCtaTap(OnboardingV2Step step) {
@@ -257,7 +291,9 @@ class _OnboardingV2ShellState extends State<OnboardingV2Shell> {
                       child: _SharedOverlay(
                         state: state,
                         legalTap: _legalTap,
+                        authProviderLoading: _loadingAuthProvider,
                         onCtaTap: () => _handleCtaTap(state.step),
+                        onAppleTap: _handleAppleSignIn,
                       ),
                     ),
                   ],
@@ -276,11 +312,19 @@ class _OnboardingV2ShellState extends State<OnboardingV2Shell> {
 // Staggered fade-in fires once on initial mount (F0 open).
 // ---------------------------------------------------------------------------
 class _SharedOverlay extends StatefulWidget {
-  const _SharedOverlay({required this.state, required this.legalTap, required this.onCtaTap});
+  const _SharedOverlay({
+    required this.state,
+    required this.legalTap,
+    required this.authProviderLoading,
+    required this.onCtaTap,
+    required this.onAppleTap,
+  });
 
   final OnboardingV2State state;
   final TapGestureRecognizer legalTap;
+  final _AuthProvider? authProviderLoading;
   final VoidCallback onCtaTap;
+  final VoidCallback onAppleTap;
 
   @override
   State<_SharedOverlay> createState() => _SharedOverlayState();
@@ -370,7 +414,9 @@ class _SharedOverlayState extends State<_SharedOverlay> {
               sy: sy,
               visible: _buttonVisible,
               state: widget.state,
+              authProviderLoading: widget.authProviderLoading,
               onCtaTap: widget.onCtaTap,
+              onAppleTap: widget.onAppleTap,
             ),
             _BottomText(
               step: step,
@@ -508,7 +554,9 @@ class _CtaButton extends StatelessWidget {
     required this.sy,
     required this.visible,
     required this.state,
+    required this.authProviderLoading,
     required this.onCtaTap,
+    required this.onAppleTap,
   });
 
   final OnboardingV2Step step;
@@ -516,7 +564,9 @@ class _CtaButton extends StatelessWidget {
   final double sy;
   final bool visible;
   final OnboardingV2State state;
+  final _AuthProvider? authProviderLoading;
   final VoidCallback onCtaTap;
+  final VoidCallback onAppleTap;
 
   @override
   Widget build(BuildContext context) {
@@ -534,6 +584,33 @@ class _CtaButton extends StatelessWidget {
       OnboardingV2Step.aiGenerate => true,
       OnboardingV2Step.firstWallpaper => true,
     };
+
+    if (step == OnboardingV2Step.auth) {
+      final bool showApple = Platform.isIOS || Platform.isMacOS;
+      final double buttonHeight = OnboardingLayout.authCtaHeight * sy;
+      final double totalHeight = showApple
+          ? (OnboardingLayout.authCtaHeight * 2 + OnboardingLayout.authCtaGap) * sy
+          : buttonHeight;
+      return Positioned(
+        top: OnboardingLayout.authCtaY * sy,
+        left: OnboardingLayout.ctaX * sx,
+        right: OnboardingLayout.ctaX * sx,
+        height: totalHeight,
+        child: AnimatedOpacity(
+          opacity: visible ? 1.0 : 0.0,
+          duration: const Duration(milliseconds: 1000),
+          child: _AuthButtons(
+            showApple: showApple,
+            buttonHeight: buttonHeight,
+            gap: OnboardingLayout.authCtaGap * sy,
+            enabled: isEnabled,
+            loadingProvider: authProviderLoading,
+            onGoogleTap: onCtaTap,
+            onAppleTap: onAppleTap,
+          ),
+        ),
+      );
+    }
 
     final label = switch (step) {
       OnboardingV2Step.auth => 'continue with Google',
@@ -555,6 +632,104 @@ class _CtaButton extends StatelessWidget {
         opacity: visible ? 1.0 : 0.0,
         duration: const Duration(milliseconds: 1000),
         child: OnboardingPrimaryButton(label: label, onPressed: onCtaTap, enabled: isEnabled, loading: isLoading),
+      ),
+    );
+  }
+}
+
+
+class _AuthButtons extends StatelessWidget {
+  const _AuthButtons({
+    required this.showApple,
+    required this.buttonHeight,
+    required this.gap,
+    required this.enabled,
+    required this.loadingProvider,
+    required this.onGoogleTap,
+    required this.onAppleTap,
+  });
+
+  final bool showApple;
+  final double buttonHeight;
+  final double gap;
+  final bool enabled;
+  final _AuthProvider? loadingProvider;
+  final VoidCallback onGoogleTap;
+  final VoidCallback onAppleTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool anyLoading = loadingProvider != null;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: buttonHeight,
+          child: OnboardingPrimaryButton(
+            label: 'continue with Google',
+            onPressed: onGoogleTap,
+            enabled: enabled && !anyLoading,
+            loading: loadingProvider == _AuthProvider.google,
+          ),
+        ),
+        if (showApple) ...[
+          SizedBox(height: gap),
+          SizedBox(
+            height: buttonHeight,
+            child: _AppleSignInButton(
+              onPressed: onAppleTap,
+              enabled: enabled && !anyLoading,
+              loading: loadingProvider == _AuthProvider.apple,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _AppleSignInButton extends StatelessWidget {
+  const _AppleSignInButton({required this.onPressed, required this.enabled, required this.loading});
+
+  final VoidCallback onPressed;
+  final bool enabled;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isEnabled = enabled && !loading;
+    return AnimatedOpacity(
+      duration: OnboardingMotion.short,
+      opacity: isEnabled || loading ? 1 : OnboardingOpacity.disabledButton,
+      child: Material(
+        color: Colors.black,
+        borderRadius: BorderRadius.circular(OnboardingRadius.cta),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(OnboardingRadius.cta),
+          onTap: isEnabled ? onPressed : null,
+          child: Center(
+            child: AnimatedSwitcher(
+              duration: OnboardingMotion.short,
+              child: loading
+                  ? const SizedBox(
+                      width: OnboardingLayout.loadingIndicatorSize,
+                      height: OnboardingLayout.loadingIndicatorSize,
+                      child: CircularProgressIndicator(
+                        strokeWidth: OnboardingLayout.loadingIndicatorStroke,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.apple, color: Colors.white, size: 20),
+                        const SizedBox(width: 8),
+                        Text('continue with Apple', style: OnboardingTypography.cta.copyWith(color: Colors.white)),
+                      ],
+                    ),
+            ),
+          ),
+        ),
       ),
     );
   }

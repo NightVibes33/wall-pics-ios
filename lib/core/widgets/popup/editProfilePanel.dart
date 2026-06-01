@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:Prism/auth/github_user_store.dart';
 import 'package:Prism/core/remote_store/remote_collections.dart';
 import 'package:Prism/core/coins/coins_service.dart';
 import 'package:Prism/core/remote_store/remote_store_query_specs.dart';
@@ -347,8 +348,9 @@ class _EditProfilePanelState extends State<EditProfilePanel> {
     );
   }
 
-  Future<void> _updateCurrentUser(Map<String, dynamic> data, String sourceTag) {
-    return remoteStoreClient.updateDoc(RemoteCollections.usersV2, app_state.prismUser.id, data, sourceTag: sourceTag);
+  Future<void> _updateCurrentUser(Map<String, dynamic> data, String sourceTag) async {
+    await remoteStoreClient.updateDoc(RemoteCollections.usersV2, app_state.prismUser.id, data, sourceTag: sourceTag);
+    await const GitHubUserStore().updateCurrentUserFields(data, sourceTag: sourceTag);
   }
 
   Future<bool> _isUsernameAvailable(String username) async {
