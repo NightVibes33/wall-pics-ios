@@ -333,7 +333,7 @@ class _SetupViewScreenState extends State<SetupViewScreen> with SingleTickerProv
                                         GestureDetector(
                                           onTap: () {
                                             final s = context.setupsAdapter(listen: false).setups![index!];
-                                            final String? docId = s.firestoreDocumentId;
+                                            final String? docId = s.remoteStoreDocumentId;
                                             if (docId == null || docId.isEmpty) {
                                               toasts.error('Report unavailable for this setup.');
                                               return;
@@ -341,7 +341,7 @@ class _SetupViewScreenState extends State<SetupViewScreen> with SingleTickerProv
                                             showContentReportSheet(
                                               context,
                                               contentType: 'setup',
-                                              targetFirestoreDocId: docId,
+                                              targetRemoteStoreDocId: docId,
                                               subtitle: s.name,
                                             );
                                           },

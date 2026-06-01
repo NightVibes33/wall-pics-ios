@@ -28,6 +28,6 @@ abstract class PublicProfileSetupEntity with _$PublicProfileSetupEntity {
     @Default(false) bool review,
     String? resolution,
     String? size,
-    String? firestoreDocumentId,
+    String? remoteStoreDocumentId,
   }) = _PublicProfileSetupEntity;
 }

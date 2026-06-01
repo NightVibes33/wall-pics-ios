@@ -1,6 +1,6 @@
 import 'package:Prism/core/di/injection.dart';
-import 'package:Prism/core/firestore/firestore_collections.dart';
-import 'package:Prism/core/firestore/firestore_runtime.dart';
+import 'package:Prism/core/remote_store/remote_collections.dart';
+import 'package:Prism/core/remote_store/remote_store_runtime.dart';
 import 'package:Prism/core/persistence/data_sources/app_icons_local_data_source.dart';
 import 'package:Prism/data/apps/app_icon.dart';
 import 'package:Prism/logger/logger.dart';
@@ -31,8 +31,8 @@ Future<List<AppIcon>> getIcons() async {
 
   logger.i("Fethcing icons");
   try {
-    final value = await firestoreClient.getById<Map<String, dynamic>>(
-      FirebaseCollections.apps,
+    final value = await remoteStoreClient.getById<Map<String, dynamic>>(
+      RemoteCollections.apps,
       "icons",
       (data, _) => data,
       sourceTag: "apps.getIcons",

@@ -91,16 +91,5 @@ if [[ -n "$direct_mixpanel_usage" ]]; then
   exit 1
 fi
 
-direct_firebase_analytics_usage="$(
-  rg -n --no-heading "FirebaseAnalytics\\.(instance|observer)|FirebaseAnalyticsObserver\\(" lib test \
-    -g '!lib/core/analytics/**' \
-    -g '!test/core/analytics/**' || true
-)"
-
-if [[ -n "$direct_firebase_analytics_usage" ]]; then
-  echo "Forbidden direct Firebase analytics usage detected outside analytics internals:"
-  echo "$direct_firebase_analytics_usage"
-  exit 1
-fi
 
 echo "analytics_raw_usage_guard passed: no raw analytics event usage found."

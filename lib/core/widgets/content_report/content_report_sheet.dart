@@ -2,9 +2,9 @@ import 'package:Prism/analytics/analytics_service.dart';
 import 'package:Prism/core/analytics/events/events.dart';
 import 'package:Prism/core/content_reports/content_report_repository.dart';
 import 'package:Prism/core/di/injection.dart';
+import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:Prism/core/widgets/popup/signInPopUp.dart';
 import 'package:Prism/theme/toasts.dart' as toasts;
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -20,13 +20,13 @@ const List<(String wire, String label)> kContentReportReasons = <(String, String
 Future<void> showContentReportSheet(
   BuildContext context, {
   required String contentType,
-  required String targetFirestoreDocId,
+  required String targetRemoteStoreDocId,
   String? subtitle,
 }) async {
   if (!context.mounted) {
     return;
   }
-  if (FirebaseAuth.instance.currentUser == null) {
+  if (!app_state.prismUser.loggedIn) {
     toasts.error('Sign in to report content');
     googleSignInPopUp(context, () {});
     return;
@@ -39,7 +39,7 @@ Future<void> showContentReportSheet(
     builder: (BuildContext sheetContext) {
       return _ContentReportSheetBody(
         contentType: contentType,
-        targetFirestoreDocId: targetFirestoreDocId,
+        targetRemoteStoreDocId: targetRemoteStoreDocId,
         subtitle: subtitle,
       );
     },
@@ -47,10 +47,10 @@ Future<void> showContentReportSheet(
 }
 
 class _ContentReportSheetBody extends StatefulWidget {
-  const _ContentReportSheetBody({required this.contentType, required this.targetFirestoreDocId, this.subtitle});
+  const _ContentReportSheetBody({required this.contentType, required this.targetRemoteStoreDocId, this.subtitle});
 
   final String contentType;
-  final String targetFirestoreDocId;
+  final String targetRemoteStoreDocId;
   final String? subtitle;
 
   @override
@@ -84,7 +84,7 @@ class _ContentReportSheetBodyState extends State<_ContentReportSheetBody> {
     final ContentReportRepository repo = getIt<ContentReportRepository>();
     final result = await repo.submitReport(
       contentType: widget.contentType,
-      targetFirestoreDocId: widget.targetFirestoreDocId,
+      targetRemoteStoreDocId: widget.targetRemoteStoreDocId,
       reason: reason,
       details: _details.text,
       appVersion: appVersion,

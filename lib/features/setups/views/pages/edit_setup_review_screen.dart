@@ -3,12 +3,12 @@ import 'dart:io';
 
 import 'package:Prism/analytics/analytics_service.dart';
 import 'package:Prism/core/analytics/events/events.dart';
-import 'package:Prism/core/firestore/firestore_document.dart';
+import 'package:Prism/core/remote_store/remote_store_document.dart';
 import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:Prism/data/apps/app_icon.dart';
 import 'package:Prism/data/apps/appsData.dart';
-import 'package:Prism/data/upload/wallpaper/wallfirestore.dart' as WallStore;
+import 'package:Prism/data/upload/wallpaper/wall_remote_store.dart' as WallStore;
 import 'package:Prism/env/env.dart';
 import 'package:Prism/logger/logger.dart';
 import 'package:Prism/theme/jam_icons_icons.dart';
@@ -25,7 +25,7 @@ import 'package:path/path.dart' as Path;
 class EditSetupReviewScreen extends StatefulWidget {
   const EditSetupReviewScreen({super.key, required this.setupDoc});
 
-  final FirestoreDocument setupDoc;
+  final RemoteStoreDocument setupDoc;
 
   @override
   _EditSetupReviewScreenState createState() => _EditSetupReviewScreenState();
@@ -35,7 +35,7 @@ class _EditSetupReviewScreenState extends State<EditSetupReviewScreen> {
   late bool isUploading;
   late bool isProcessing;
   late File image;
-  late FirestoreDocument setupDoc;
+  late RemoteStoreDocument setupDoc;
   String? imageURL;
   TextEditingController setupName = TextEditingController();
   TextEditingController setupDesc = TextEditingController();

@@ -6,7 +6,7 @@ import 'package:Prism/analytics/analytics_service.dart';
 import 'package:Prism/core/analytics/events/events.dart';
 import 'package:Prism/core/coins/coins_service.dart';
 import 'package:Prism/core/di/injection.dart';
-import 'package:Prism/core/firestore/firestore_error.dart';
+import 'package:Prism/core/remote_store/remote_store_error.dart';
 import 'package:Prism/core/network/connectivity_service.dart';
 import 'package:Prism/core/platform/pigeon/prism_media_api.g.dart';
 import 'package:Prism/core/platform/wallpaper_capability.dart';
@@ -14,7 +14,7 @@ import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:Prism/core/wallpaper/wallpaper_source.dart';
 import 'package:Prism/core/widgets/coins/coin_balance_chip.dart';
-import 'package:Prism/data/upload/wallpaper/wallfirestore.dart' as wallstore;
+import 'package:Prism/data/upload/wallpaper/wall_remote_store.dart' as wallstore;
 import 'package:Prism/features/ai_wallpaper/data/repositories/ai_generation_repository_impl.dart';
 import 'package:Prism/features/ai_wallpaper/domain/entities/ai_charge_mode.dart';
 import 'package:Prism/features/ai_wallpaper/domain/entities/ai_generation_record.dart';
@@ -24,7 +24,6 @@ import 'package:Prism/features/ai_wallpaper/views/widgets/ai_sheet_chrome.dart';
 import 'package:Prism/logger/logger.dart';
 import 'package:Prism/theme/toasts.dart' as toasts;
 import 'package:auto_route/auto_route.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -193,14 +192,7 @@ class _AiWallpaperTabPageState extends State<AiWallpaperTabPage> {
     if (error is SocketException || error is TimeoutException || error is http.ClientException) {
       return true;
     }
-    if (error is FirebaseException && (error.code == 'unavailable' || error.code == 'deadline-exceeded')) {
-      return true;
-    }
-    if (error is FirestoreError) {
-      final Object? original = error.original;
-      if (original is FirebaseException && (original.code == 'unavailable' || original.code == 'deadline-exceeded')) {
-        return true;
-      }
+    if (error is RemoteStoreError) {
     }
     return false;
   }

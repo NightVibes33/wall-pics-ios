@@ -365,7 +365,7 @@ class EditProfilePanelRoute extends PageRouteInfo<void> {
 class EditSetupReviewRoute extends PageRouteInfo<EditSetupReviewRouteArgs> {
   EditSetupReviewRoute({
     Key? key,
-    required FirestoreDocument setupDoc,
+    required RemoteStoreDocument setupDoc,
     List<PageRouteInfo>? children,
   }) : super(
          EditSetupReviewRoute.name,
@@ -389,7 +389,7 @@ class EditSetupReviewRouteArgs {
 
   final Key? key;
 
-  final FirestoreDocument setupDoc;
+  final RemoteStoreDocument setupDoc;
 
   @override
   String toString() {
@@ -531,17 +531,17 @@ class FavouriteWallpaperRoute extends PageRouteInfo<void> {
 }
 
 /// generated route for
-/// [FirestoreTelemetryScreen]
-class FirestoreTelemetryRoute extends PageRouteInfo<void> {
-  const FirestoreTelemetryRoute({List<PageRouteInfo>? children})
-    : super(FirestoreTelemetryRoute.name, initialChildren: children);
+/// [RemoteStoreTelemetryScreen]
+class RemoteStoreTelemetryRoute extends PageRouteInfo<void> {
+  const RemoteStoreTelemetryRoute({List<PageRouteInfo>? children})
+    : super(RemoteStoreTelemetryRoute.name, initialChildren: children);
 
-  static const String name = 'FirestoreTelemetryRoute';
+  static const String name = 'RemoteStoreTelemetryRoute';
 
   static PageInfo page = PageInfo(
     name,
     builder: (data) {
-      return const FirestoreTelemetryScreen();
+      return const RemoteStoreTelemetryScreen();
     },
   );
 }

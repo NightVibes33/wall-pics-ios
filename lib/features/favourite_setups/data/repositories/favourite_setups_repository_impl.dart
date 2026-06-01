@@ -1,7 +1,7 @@
 import 'package:Prism/core/error/failure.dart';
-import 'package:Prism/core/firestore/dtos/setup_doc_dto.dart';
-import 'package:Prism/core/firestore/firestore_client.dart';
-import 'package:Prism/core/firestore/firestore_query_specs.dart';
+import 'package:Prism/core/remote_store/dtos/setup_doc_dto.dart';
+import 'package:Prism/core/remote_store/remote_store_client.dart';
+import 'package:Prism/core/remote_store/remote_store_query_specs.dart';
 import 'package:Prism/core/persistence/data_sources/favorites_local_data_source.dart';
 import 'package:Prism/core/utils/result.dart';
 import 'package:Prism/core/wallpaper/wallpaper_source.dart';
@@ -11,16 +11,16 @@ import 'package:injectable/injectable.dart';
 
 @LazySingleton(as: FavouriteSetupsRepository)
 class FavouriteSetupsRepositoryImpl implements FavouriteSetupsRepository {
-  FavouriteSetupsRepositoryImpl(this._firestoreClient, this._favoritesLocal);
+  FavouriteSetupsRepositoryImpl(this._remoteStoreClient, this._favoritesLocal);
 
-  final FirestoreClient _firestoreClient;
+  final RemoteStoreClient _remoteStoreClient;
   final FavoritesLocalDataSource _favoritesLocal;
 
   String _collectionPath(String userId) => 'usersv2/$userId/setups';
 
   Future<List<FavouriteSetupEntity>> _read(String userId) async {
-    final rows = await _firestoreClient.query<_SetupRow>(
-      FirestoreQuerySpec(collection: _collectionPath(userId), sourceTag: 'favourite_setups.read'),
+    final rows = await _remoteStoreClient.query<_SetupRow>(
+      RemoteStoreQuerySpec(collection: _collectionPath(userId), sourceTag: 'favourite_setups.read'),
       (data, docId) => _SetupRow(docId: docId, doc: SetupDocDto.fromJson(data)),
     );
 
@@ -53,24 +53,24 @@ class FavouriteSetupsRepositoryImpl implements FavouriteSetupsRepository {
     required FavouriteSetupEntity setup,
   }) async {
     try {
-      final existing = await _firestoreClient.getById<Map<String, dynamic>>(
+      final existing = await _remoteStoreClient.getById<Map<String, dynamic>>(
         _collectionPath(userId),
         setup.id,
         (data, _) => data,
         sourceTag: 'favourite_setups.toggle.get',
       );
       if (existing != null) {
-        await _firestoreClient.deleteDoc(
+        await _remoteStoreClient.deleteDoc(
           _collectionPath(userId),
           setup.id,
           sourceTag: 'favourite_setups.toggle.delete',
         );
         await _favoritesLocal.setSetupFavourite(userId, setup.id, false);
       } else {
-        await _firestoreClient.setDoc(
+        await _remoteStoreClient.setDoc(
           _collectionPath(userId),
           setup.id,
-          _toFirestoreDoc(setup),
+          _toRemoteStoreDoc(setup),
           sourceTag: 'favourite_setups.toggle.set',
         );
         await _favoritesLocal.setSetupFavourite(userId, setup.id, true);
@@ -84,7 +84,7 @@ class FavouriteSetupsRepositoryImpl implements FavouriteSetupsRepository {
   @override
   Future<Result<List<FavouriteSetupEntity>>> removeFavourite({required String userId, required String setupId}) async {
     try {
-      await _firestoreClient.deleteDoc(_collectionPath(userId), setupId, sourceTag: 'favourite_setups.remove');
+      await _remoteStoreClient.deleteDoc(_collectionPath(userId), setupId, sourceTag: 'favourite_setups.remove');
       await _favoritesLocal.setSetupFavourite(userId, setupId, false);
       return Result.success(await _read(userId));
     } catch (error) {
@@ -95,13 +95,13 @@ class FavouriteSetupsRepositoryImpl implements FavouriteSetupsRepository {
   @override
   Future<Result<List<FavouriteSetupEntity>>> clearAll({required String userId}) async {
     try {
-      final rows = await _firestoreClient.query<String>(
-        FirestoreQuerySpec(collection: _collectionPath(userId), sourceTag: 'favourite_setups.clear_all.read'),
+      final rows = await _remoteStoreClient.query<String>(
+        RemoteStoreQuerySpec(collection: _collectionPath(userId), sourceTag: 'favourite_setups.clear_all.read'),
         (_, docId) => docId,
       );
       for (final String id in rows) {
         if (id.isEmpty) continue;
-        await _firestoreClient.deleteDoc(_collectionPath(userId), id, sourceTag: 'favourite_setups.clear_all.delete');
+        await _remoteStoreClient.deleteDoc(_collectionPath(userId), id, sourceTag: 'favourite_setups.clear_all.delete');
       }
       return Result.success(const <FavouriteSetupEntity>[]);
     } catch (error) {
@@ -133,11 +133,11 @@ class FavouriteSetupsRepositoryImpl implements FavouriteSetupsRepository {
       review: dto.review,
       resolution: dto.resolution,
       size: dto.size,
-      firestoreDocumentId: docId,
+      remoteStoreDocumentId: docId,
     );
   }
 
-  Map<String, dynamic> _toFirestoreDoc(FavouriteSetupEntity setup) {
+  Map<String, dynamic> _toRemoteStoreDoc(FavouriteSetupEntity setup) {
     return <String, dynamic>{
       'id': setup.id,
       'by': setup.by,

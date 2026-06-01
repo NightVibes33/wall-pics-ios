@@ -19,7 +19,6 @@ These paths are copied from Prism and should not be rewritten unless we are inte
 - `ios/Runner/SceneDelegate.swift`
 - `ios/Runner/PrismMediaHostApiImpl.swift`
 - `ios/Runner/Pigeon/`
-- `packages/cloud_functions/`
 - `pigeons/`
 
 ## Wall Pics deltas allowed before push
@@ -35,10 +34,6 @@ Only these changes are expected in the direct clone candidate:
 
 ## Current blocker for TestFlight-ready production build
 
-The upstream Prism app expects runtime configuration that is not in the public repo:
+The app expects Prism dart-defines for GitHub, RevenueCat, Pexels, Sentry, Mixpanel, and optional AI client-token values.
 
-- `lib/firebase_options.dart`
-- `ios/Runner/GoogleService-Info.plist`
-- Prism dart-defines for GitHub, RevenueCat, Pexels, Sentry, and Mixpanel values
-
-The unsigned CI workflow can build with Firebase stubs and `SKIP_FIREBASE_INIT=true` for install testing. The TestFlight workflow intentionally fails until production Firebase files and Prism dart-defines are provided as GitHub secrets.
+The unsigned CI workflow builds without signing or App Store Connect material. The TestFlight workflow uses only App Store Connect signing/upload secrets plus Prism dart-defines.

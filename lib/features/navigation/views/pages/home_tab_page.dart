@@ -18,7 +18,6 @@ import 'package:Prism/features/personalized_feed/views/pages/personalized_feed_s
 import 'package:Prism/logger/logger.dart';
 import 'package:Prism/notifications/topic_subscription.dart';
 import 'package:auto_route/auto_route.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:internet_connection_checker/internet_connection_checker.dart';
@@ -44,13 +43,11 @@ class _HomeTabPageState extends State<HomeTabPage> {
 
   Future<void> _ensureDefaultTopicSubscriptions() async {
     if (!_settingsLocal.get<bool>('subscribedToRecommendations', defaultValue: false)) {
-      final messaging = FirebaseMessaging.instance;
       final bool recommendationsSubscribed = await subscribeToTopicSafely(
-        messaging,
         'recommendations',
         sourceTag: 'home_tab.init.recommendations',
       );
-      final bool postsSubscribed = await subscribeToTopicSafely(messaging, 'posts', sourceTag: 'home_tab.init.posts');
+      final bool postsSubscribed = await subscribeToTopicSafely('posts', sourceTag: 'home_tab.init.posts');
       if (recommendationsSubscribed && postsSubscribed) {
         _settingsLocal.set('subscribedToRecommendations', true);
       }

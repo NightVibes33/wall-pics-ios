@@ -29,7 +29,7 @@ abstract class FavouriteSetupEntity with _$FavouriteSetupEntity {
     String? resolution,
     String? size,
 
-    /// Firestore document id (favourite copy key; matches global setup id when favourited from feed).
-    String? firestoreDocumentId,
+    /// RemoteStore document id (favourite copy key; matches global setup id when favourited from feed).
+    String? remoteStoreDocumentId,
   }) = _FavouriteSetupEntity;
 }

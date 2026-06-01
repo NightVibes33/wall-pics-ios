@@ -3,8 +3,8 @@ import 'dart:io';
 
 import 'package:Prism/analytics/analytics_service.dart';
 import 'package:Prism/core/analytics/events/events.dart';
-import 'package:Prism/core/firestore/firestore_collections.dart';
-import 'package:Prism/core/firestore/firestore_runtime.dart';
+import 'package:Prism/core/remote_store/remote_collections.dart';
+import 'package:Prism/core/remote_store/remote_store_runtime.dart';
 import 'package:Prism/core/purchases/purchase_constants.dart';
 import 'package:Prism/core/purchases/subscription_tier.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
@@ -42,7 +42,7 @@ class PurchasesService {
   bool _configured = false;
   String _configuredUserId = '';
 
-  /// Skip redundant Firestore subscription updates when state unchanged (co-ordinate with coin sync / reduce usersv2 writes).
+  /// Skip redundant RemoteStore subscription updates when state unchanged (co-ordinate with coin sync / reduce usersv2 writes).
   static const Duration _subscriptionPersistThrottle = Duration(minutes: 5);
   bool? _lastPersistedPremium;
   String? _lastPersistedTier;
@@ -161,7 +161,7 @@ class PurchasesService {
     return lifetime ? SubscriptionTier.lifetime : SubscriptionTier.pro;
   }
 
-  Future<void> _persistSubscriptionStateToFirestore({required bool isPremium, required SubscriptionTier tier}) async {
+  Future<void> _persistSubscriptionStateToRemoteStore({required bool isPremium, required SubscriptionTier tier}) async {
     final String userId = app_state.prismUser.id.trim();
     if (userId.isEmpty || !app_state.prismUser.loggedIn) {
       return;
@@ -174,7 +174,7 @@ class PurchasesService {
       return;
     }
     try {
-      await firestoreClient.updateDoc(FirebaseCollections.usersV2, userId, <String, dynamic>{
+      await remoteStoreClient.updateDoc(RemoteCollections.usersV2, userId, <String, dynamic>{
         'premium': isPremium,
         'subscriptionTier': tier.value,
       }, sourceTag: 'purchases.sync_subscription_state');
@@ -182,7 +182,7 @@ class PurchasesService {
       _lastPersistedTier = tier.value;
       _lastPersistSubscriptionTime = now;
     } catch (error, stackTrace) {
-      logger.w('Unable to persist subscription state to Firestore.', error: error, stackTrace: stackTrace);
+      logger.w('Unable to persist subscription state to RemoteStore.', error: error, stackTrace: stackTrace);
     }
   }
 
@@ -242,7 +242,7 @@ class PurchasesService {
       app_state.prismUser.premium = isPremium;
       app_state.prismUser.subscriptionTier = tier.value;
       app_state.persistPrismUser();
-      await _persistSubscriptionStateToFirestore(isPremium: isPremium, tier: tier);
+      await _persistSubscriptionStateToRemoteStore(isPremium: isPremium, tier: tier);
       await _syncAnalyticsSubscriptionState(isPremium: isPremium, tier: tier);
       if (!wasPremium && isPremium) {
         await _logSubscriptionConversion(tier: tier, conversionContext: conversionContext);

@@ -392,7 +392,7 @@ class _UserProfileSetupViewScreenState extends State<UserProfileSetupViewScreen>
                                         ),
                                         GestureDetector(
                                           onTap: () async {
-                                            final String? docId = _setup.firestoreDocumentId;
+                                            final String? docId = _setup.remoteStoreDocumentId;
                                             if (docId == null || docId.isEmpty) {
                                               toasts.error('Report unavailable for this setup.');
                                               return;
@@ -400,7 +400,7 @@ class _UserProfileSetupViewScreenState extends State<UserProfileSetupViewScreen>
                                             showContentReportSheet(
                                               context,
                                               contentType: 'setup',
-                                              targetFirestoreDocId: docId,
+                                              targetRemoteStoreDocId: docId,
                                               subtitle: _setup.name,
                                             );
                                           },

@@ -1,6 +1,6 @@
-import 'package:Prism/core/firestore/firestore_collections.dart';
-import 'package:Prism/core/firestore/firestore_query_specs.dart';
-import 'package:Prism/core/firestore/firestore_runtime.dart';
+import 'package:Prism/core/remote_store/remote_collections.dart';
+import 'package:Prism/core/remote_store/remote_store_query_specs.dart';
+import 'package:Prism/core/remote_store/remote_store_runtime.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:Prism/theme/jam_icons_icons.dart';
 import 'package:Prism/theme/toasts.dart' as toasts;
@@ -111,14 +111,14 @@ class _EnterCodePanelState extends State<EnterCodePanel> {
                               setState(() {
                                 isLoading = true;
                               });
-                              final matches = await firestoreClient.query<_RedeemCodeDoc>(
-                                FirestoreQuerySpec(
-                                  collection: FirebaseCollections.codes,
+                              final matches = await remoteStoreClient.query<_RedeemCodeDoc>(
+                                RemoteStoreQuerySpec(
+                                  collection: RemoteCollections.codes,
                                   sourceTag: 'codes.redeem.lookup',
-                                  filters: <FirestoreFilter>[
-                                    FirestoreFilter(
+                                  filters: <RemoteStoreFilter>[
+                                    RemoteStoreFilter(
                                       field: 'code',
-                                      op: FirestoreFilterOp.isEqualTo,
+                                      op: RemoteStoreFilterOp.isEqualTo,
                                       value: codeController.text.toLowerCase(),
                                     ),
                                   ],
@@ -129,7 +129,7 @@ class _EnterCodePanelState extends State<EnterCodePanel> {
                               if (matches.isNotEmpty) {
                                 final doc = matches.first;
                                 if (doc.data["redeemed"] == false) {
-                                  await firestoreClient.updateDoc(FirebaseCollections.codes, doc.id, <String, dynamic>{
+                                  await remoteStoreClient.updateDoc(RemoteCollections.codes, doc.id, <String, dynamic>{
                                     "redeemed": true,
                                     "winner": app_state.prismUser.toJson(),
                                     "when": DateTime.now().toUtc(),

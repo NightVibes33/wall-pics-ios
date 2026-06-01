@@ -1,8 +1,8 @@
 import 'package:Prism/core/error/failure.dart';
-import 'package:Prism/core/firestore/dtos/setup_doc_dto.dart';
-import 'package:Prism/core/firestore/firestore_client.dart';
-import 'package:Prism/core/firestore/firestore_collections.dart';
-import 'package:Prism/core/firestore/firestore_query_specs.dart';
+import 'package:Prism/core/remote_store/dtos/setup_doc_dto.dart';
+import 'package:Prism/core/remote_store/remote_store_client.dart';
+import 'package:Prism/core/remote_store/remote_collections.dart';
+import 'package:Prism/core/remote_store/remote_store_query_specs.dart';
 import 'package:Prism/core/persistence/data_sources/feed_cache_local_data_source.dart';
 import 'package:Prism/core/user_blocks/blocked_creators_filter.dart';
 import 'package:Prism/core/utils/result.dart';
@@ -15,9 +15,9 @@ import 'package:injectable/injectable.dart';
 
 @LazySingleton(as: SetupsRepository)
 class SetupsRepositoryImpl implements SetupsRepository {
-  SetupsRepositoryImpl(this._firestoreClient, this._feedCacheLocal, this._userBlockRepository);
+  SetupsRepositoryImpl(this._remoteStoreClient, this._feedCacheLocal, this._userBlockRepository);
 
-  final FirestoreClient _firestoreClient;
+  final RemoteStoreClient _remoteStoreClient;
   final FeedCacheLocalDataSource _feedCacheLocal;
   final UserBlockRepository _userBlockRepository;
   String? _cursorDocId;
@@ -27,17 +27,17 @@ class SetupsRepositoryImpl implements SetupsRepository {
   @override
   Future<Result<SetupsPage>> fetchSetups({required bool refresh}) async {
     try {
-      final rows = await _firestoreClient.query<_SetupRow>(
-        FirestoreQuerySpec(
-          collection: FirebaseCollections.setups,
+      final rows = await _remoteStoreClient.query<_SetupRow>(
+        RemoteStoreQuerySpec(
+          collection: RemoteCollections.setups,
           sourceTag: 'setups.fetch_setups',
-          filters: const <FirestoreFilter>[
-            FirestoreFilter(field: 'review', op: FirestoreFilterOp.isEqualTo, value: true),
+          filters: const <RemoteStoreFilter>[
+            RemoteStoreFilter(field: 'review', op: RemoteStoreFilterOp.isEqualTo, value: true),
           ],
-          orderBy: const <FirestoreOrderBy>[FirestoreOrderBy(field: 'created_at', descending: true)],
+          orderBy: const <RemoteStoreOrderBy>[RemoteStoreOrderBy(field: 'created_at', descending: true)],
           limit: 10,
           startAfterDocId: refresh ? null : _cursorDocId,
-          cachePolicy: refresh ? FirestoreCachePolicy.networkOnly : FirestoreCachePolicy.memoryFirst,
+          cachePolicy: refresh ? RemoteStoreCachePolicy.networkOnly : RemoteStoreCachePolicy.memoryFirst,
           dedupeWindowMs: refresh ? 0 : _setupsReadDedupeMs,
         ),
         (data, docId) => _SetupRow(docId: docId, doc: SetupDocDto.fromJson(data)),
@@ -141,7 +141,7 @@ class SetupsRepositoryImpl implements SetupsRepository {
       review: dto.review,
       resolution: dto.resolution,
       size: dto.size,
-      firestoreDocumentId: docId,
+      remoteStoreDocumentId: docId,
     );
   }
 }

@@ -1,8 +1,8 @@
 import 'package:Prism/core/error/failure.dart';
-import 'package:Prism/core/firestore/dtos/setup_doc_dto.dart';
-import 'package:Prism/core/firestore/firestore_client.dart';
-import 'package:Prism/core/firestore/firestore_collections.dart';
-import 'package:Prism/core/firestore/firestore_query_specs.dart';
+import 'package:Prism/core/remote_store/dtos/setup_doc_dto.dart';
+import 'package:Prism/core/remote_store/remote_store_client.dart';
+import 'package:Prism/core/remote_store/remote_collections.dart';
+import 'package:Prism/core/remote_store/remote_store_query_specs.dart';
 import 'package:Prism/core/user_blocks/blocked_creators_filter.dart';
 import 'package:Prism/core/utils/result.dart';
 import 'package:Prism/core/wallpaper/wallpaper_source.dart';
@@ -14,9 +14,9 @@ import 'package:injectable/injectable.dart';
 
 @LazySingleton(as: ProfileSetupsRepository)
 class ProfileSetupsRepositoryImpl implements ProfileSetupsRepository {
-  ProfileSetupsRepositoryImpl(this._firestoreClient, this._userBlockRepository);
+  ProfileSetupsRepositoryImpl(this._remoteStoreClient, this._userBlockRepository);
 
-  final FirestoreClient _firestoreClient;
+  final RemoteStoreClient _remoteStoreClient;
   final UserBlockRepository _userBlockRepository;
   final Map<String, String> _cursorByEmail = {};
 
@@ -28,15 +28,15 @@ class ProfileSetupsRepositoryImpl implements ProfileSetupsRepository {
     }
     try {
       final cursor = _cursorByEmail[email];
-      final rows = await _firestoreClient.query<_SetupRow>(
-        FirestoreQuerySpec(
-          collection: FirebaseCollections.setups,
+      final rows = await _remoteStoreClient.query<_SetupRow>(
+        RemoteStoreQuerySpec(
+          collection: RemoteCollections.setups,
           sourceTag: 'profile_setups.fetch',
-          filters: <FirestoreFilter>[
-            const FirestoreFilter(field: 'review', op: FirestoreFilterOp.isEqualTo, value: true),
-            FirestoreFilter(field: 'email', op: FirestoreFilterOp.isEqualTo, value: email),
+          filters: <RemoteStoreFilter>[
+            const RemoteStoreFilter(field: 'review', op: RemoteStoreFilterOp.isEqualTo, value: true),
+            RemoteStoreFilter(field: 'email', op: RemoteStoreFilterOp.isEqualTo, value: email),
           ],
-          orderBy: const <FirestoreOrderBy>[FirestoreOrderBy(field: 'created_at', descending: true)],
+          orderBy: const <RemoteStoreOrderBy>[RemoteStoreOrderBy(field: 'created_at', descending: true)],
           limit: 8,
           startAfterDocId: refresh ? null : cursor,
         ),
@@ -80,7 +80,7 @@ class ProfileSetupsRepositoryImpl implements ProfileSetupsRepository {
       review: dto.review,
       resolution: dto.resolution,
       size: dto.size,
-      firestoreDocumentId: docId,
+      remoteStoreDocumentId: docId,
     );
   }
 }

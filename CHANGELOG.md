@@ -10,11 +10,11 @@
 - Added user blocking, with follow-up fixes for notification auth, cooldowns, and review feedback
 - Revamped the collections page, personalised feed editor, AI generation screen, streak UI, and bottom bar sizing
 - Grouped notifications and improved in-app notification behaviour
-- Added wallpaper reporting and migrated wall/setup view tracking from GitHub-backed data to Firestore
+- Added wallpaper reporting and migrated wall/setup view tracking from GitHub-backed data to RemoteStore
 - Fixed Wall of the Day generation, profile refresh, and edit profile reliability
 - Reworked the wallpaper detail sheet with liquid-glass styling, richer color handling, better author/date presentation, and tap animations
 - Improved startup performance and added an email export utility
-- iOS release stability fixes, including build/review compliance updates, Firebase/plugin updates, media host support, and app icon refresh
+- iOS release stability fixes, including build/review compliance updates, backend/plugin updates, media host support, and app icon refresh
 - Website refresh plus Kotlin, CI, pigeon, and formatting fixes for release stability
 
 ### v3.0.6
@@ -34,7 +34,7 @@
 - Fixed crash when editing with a null image URL
 - AI submissions use watermarked image for wallpaper thumbnails where appropriate
 - Trimmed author fields and fixed visibility for email-only authors on wallpaper detail
-- Firestore rules: allow deleting reviewed wallpapers during review cleanup
+- RemoteStore rules: allow deleting reviewed wallpapers during review cleanup
 - Additional Sentry crash fixes and minor stability improvements
 
 ### v3.0.4
@@ -78,7 +78,7 @@
 - Wallpaper of the day
 - Daily streak reminders and rewards
 - Smart notifications system
-- Deep links support (replaced Firebase Dynamic Links)
+- Deep links support (replaced legacy dynamic links)
 - Sentry error monitoring integration
 - Mixpanel analytics with type-safe, provider-agnostic event tracking
 - New onboarding flow
@@ -88,7 +88,7 @@
 - Consolidated share service
 - Admin app for wallpaper review
 - Profile completeness feature
-- Improved Firestore performance and optimisations
+- Improved RemoteStore performance and optimisations
 - Updated app icon and splash screen
 - CI improvements
 - Minor bug fixes and improvements
@@ -164,7 +164,7 @@
 - Added quick actions
 - Added widget, to shuffle current wallpaper with downloaded walls
 - Favourite icon now shows favourite status
-- Created obsolete version check, after this version old apps can be forced to not work with Firebase Remote Config
+- Created obsolete version check, after this version old apps can be forced to not work with legacy remote config
 - Fixed error in setups where wallpaper was not able to download/set
 - Redesigned the notifications model
 - Added options to unsubscribe to notifications
@@ -217,7 +217,7 @@
 - Fixed thousands of lint issues
 - Updated Sliding Up Panel
 - Added New About Page
-- Swapped Firebase Storage with GitHub in setups
+- Swapped legacy storage with GitHub in setups
 - Redesigned new category popup
 - Changed HomeScreen Layout to Tabs
 - Setups now don't require signin to view
@@ -299,7 +299,7 @@
 ### v2.4.9
 - Fixed excessive requests and rebuilding
 - Added scroll to top button
-- Used Firebase remote config for app version, categories to easily change them
+- Used legacy remote config for app version and categories
 - Added dynamic categories
 - Added cache to images
 - Major bug fixes
@@ -351,7 +351,7 @@
 - Major bug fixes and improvements
 - Redesigned the wallpaper info sheet
 - Added swipe to change categories
-- Added Firebase analytics
+- Added analytics
 - Added notifications support
 
 ### v2.3.5

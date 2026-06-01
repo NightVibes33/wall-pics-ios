@@ -58,7 +58,7 @@ final class PexelsFavouriteWall extends FavouriteWallEntity {
   DateTime? get createdAt => null;
 }
 
-/// Used when the existing Firestore doc cannot be resolved to a typed variant
+/// Used when the existing RemoteStore doc cannot be resolved to a typed variant
 /// (e.g., docs written by older app versions).
 final class LegacyFavouriteWall extends FavouriteWallEntity {
   const LegacyFavouriteWall({required super.id, required super.source, required this.legacyPayload});

@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:Prism/core/firestore/firestore_client.dart';
-import 'package:Prism/core/firestore/firestore_query_specs.dart';
+import 'package:Prism/core/remote_store/remote_store_client.dart';
+import 'package:Prism/core/remote_store/remote_store_query_specs.dart';
 import 'package:Prism/core/persistence/data_sources/feed_cache_local_data_source.dart';
 import 'package:Prism/core/utils/result.dart';
 import 'package:Prism/core/wallpaper/wallpaper_variants.dart';
@@ -12,15 +12,15 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('PrismWallpaperRepositoryImpl', () {
     test('waits for blocked creators and refills filtered pages without skipping visible rows', () async {
-      final firestore = _FakeFirestoreClient(_buildWallDocs(count: 30));
+      final remoteStore = _FakeRemoteStoreClient(_buildWallDocs(count: 30));
       final cache = _FakeFeedCacheLocalDataSource();
       final blocks = _FakeUserBlockRepository.pending();
-      final repo = PrismWallpaperRepositoryImpl(firestore, cache, blocks);
+      final repo = PrismWallpaperRepositoryImpl(remoteStore, cache, blocks);
 
       final Future<Result<List<PrismWallpaper>>> pending = repo.fetchFeed(refresh: true);
       await Future<void>.delayed(Duration.zero);
 
-      expect(firestore.queryCalls, 0);
+      expect(remoteStore.queryCalls, 0);
 
       blocks.completeInitial(<String>{'creator1@example.com', 'creator2@example.com', 'creator3@example.com'});
 
@@ -30,7 +30,7 @@ void main() {
       expect(firstPage.data!.first.core.id, 'wall-4');
       expect(firstPage.data!.last.core.id, 'wall-27');
       expect(repo.hasMore, isTrue);
-      expect(firestore.queryCalls, 2);
+      expect(remoteStore.queryCalls, 2);
 
       final secondPage = await repo.fetchFeed(refresh: false);
       expect(secondPage.isSuccess, isTrue);
@@ -44,14 +44,14 @@ void main() {
   });
 }
 
-class _FakeFirestoreClient implements FirestoreClient {
-  _FakeFirestoreClient(this._docs);
+class _FakeRemoteStoreClient implements RemoteStoreClient {
+  _FakeRemoteStoreClient(this._docs);
 
   final List<({String docId, Map<String, dynamic> data})> _docs;
   int queryCalls = 0;
 
   @override
-  Future<List<T>> query<T>(FirestoreQuerySpec spec, T Function(Map<String, dynamic> data, String docId) map) async {
+  Future<List<T>> query<T>(RemoteStoreQuerySpec spec, T Function(Map<String, dynamic> data, String docId) map) async {
     queryCalls += 1;
     final int startIndex;
     if (spec.startAfterDocId == null) {
@@ -89,13 +89,13 @@ class _FakeFirestoreClient implements FirestoreClient {
   }
 
   @override
-  Future<void> runBatch(Future<void> Function(FirestoreBatch batch) action, {required String sourceTag}) {
+  Future<void> runBatch(Future<void> Function(RemoteStoreBatch batch) action, {required String sourceTag}) {
     throw UnimplementedError();
   }
 
   @override
   Future<T> runTransaction<T>(
-    Future<T> Function(FirestoreTransaction transaction) action, {
+    Future<T> Function(RemoteStoreTransaction transaction) action, {
     required String sourceTag,
     required String collection,
     String? docId,
@@ -120,7 +120,7 @@ class _FakeFirestoreClient implements FirestoreClient {
   }
 
   @override
-  Stream<List<T>> watchQuery<T>(FirestoreQuerySpec spec, T Function(Map<String, dynamic> data, String docId) map) {
+  Stream<List<T>> watchQuery<T>(RemoteStoreQuerySpec spec, T Function(Map<String, dynamic> data, String docId) map) {
     throw UnimplementedError();
   }
 }

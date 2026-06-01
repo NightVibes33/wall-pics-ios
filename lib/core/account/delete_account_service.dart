@@ -1,26 +1,25 @@
 import 'package:Prism/core/di/injection.dart';
-import 'package:Prism/core/firestore/firestore_client.dart';
-import 'package:Prism/core/firestore/firestore_collections.dart';
-import 'package:Prism/core/firestore/firestore_query_specs.dart';
+import 'package:Prism/core/remote_store/remote_store_client.dart';
+import 'package:Prism/core/remote_store/remote_collections.dart';
+import 'package:Prism/core/remote_store/remote_store_query_specs.dart';
 import 'package:Prism/core/persistence/data_sources/settings_local_data_source.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:Prism/features/onboarding_v2/src/common/onboarding_v2_keys.dart';
 import 'package:Prism/logger/logger.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 class DeleteAccountService {
   DeleteAccountService._();
 
   static final DeleteAccountService instance = DeleteAccountService._();
 
-  FirestoreClient get _firestore => getIt<FirestoreClient>();
+  RemoteStoreClient get _remoteStore => getIt<RemoteStoreClient>();
   SettingsLocalDataSource get _settingsLocal => getIt<SettingsLocalDataSource>();
 
   /// Performs a full account deletion:
   ///   1. Deletes favourite subcollections (usersv2/{id}/images, /setups)
   ///   2. Deletes coinTransactions, aiGenerations, draftSetups owned by this user
   ///   3. Anonymizes the usersv2 doc so uploaded walls/setups still resolve
-  ///   4. Deletes the Firebase Auth user record
+  ///   4. Clears local account state
   ///   5. Clears all local persistence
   Future<void> deleteAccount() async {
     final userId = app_state.prismUser.id;
@@ -37,25 +36,25 @@ class DeleteAccountService {
 
     // 2. coinTransactions
     logger.i('[DeleteAccount] Step 2: Deleting coinTransactions', tag: 'DeleteAccount');
-    await _deleteBatch(FirebaseCollections.coinTransactions, [
-      FirestoreFilter(field: 'userId', op: FirestoreFilterOp.isEqualTo, value: userId),
+    await _deleteBatch(RemoteCollections.coinTransactions, [
+      RemoteStoreFilter(field: 'userId', op: RemoteStoreFilterOp.isEqualTo, value: userId),
     ], 'delete_account.coin_transactions');
 
     // 3. aiGenerations
     logger.i('[DeleteAccount] Step 3: Deleting aiGenerations', tag: 'DeleteAccount');
-    await _deleteBatch(FirebaseCollections.aiGenerations, [
-      FirestoreFilter(field: 'userId', op: FirestoreFilterOp.isEqualTo, value: userId),
+    await _deleteBatch(RemoteCollections.aiGenerations, [
+      RemoteStoreFilter(field: 'userId', op: RemoteStoreFilterOp.isEqualTo, value: userId),
     ], 'delete_account.ai_generations');
 
     // 4. draftSetups
     logger.i('[DeleteAccount] Step 4: Deleting draftSetups', tag: 'DeleteAccount');
-    await _deleteBatch(FirebaseCollections.draftSetups, [
-      FirestoreFilter(field: 'email', op: FirestoreFilterOp.isEqualTo, value: email),
+    await _deleteBatch(RemoteCollections.draftSetups, [
+      RemoteStoreFilter(field: 'email', op: RemoteStoreFilterOp.isEqualTo, value: email),
     ], 'delete_account.draft_setups');
 
     // 5. Anonymize usersv2 doc — keeps uploaded walls/setups resolving to "Deleted Account"
     logger.i('[DeleteAccount] Step 5: Anonymizing usersv2 doc', tag: 'DeleteAccount');
-    await _firestore.setDoc(FirebaseCollections.usersV2, userId, <String, dynamic>{
+    await _remoteStore.setDoc(RemoteCollections.usersV2, userId, <String, dynamic>{
       'name': 'Deleted Account',
       'profilePhoto': '',
       'bio': '',
@@ -71,14 +70,11 @@ class DeleteAccountService {
       'coins': 0,
     }, sourceTag: 'delete_account.anonymize_user');
 
-    // 6. Re-authenticate then delete Firebase Auth user
-    logger.i('[DeleteAccount] Step 6: Re-authenticating with Google', tag: 'DeleteAccount');
-    await app_state.gAuth.reauthenticateCurrentUser();
-    logger.i('[DeleteAccount] Step 6: Deleting Firebase Auth user', tag: 'DeleteAccount');
-    await FirebaseAuth.instance.currentUser?.delete();
+    // 6. Clear local account state
+    logger.i('[DeleteAccount] Step 6: Clearing local account state', tag: 'DeleteAccount');
 
-    // 6b. Sign out from Google SDK so silent re-auth doesn't recreate the account
-    logger.i('[DeleteAccount] Step 6b: Signing out from Google SDK', tag: 'DeleteAccount');
+    // 6b. Sign out from local auth runtime
+    logger.i('[DeleteAccount] Step 6b: Signing out locally', tag: 'DeleteAccount');
     await app_state.gAuth.signOutGoogle();
 
     // 7. Clear local persistence
@@ -92,11 +88,11 @@ class DeleteAccountService {
   }
 
   Future<void> _deleteSubcollection(String collectionPath) async {
-    final docIds = await _firestore.query<String>(
-      FirestoreQuerySpec(
+    final docIds = await _remoteStore.query<String>(
+      RemoteStoreQuerySpec(
         collection: collectionPath,
         sourceTag: 'delete_account.list.$collectionPath',
-        cachePolicy: FirestoreCachePolicy.networkOnly,
+        cachePolicy: RemoteStoreCachePolicy.networkOnly,
       ),
       (_, docId) => docId,
     );
@@ -106,25 +102,25 @@ class DeleteAccountService {
     );
     for (final docId in docIds) {
       logger.d('[DeleteAccount]   deleting $collectionPath/$docId', tag: 'DeleteAccount');
-      await _firestore.deleteDoc(collectionPath, docId, sourceTag: 'delete_account.delete.$collectionPath');
+      await _remoteStore.deleteDoc(collectionPath, docId, sourceTag: 'delete_account.delete.$collectionPath');
     }
     logger.d('[DeleteAccount] _deleteSubcollection: $collectionPath — done', tag: 'DeleteAccount');
   }
 
-  Future<void> _deleteBatch(String collection, List<FirestoreFilter> filters, String tag) async {
-    final docIds = await _firestore.query<String>(
-      FirestoreQuerySpec(
+  Future<void> _deleteBatch(String collection, List<RemoteStoreFilter> filters, String tag) async {
+    final docIds = await _remoteStore.query<String>(
+      RemoteStoreQuerySpec(
         collection: collection,
         sourceTag: tag,
         filters: filters,
-        cachePolicy: FirestoreCachePolicy.networkOnly,
+        cachePolicy: RemoteStoreCachePolicy.networkOnly,
       ),
       (_, docId) => docId,
     );
     logger.d('[DeleteAccount] _deleteBatch: $collection — found ${docIds.length} docs', tag: 'DeleteAccount');
     if (docIds.isEmpty) return;
     try {
-      await _firestore.runBatch((batch) async {
+      await _remoteStore.runBatch((batch) async {
         for (final docId in docIds) {
           logger.d('[DeleteAccount]   queuing delete $collection/$docId', tag: 'DeleteAccount');
           batch.deleteDoc(collection, docId);
@@ -132,11 +128,11 @@ class DeleteAccountService {
       }, sourceTag: '$tag.batch_delete');
       logger.d('[DeleteAccount] _deleteBatch: $collection — batch committed', tag: 'DeleteAccount');
     } catch (e) {
-      // Firestore rules may not allow client-side deletes on this collection.
+      // RemoteStore rules may not allow client-side deletes on this collection.
       // Log and continue — these are non-critical audit records; the important
-      // steps (anonymize usersv2 doc + delete Firebase Auth user) still run.
+      // steps (anonymize usersv2 doc + clear local account state) still run.
       logger.w(
-        '[DeleteAccount] _deleteBatch: $collection — skipped (${e.toString()}). TODO: update Firestore rules to allow user self-delete.',
+        '[DeleteAccount] _deleteBatch: $collection — skipped (${e.toString()}). TODO: update RemoteStore rules to allow user self-delete.',
         tag: 'DeleteAccount',
       );
     }

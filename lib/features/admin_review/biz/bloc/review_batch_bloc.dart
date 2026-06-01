@@ -1,4 +1,4 @@
-import 'package:Prism/core/firestore/firestore_document.dart';
+import 'package:Prism/core/remote_store/remote_store_document.dart';
 import 'package:Prism/features/admin_review/data/review_batch_repository.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:injectable/injectable.dart';
@@ -9,7 +9,7 @@ part 'review_batch_state.dart';
 enum ReviewAction { approve, reject, skip }
 
 class UndoableAction {
-  final FirestoreDocument wall;
+  final RemoteStoreDocument wall;
   final ReviewAction action;
   final String? reason;
 
@@ -124,7 +124,7 @@ class ReviewBatchBloc extends Bloc<ReviewBatchEvent, ReviewBatchState> {
     if (state.currentIndex >= state.walls.length) return;
 
     final currentWall = state.walls[state.currentIndex];
-    final skippedStack = List<FirestoreDocument>.from(state.skippedStack);
+    final skippedStack = List<RemoteStoreDocument>.from(state.skippedStack);
     skippedStack.add(currentWall);
 
     emit(state.copyWith(currentIndex: state.currentIndex + 1, skippedStack: skippedStack));

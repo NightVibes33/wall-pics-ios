@@ -2,7 +2,6 @@ import 'package:Prism/auth/badgeModel.dart';
 import 'package:Prism/auth/transactionModel.dart';
 import 'package:Prism/core/purchases/subscription_tier.dart';
 import 'package:Prism/logger/logger.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:json_annotation/json_annotation.dart';
 
 part 'userModel.g.dart';
@@ -63,6 +62,15 @@ String _resolveTierValue({required bool premium, required Object? raw}) {
   return premium ? SubscriptionTier.pro.value : SubscriptionTier.free.value;
 }
 
+class PrismAuthUser {
+  const PrismAuthUser({required this.uid, this.displayName, this.email, this.photoURL});
+
+  final String uid;
+  final String? displayName;
+  final String? email;
+  final String? photoURL;
+}
+
 @JsonSerializable(explicitToJson: true)
 class PrismUsersV2 {
   String username;
@@ -114,7 +122,7 @@ class PrismUsersV2 {
   }
 
   factory PrismUsersV2.fromJson(Map<String, dynamic> json) => _$PrismUsersV2FromJson(json);
-  factory PrismUsersV2.fromMapWithUser(Map<String, dynamic> raw, User user) {
+  factory PrismUsersV2.fromMapWithUser(Map<String, dynamic> raw, PrismAuthUser user) {
     final data = _mapData(raw);
     final bool rawPremium = data["premium"] as bool? ?? false;
     final String tierValue = _resolveTierValue(premium: rawPremium, raw: data['subscriptionTier']);

@@ -5,9 +5,9 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 # Paths excluded from the dynamic-type check.
-# - lib/core/firestore/: raw Firestore boundary — dynamic is expected there.
+# - lib/core/remote_store/: raw remote-store boundary — dynamic is expected there.
 # - Generated files: *.g.dart, *.freezed.dart, *.gr.dart, *.config.dart
-EXCLUDED_PATHS_REGEX='^lib/core/firestore/|\.g\.dart$|\.freezed\.dart$|\.gr\.dart$|\.config\.dart$'
+EXCLUDED_PATHS_REGEX='^lib/core/remote_store/|\.g\.dart$|\.freezed\.dart$|\.gr\.dart$|\.config\.dart$'
 
 violations=0
 

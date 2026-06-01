@@ -1,6 +1,6 @@
 import 'package:Prism/core/analytics/events/events.dart';
-import 'package:Prism/core/firestore/firestore_collections.dart';
-import 'package:Prism/core/firestore/firestore_runtime.dart';
+import 'package:Prism/core/remote_store/remote_collections.dart';
+import 'package:Prism/core/remote_store/remote_store_runtime.dart';
 import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/wallpaper/wallpaper_source.dart';
 import 'package:auto_route/auto_route.dart';
@@ -71,8 +71,8 @@ class NotificationRouteMapper {
     if (wallId.isEmpty) {
       return null;
     }
-    final Map<String, dynamic>? wall = await firestoreClient.getById<Map<String, dynamic>>(
-      FirebaseCollections.walls,
+    final Map<String, dynamic>? wall = await remoteStoreClient.getById<Map<String, dynamic>>(
+      RemoteCollections.walls,
       wallId,
       (Map<String, dynamic> data, String _) => data,
       sourceTag: sourceTag,

@@ -1,11 +1,11 @@
 import 'package:Prism/core/error/failure.dart';
-import 'package:Prism/core/firestore/dtos/public_user_doc_dto.dart';
-import 'package:Prism/core/firestore/dtos/setup_doc_dto.dart';
-import 'package:Prism/core/firestore/dtos/wall_doc_dto.dart';
-import 'package:Prism/core/firestore/firestore_client.dart';
-import 'package:Prism/core/firestore/firestore_collections.dart';
-import 'package:Prism/core/firestore/firestore_query_specs.dart';
-import 'package:Prism/core/firestore/firestore_sentinels.dart';
+import 'package:Prism/core/remote_store/dtos/public_user_doc_dto.dart';
+import 'package:Prism/core/remote_store/dtos/setup_doc_dto.dart';
+import 'package:Prism/core/remote_store/dtos/wall_doc_dto.dart';
+import 'package:Prism/core/remote_store/remote_store_client.dart';
+import 'package:Prism/core/remote_store/remote_collections.dart';
+import 'package:Prism/core/remote_store/remote_store_query_specs.dart';
+import 'package:Prism/core/remote_store/remote_store_sentinels.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:Prism/core/user_blocks/blocked_creators_filter.dart';
 import 'package:Prism/core/utils/result.dart';
@@ -21,22 +21,22 @@ import 'package:injectable/injectable.dart';
 
 @LazySingleton(as: PublicProfileRepository)
 class PublicProfileRepositoryImpl implements PublicProfileRepository {
-  PublicProfileRepositoryImpl(this._firestoreClient, this._userBlockRepository);
+  PublicProfileRepositoryImpl(this._remoteStoreClient, this._userBlockRepository);
 
-  final FirestoreClient _firestoreClient;
+  final RemoteStoreClient _remoteStoreClient;
   final UserBlockRepository _userBlockRepository;
   final Map<String, String> _wallCursorByEmail = <String, String>{};
   final Map<String, String> _setupCursorByEmail = <String, String>{};
   static const int _profileReadDedupeMs = 30000;
 
   Future<_UserRow?> _findUser(String email) async {
-    final usersv2 = await _firestoreClient.query<_UserRow>(
-      FirestoreQuerySpec(
-        collection: FirebaseCollections.usersV2,
+    final usersv2 = await _remoteStoreClient.query<_UserRow>(
+      RemoteStoreQuerySpec(
+        collection: RemoteCollections.usersV2,
         sourceTag: 'public_profile.find_user_v2',
-        filters: <FirestoreFilter>[FirestoreFilter(field: 'email', op: FirestoreFilterOp.isEqualTo, value: email)],
+        filters: <RemoteStoreFilter>[RemoteStoreFilter(field: 'email', op: RemoteStoreFilterOp.isEqualTo, value: email)],
         limit: 1,
-        cachePolicy: FirestoreCachePolicy.memoryFirst,
+        cachePolicy: RemoteStoreCachePolicy.memoryFirst,
         dedupeWindowMs: _profileReadDedupeMs,
       ),
       (data, docId) => _UserRow(docId: docId, doc: PublicUserDocDto.fromJson(data)),
@@ -88,18 +88,18 @@ class PublicProfileRepositoryImpl implements PublicProfileRepository {
       );
     }
     try {
-      final rows = await _firestoreClient.query<_WallRow>(
-        FirestoreQuerySpec(
-          collection: FirebaseCollections.walls,
+      final rows = await _remoteStoreClient.query<_WallRow>(
+        RemoteStoreQuerySpec(
+          collection: RemoteCollections.walls,
           sourceTag: 'public_profile.fetch_walls',
-          filters: <FirestoreFilter>[
-            const FirestoreFilter(field: 'review', op: FirestoreFilterOp.isEqualTo, value: true),
-            FirestoreFilter(field: 'email', op: FirestoreFilterOp.isEqualTo, value: email),
+          filters: <RemoteStoreFilter>[
+            const RemoteStoreFilter(field: 'review', op: RemoteStoreFilterOp.isEqualTo, value: true),
+            RemoteStoreFilter(field: 'email', op: RemoteStoreFilterOp.isEqualTo, value: email),
           ],
-          orderBy: const <FirestoreOrderBy>[FirestoreOrderBy(field: 'createdAt', descending: true)],
+          orderBy: const <RemoteStoreOrderBy>[RemoteStoreOrderBy(field: 'createdAt', descending: true)],
           limit: 12,
           startAfterDocId: refresh ? null : _wallCursorByEmail[email],
-          cachePolicy: refresh ? FirestoreCachePolicy.networkOnly : FirestoreCachePolicy.memoryFirst,
+          cachePolicy: refresh ? RemoteStoreCachePolicy.networkOnly : RemoteStoreCachePolicy.memoryFirst,
           dedupeWindowMs: refresh ? 0 : _profileReadDedupeMs,
         ),
         (data, docId) => _WallRow(docId: docId, doc: WallDocDto.fromJson(data)),
@@ -134,18 +134,18 @@ class PublicProfileRepositoryImpl implements PublicProfileRepository {
       );
     }
     try {
-      final rows = await _firestoreClient.query<_SetupRow>(
-        FirestoreQuerySpec(
-          collection: FirebaseCollections.setups,
+      final rows = await _remoteStoreClient.query<_SetupRow>(
+        RemoteStoreQuerySpec(
+          collection: RemoteCollections.setups,
           sourceTag: 'public_profile.fetch_setups',
-          filters: <FirestoreFilter>[
-            const FirestoreFilter(field: 'review', op: FirestoreFilterOp.isEqualTo, value: true),
-            FirestoreFilter(field: 'email', op: FirestoreFilterOp.isEqualTo, value: email),
+          filters: <RemoteStoreFilter>[
+            const RemoteStoreFilter(field: 'review', op: RemoteStoreFilterOp.isEqualTo, value: true),
+            RemoteStoreFilter(field: 'email', op: RemoteStoreFilterOp.isEqualTo, value: email),
           ],
-          orderBy: const <FirestoreOrderBy>[FirestoreOrderBy(field: 'created_at', descending: true)],
+          orderBy: const <RemoteStoreOrderBy>[RemoteStoreOrderBy(field: 'created_at', descending: true)],
           limit: 8,
           startAfterDocId: refresh ? null : _setupCursorByEmail[email],
-          cachePolicy: refresh ? FirestoreCachePolicy.networkOnly : FirestoreCachePolicy.memoryFirst,
+          cachePolicy: refresh ? RemoteStoreCachePolicy.networkOnly : RemoteStoreCachePolicy.memoryFirst,
           dedupeWindowMs: refresh ? 0 : _profileReadDedupeMs,
         ),
         (data, docId) => _SetupRow(docId: docId, doc: SetupDocDto.fromJson(data)),
@@ -176,11 +176,11 @@ class PublicProfileRepositoryImpl implements PublicProfileRepository {
     required String targetUserEmail,
   }) async {
     try {
-      await _firestoreClient.updateDoc(FirebaseCollections.usersV2, currentUserId, <String, dynamic>{
-        'following': FirestoreSentinels.arrayUnion(<Object?>[targetUserEmail]),
+      await _remoteStoreClient.updateDoc(RemoteCollections.usersV2, currentUserId, <String, dynamic>{
+        'following': RemoteStoreSentinels.arrayUnion(<Object?>[targetUserEmail]),
       }, sourceTag: 'public_profile.follow.current_user');
-      await _firestoreClient.updateDoc(FirebaseCollections.usersV2, targetUserId, <String, dynamic>{
-        'followers': FirestoreSentinels.arrayUnion(<Object?>[currentUserEmail]),
+      await _remoteStoreClient.updateDoc(RemoteCollections.usersV2, targetUserId, <String, dynamic>{
+        'followers': RemoteStoreSentinels.arrayUnion(<Object?>[currentUserEmail]),
       }, sourceTag: 'public_profile.follow.target_user');
       return fetchProfile(email: targetUserEmail);
     } catch (error) {
@@ -196,11 +196,11 @@ class PublicProfileRepositoryImpl implements PublicProfileRepository {
     required String targetUserEmail,
   }) async {
     try {
-      await _firestoreClient.updateDoc(FirebaseCollections.usersV2, currentUserId, <String, dynamic>{
-        'following': FirestoreSentinels.arrayRemove(<Object?>[targetUserEmail]),
+      await _remoteStoreClient.updateDoc(RemoteCollections.usersV2, currentUserId, <String, dynamic>{
+        'following': RemoteStoreSentinels.arrayRemove(<Object?>[targetUserEmail]),
       }, sourceTag: 'public_profile.unfollow.current_user');
-      await _firestoreClient.updateDoc(FirebaseCollections.usersV2, targetUserId, <String, dynamic>{
-        'followers': FirestoreSentinels.arrayRemove(<Object?>[currentUserEmail]),
+      await _remoteStoreClient.updateDoc(RemoteCollections.usersV2, targetUserId, <String, dynamic>{
+        'followers': RemoteStoreSentinels.arrayRemove(<Object?>[currentUserEmail]),
       }, sourceTag: 'public_profile.unfollow.target_user');
       return fetchProfile(email: targetUserEmail);
     } catch (error) {
@@ -211,11 +211,11 @@ class PublicProfileRepositoryImpl implements PublicProfileRepository {
   @override
   Future<Result<PublicProfileEntity>> updateLinks({required String userId, required Map<String, String> links}) async {
     try {
-      await _firestoreClient.updateDoc(FirebaseCollections.usersV2, userId, <String, dynamic>{
+      await _remoteStoreClient.updateDoc(RemoteCollections.usersV2, userId, <String, dynamic>{
         'links': links,
       }, sourceTag: 'public_profile.update_links');
-      final updated = await _firestoreClient.getById<_UserRow>(
-        FirebaseCollections.usersV2,
+      final updated = await _remoteStoreClient.getById<_UserRow>(
+        RemoteCollections.usersV2,
         userId,
         (data, docId) => _UserRow(docId: docId, doc: PublicUserDocDto.fromJson(data)),
         sourceTag: 'public_profile.update_links.read_back',
@@ -245,20 +245,20 @@ class PublicProfileRepositoryImpl implements PublicProfileRepository {
           .toSet()
           .toList(growable: false);
 
-      // Firestore whereIn is limited to 10 items per query — chunk accordingly.
+      // RemoteStore whereIn is limited to 10 items per query — chunk accordingly.
       final List<List<String>> chunks = <List<String>>[];
       for (int i = 0; i < unique.length; i += 10) {
         chunks.add(unique.sublist(i, i + 10 < unique.length ? i + 10 : unique.length));
       }
 
       final futures = chunks.map((chunk) {
-        return _firestoreClient.query<_UserRow>(
-          FirestoreQuerySpec(
-            collection: FirebaseCollections.usersV2,
+        return _remoteStoreClient.query<_UserRow>(
+          RemoteStoreQuerySpec(
+            collection: RemoteCollections.usersV2,
             sourceTag: 'public_profile.fetch_user_summaries',
-            filters: <FirestoreFilter>[FirestoreFilter(field: 'email', op: FirestoreFilterOp.whereIn, value: chunk)],
+            filters: <RemoteStoreFilter>[RemoteStoreFilter(field: 'email', op: RemoteStoreFilterOp.whereIn, value: chunk)],
             limit: chunk.length,
-            cachePolicy: FirestoreCachePolicy.memoryFirst,
+            cachePolicy: RemoteStoreCachePolicy.memoryFirst,
             dedupeWindowMs: _profileReadDedupeMs,
           ),
           (data, docId) => _UserRow(docId: docId, doc: PublicUserDocDto.fromJson(data)),
@@ -348,22 +348,22 @@ class PublicProfileRepositoryImpl implements PublicProfileRepository {
     }
 
     try {
-      // Firestore prefix range query: username >= query AND username < query + '\uf8ff'
+      // RemoteStore prefix range query: username >= query AND username < query + '\uf8ff'
       final end = '$query\uf8ff';
       final scopeSet = scopeEmails.map((e) => e.trim().toLowerCase()).toSet();
       final Set<String> followingSet = app_state.prismUser.following.map((e) => e.trim().toLowerCase()).toSet();
 
-      final rows = await _firestoreClient.query<_UserRow>(
-        FirestoreQuerySpec(
-          collection: FirebaseCollections.usersV2,
+      final rows = await _remoteStoreClient.query<_UserRow>(
+        RemoteStoreQuerySpec(
+          collection: RemoteCollections.usersV2,
           sourceTag: 'public_profile.search_by_username',
-          filters: <FirestoreFilter>[
-            FirestoreFilter(field: 'username', op: FirestoreFilterOp.isGreaterThanOrEqualTo, value: query),
-            FirestoreFilter(field: 'username', op: FirestoreFilterOp.isLessThan, value: end),
+          filters: <RemoteStoreFilter>[
+            RemoteStoreFilter(field: 'username', op: RemoteStoreFilterOp.isGreaterThanOrEqualTo, value: query),
+            RemoteStoreFilter(field: 'username', op: RemoteStoreFilterOp.isLessThan, value: end),
           ],
-          orderBy: const <FirestoreOrderBy>[FirestoreOrderBy(field: 'username', descending: false)],
+          orderBy: const <RemoteStoreOrderBy>[RemoteStoreOrderBy(field: 'username', descending: false)],
           limit: limit * 4, // over-fetch so we have enough after scope filtering
-          cachePolicy: FirestoreCachePolicy.networkOnly,
+          cachePolicy: RemoteStoreCachePolicy.networkOnly,
         ),
         (data, docId) => _UserRow(docId: docId, doc: PublicUserDocDto.fromJson(data)),
       );
@@ -415,7 +415,7 @@ class PublicProfileRepositoryImpl implements PublicProfileRepository {
       review: dto.review,
       resolution: dto.resolution,
       size: dto.size,
-      firestoreDocumentId: docId,
+      remoteStoreDocumentId: docId,
     );
   }
 

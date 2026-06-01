@@ -1,8 +1,7 @@
-import 'package:Prism/core/firestore/firestore_client.dart';
-import 'package:Prism/core/firestore/firestore_collections.dart';
-import 'package:Prism/core/firestore/firestore_document.dart';
-import 'package:Prism/core/firestore/firestore_query_specs.dart';
-import 'package:cloud_functions/cloud_functions.dart';
+import 'package:Prism/core/remote_store/remote_store_client.dart';
+import 'package:Prism/core/remote_store/remote_collections.dart';
+import 'package:Prism/core/remote_store/remote_store_document.dart';
+import 'package:Prism/core/remote_store/remote_store_query_specs.dart';
 import 'package:injectable/injectable.dart';
 
 @lazySingleton
@@ -10,28 +9,28 @@ class ReviewBatchRepository {
   static const int defaultBatchSize = 20;
   static const int maxUndoStack = 5;
 
-  final FirestoreClient _firestoreClient;
+  final RemoteStoreClient _remoteStoreClient;
 
-  ReviewBatchRepository(this._firestoreClient);
+  ReviewBatchRepository(this._remoteStoreClient);
 
-  Future<List<FirestoreDocument>> fetchPendingWallsBatch({
+  Future<List<RemoteStoreDocument>> fetchPendingWallsBatch({
     int limit = defaultBatchSize,
     String? startAfterDocId,
   }) async {
-    final querySpec = FirestoreQuerySpec(
-      collection: FirebaseCollections.walls,
+    final querySpec = RemoteStoreQuerySpec(
+      collection: RemoteCollections.walls,
       sourceTag: 'review_batch.pending_walls',
-      filters: <FirestoreFilter>[const FirestoreFilter(field: 'review', op: FirestoreFilterOp.isEqualTo, value: false)],
-      orderBy: <FirestoreOrderBy>[const FirestoreOrderBy(field: 'createdAt', descending: true)],
+      filters: <RemoteStoreFilter>[const RemoteStoreFilter(field: 'review', op: RemoteStoreFilterOp.isEqualTo, value: false)],
+      orderBy: <RemoteStoreOrderBy>[const RemoteStoreOrderBy(field: 'createdAt', descending: true)],
       limit: limit,
       startAfterDocId: startAfterDocId,
     );
 
-    final walls = await _firestoreClient.query(querySpec, (data, docId) => FirestoreDocument(docId, data));
+    final walls = await _remoteStoreClient.query(querySpec, (data, docId) => RemoteStoreDocument(docId, data));
     return walls;
   }
 
-  Future<void> approveWall(FirestoreDocument wall, {List<String>? collections}) async {
+  Future<void> approveWall(RemoteStoreDocument wall, {List<String>? collections}) async {
     final payload = Map<String, dynamic>.from(wall.data());
     final wallCollections =
         collections ??
@@ -42,8 +41,8 @@ class ReviewBatchRepository {
             .toList(growable: false) ??
         <String>[];
 
-    await _firestoreClient.runBatch((FirestoreBatch batch) async {
-      batch.updateDoc(FirebaseCollections.walls, wall.id, <String, dynamic>{
+    await _remoteStoreClient.runBatch((RemoteStoreBatch batch) async {
+      batch.updateDoc(RemoteCollections.walls, wall.id, <String, dynamic>{
         'review': true,
         'collections': wallCollections.isEmpty ? <String>['community'] : wallCollections,
         'reviewedAt': DateTime.now().toUtc(),
@@ -60,14 +59,14 @@ class ReviewBatchRepository {
     }, sourceTag: 'review_batch.approve_wall');
   }
 
-  Future<void> rejectWall(FirestoreDocument wall, {required String reason}) async {
+  Future<void> rejectWall(RemoteStoreDocument wall, {required String reason}) async {
     final payload = Map<String, dynamic>.from(wall.data());
     payload['rejectionReason'] = reason;
     payload['rejectedAt'] = DateTime.now().toUtc();
 
-    await _firestoreClient.runBatch((FirestoreBatch batch) async {
-      batch.addDoc(FirebaseCollections.rejectedWalls, payload);
-      batch.deleteDoc(FirebaseCollections.walls, wall.id);
+    await _remoteStoreClient.runBatch((RemoteStoreBatch batch) async {
+      batch.addDoc(RemoteCollections.rejectedWalls, payload);
+      batch.deleteDoc(RemoteCollections.walls, wall.id);
       _addNotificationToBatch(
         batch,
         modifier: _safeString(payload['email']),
@@ -80,39 +79,25 @@ class ReviewBatchRepository {
   }
 
   Future<void> updateWallCategory(String wallId, String category) async {
-    await _firestoreClient.updateDoc(FirebaseCollections.walls, wallId, <String, dynamic>{
+    await _remoteStoreClient.updateDoc(RemoteCollections.walls, wallId, <String, dynamic>{
       'category': category,
     }, sourceTag: 'review_batch.update_category');
   }
 
-  Future<void> categorizeWalls(List<FirestoreDocument> walls) async {
-    final functions = FirebaseFunctions.instanceFor(region: 'asia-south1');
-
-    for (final wall in walls) {
-      final category = wall.data()['category']?.toString() ?? '';
-
-      if (category.isEmpty || category == 'General') {
-        try {
-          await functions
-              .httpsCallable('categorizeWallpaper', options: HttpsCallableOptions(timeout: const Duration(seconds: 30)))
-              .call(<String, dynamic>{'wallId': wall.id});
-        } catch (_) {}
-      }
-    }
-  }
+  Future<void> categorizeWalls(List<RemoteStoreDocument> walls) async {}
 
   Future<int> getPendingWallsCount() async {
-    const querySpec = FirestoreQuerySpec(
-      collection: FirebaseCollections.walls,
+    const querySpec = RemoteStoreQuerySpec(
+      collection: RemoteCollections.walls,
       sourceTag: 'review_batch.pending_count',
-      filters: <FirestoreFilter>[FirestoreFilter(field: 'review', op: FirestoreFilterOp.isEqualTo, value: false)],
+      filters: <RemoteStoreFilter>[RemoteStoreFilter(field: 'review', op: RemoteStoreFilterOp.isEqualTo, value: false)],
     );
-    final walls = await _firestoreClient.query(querySpec, (data, docId) => FirestoreDocument(docId, data));
+    final walls = await _remoteStoreClient.query(querySpec, (data, docId) => RemoteStoreDocument(docId, data));
     return walls.length;
   }
 
   void _addNotificationToBatch(
-    FirestoreBatch batch, {
+    RemoteStoreBatch batch, {
     required String modifier,
     required String title,
     required String body,
@@ -120,7 +105,7 @@ class ReviewBatchRepository {
     String route = '',
   }) {
     if (modifier.isEmpty) return;
-    batch.addDoc(FirebaseCollections.notifications, <String, dynamic>{
+    batch.addDoc(RemoteCollections.notifications, <String, dynamic>{
       'modifier': modifier,
       'notification': <String, dynamic>{'title': title, 'body': body},
       'data': <String, dynamic>{

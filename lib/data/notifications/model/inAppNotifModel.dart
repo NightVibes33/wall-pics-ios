@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 class InAppNotif {
   final String? title;
@@ -47,9 +46,6 @@ class InAppNotif {
         final sec = value['_seconds'] as int? ?? 0;
         final nanosec = value['_nanoseconds'] as int? ?? 0;
         return DateTime.fromMillisecondsSinceEpoch(sec * 1000 + nanosec ~/ 1000000);
-      }
-      if (value is Timestamp) {
-        return value.toDate();
       }
     } catch (_) {
       return DateTime.now();

@@ -1,5 +1,3 @@
-import { verifyFirebaseIdTokenFromRequest } from './firebase_auth';
-
 export interface AiEnvBindings {
   AI_STATE_KV: KVNamespace;
   AI_QUOTA_DO: DurableObjectNamespace;
@@ -8,8 +6,7 @@ export interface AiEnvBindings {
   GEMINI_API_KEY?: string;
   BROWSER_RENDERING_ACCOUNT_ID?: string;
   BROWSER_RENDERING_API_TOKEN?: string;
-  FIREBASE_PROJECT_ID?: string;
-  FIREBASE_AUTH_DEBUG?: string;
+  AI_CLIENT_TOKEN?: string;
 }
 
 type AiProviderName = 'fal' | 'gemini';
@@ -29,7 +26,6 @@ type AiErrorCode =
 type BudgetThresholdLevel = 0 | 70 | 85 | 95;
 
 interface AuthContext {
-  token: string;
   userId: string;
 }
 
@@ -595,7 +591,7 @@ async function handleAiHealth(env: AiEnvBindings): Promise<Response> {
 async function handleGenerate(request: Request, env: AiEnvBindings): Promise<Response> {
   const auth = await parseAuth(request, env);
   if (auth == null) {
-    return aiError('unauthorized', 401, 'Missing or invalid bearer token');
+    return aiError('unauthorized', 401, 'Missing or invalid user identity');
   }
 
   const body = await readJson<AiGenerateRequest>(request);
@@ -626,7 +622,7 @@ async function handleGenerate(request: Request, env: AiEnvBindings): Promise<Res
 async function handleVariation(request: Request, env: AiEnvBindings, parentGenerationId: string): Promise<Response> {
   const auth = await parseAuth(request, env);
   if (auth == null) {
-    return aiError('unauthorized', 401, 'Missing or invalid bearer token');
+    return aiError('unauthorized', 401, 'Missing or invalid user identity');
   }
 
   const original = await readGenerationRecord(parentGenerationId, env);
@@ -666,7 +662,7 @@ async function handleVariation(request: Request, env: AiEnvBindings, parentGener
 async function handlePrefill(request: Request, env: AiEnvBindings): Promise<Response> {
   const auth = await parseAuth(request, env);
   if (auth == null) {
-    return aiError('unauthorized', 401, 'Missing or invalid bearer token');
+    return aiError('unauthorized', 401, 'Missing or invalid user identity');
   }
   const body = await readJson<{ generationId?: string }>(request);
   if (body == null || !isNonEmptyString(body.generationId)) {
@@ -967,14 +963,19 @@ function normalizeTargetSize(value: unknown): string {
 }
 
 async function parseAuth(request: Request, env: AiEnvBindings): Promise<AuthContext | null> {
-  const verified = await verifyFirebaseIdTokenFromRequest(request, env);
-  if (verified == null) {
+  const expectedClientToken = asString(env.AI_CLIENT_TOKEN);
+  if (expectedClientToken.length > 0) {
+    const clientToken = asString(request.headers.get('x-prism-client-token'));
+    if (clientToken !== expectedClientToken) {
+      return null;
+    }
+  }
+
+  const userId = clipText(asString(request.headers.get('x-prism-user-id')), 128);
+  if (!isNonEmptyString(userId)) {
     return null;
   }
-  return {
-    token: verified.token,
-    userId: clipText(verified.userId, 128),
-  };
+  return { userId };
 }
 
 async function readRoutingConfig(env: AiEnvBindings): Promise<AiRoutingConfig> {

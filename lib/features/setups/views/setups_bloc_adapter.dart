@@ -1,7 +1,7 @@
-import 'package:Prism/core/firestore/dtos/setup_doc_dto.dart';
-import 'package:Prism/core/firestore/firestore_collections.dart';
-import 'package:Prism/core/firestore/firestore_query_specs.dart';
-import 'package:Prism/core/firestore/firestore_runtime.dart';
+import 'package:Prism/core/remote_store/dtos/setup_doc_dto.dart';
+import 'package:Prism/core/remote_store/remote_collections.dart';
+import 'package:Prism/core/remote_store/remote_store_query_specs.dart';
+import 'package:Prism/core/remote_store/remote_store_runtime.dart';
 import 'package:Prism/core/utils/status.dart';
 import 'package:Prism/core/wallpaper/wallpaper_source.dart';
 import 'package:Prism/features/setups/biz/bloc/setups_bloc.j.dart';
@@ -50,11 +50,11 @@ SetupEntity? setup;
 
 Future<SetupEntity?> getSetupFromName(String? name) async {
   try {
-    final List<(SetupDocDto, String)> value = await firestoreClient.query<(SetupDocDto, String)>(
-      FirestoreQuerySpec(
-        collection: FirebaseCollections.setups,
+    final List<(SetupDocDto, String)> value = await remoteStoreClient.query<(SetupDocDto, String)>(
+      RemoteStoreQuerySpec(
+        collection: RemoteCollections.setups,
         sourceTag: 'setups.lookup.byName',
-        filters: <FirestoreFilter>[FirestoreFilter(field: 'name', op: FirestoreFilterOp.isEqualTo, value: name)],
+        filters: <RemoteStoreFilter>[RemoteStoreFilter(field: 'name', op: RemoteStoreFilterOp.isEqualTo, value: name)],
         limit: 1,
       ),
       (data, docId) => (SetupDocDto.fromJson(data), docId),
@@ -87,7 +87,7 @@ Future<SetupEntity?> getSetupFromName(String? name) async {
       review: item.review,
       resolution: item.resolution,
       size: item.size,
-      firestoreDocumentId: docId,
+      remoteStoreDocumentId: docId,
     );
     return setup;
   } catch (error) {

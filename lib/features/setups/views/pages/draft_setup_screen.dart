@@ -1,7 +1,7 @@
-import 'package:Prism/core/firestore/firestore_collections.dart';
-import 'package:Prism/core/firestore/firestore_document.dart';
-import 'package:Prism/core/firestore/firestore_query_specs.dart';
-import 'package:Prism/core/firestore/firestore_runtime.dart';
+import 'package:Prism/core/remote_store/remote_collections.dart';
+import 'package:Prism/core/remote_store/remote_store_document.dart';
+import 'package:Prism/core/remote_store/remote_store_query_specs.dart';
+import 'package:Prism/core/remote_store/remote_store_runtime.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:Prism/core/widgets/animated/loader.dart';
 import 'package:Prism/features/setups/views/pages/review_screen.dart';
@@ -24,21 +24,21 @@ class _DraftSetupScreenState extends State<DraftSetupScreen> {
       appBar: AppBar(
         title: Text("Setup Drafts", style: TextStyle(color: Theme.of(context).colorScheme.secondary)),
       ),
-      body: StreamBuilder<List<FirestoreDocument>>(
-        stream: firestoreClient.watchQuery<FirestoreDocument>(
-          FirestoreQuerySpec(
-            collection: FirebaseCollections.draftSetups,
+      body: StreamBuilder<List<RemoteStoreDocument>>(
+        stream: remoteStoreClient.watchQuery<RemoteStoreDocument>(
+          RemoteStoreQuerySpec(
+            collection: RemoteCollections.draftSetups,
             sourceTag: 'draftSetups.list',
-            filters: <FirestoreFilter>[
-              FirestoreFilter(field: "email", op: FirestoreFilterOp.isEqualTo, value: app_state.prismUser.email),
-              const FirestoreFilter(field: "review", op: FirestoreFilterOp.isEqualTo, value: false),
+            filters: <RemoteStoreFilter>[
+              RemoteStoreFilter(field: "email", op: RemoteStoreFilterOp.isEqualTo, value: app_state.prismUser.email),
+              const RemoteStoreFilter(field: "review", op: RemoteStoreFilterOp.isEqualTo, value: false),
             ],
-            orderBy: const <FirestoreOrderBy>[FirestoreOrderBy(field: 'created_at', descending: true)],
+            orderBy: const <RemoteStoreOrderBy>[RemoteStoreOrderBy(field: 'created_at', descending: true)],
             isStream: true,
           ),
-          (data, docId) => FirestoreDocument(docId, data),
+          (data, docId) => RemoteStoreDocument(docId, data),
         ),
-        builder: (BuildContext context, AsyncSnapshot<List<FirestoreDocument>> snapshot) {
+        builder: (BuildContext context, AsyncSnapshot<List<RemoteStoreDocument>> snapshot) {
           if (!snapshot.hasData) {
             return Center(child: Loader());
           } else {

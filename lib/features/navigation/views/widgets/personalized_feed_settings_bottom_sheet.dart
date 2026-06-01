@@ -8,7 +8,6 @@ import 'package:Prism/features/onboarding_v2/src/domain/usecases/save_interests_
 import 'package:Prism/features/onboarding_v2/src/utils/onboarding_v2_config.dart';
 import 'package:Prism/theme/app_tokens.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:flutter/material.dart';
 
 const String _kDefaultFeedMix = 'balanced';
@@ -16,7 +15,6 @@ const String _kDefaultFeedMix = 'balanced';
 Future<void> openPersonalizedFeedSettingsBottomSheet(BuildContext context, {VoidCallback? onPreferencesSaved}) async {
   final SettingsLocalDataSource settingsLocal = getIt<SettingsLocalDataSource>();
   final List<PersonalizedInterest> catalog = await PersonalizedInterestsCatalog.load(
-    remoteConfig: FirebaseRemoteConfig.instance,
     settingsLocal: settingsLocal,
   );
   if (catalog.isEmpty || !context.mounted) {

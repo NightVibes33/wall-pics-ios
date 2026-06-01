@@ -14,7 +14,7 @@ This page informs visitors regarding our policies for the collection, use, and d
 
 You can use Prism without creating an account. In this case we collect:
 
-- **Usage and analytics data** — app interactions, screens visited, features used (via Firebase Analytics and Mixpanel)
+- **Usage and analytics data** — app interactions, screens visited, features used (via Mixpanel)
 - **Crash reports and diagnostic data** — error logs and device information (via Sentry)
 - **Ad identifiers** — anonymous advertising ID used to serve relevant ads (via Google Mobile Ads)
 - **Device information** — device model, OS version, IP address (collected automatically by analytics and crash SDKs)
@@ -25,13 +25,13 @@ When you create an account using Google Sign-In or Sign in with Apple, we additi
 
 - **Name and email address** — from your Google or Apple account
 - **Profile photo** — from your Google account (if using Google Sign-In)
-- **User ID** — a unique identifier assigned to your account in Firebase
+- **User ID** — a unique identifier assigned to your account in the app
 
 ### Content You Create
 
 When you use community features, we collect:
 
-- **Uploaded wallpapers and home screen setups** — stored in Firebase Storage and Firestore
+- **Uploaded wallpapers and home screen setups** — stored by the app backend when upload features are enabled
 - **Profile information** — username, bio, profile photo, cover photo, and social links you add
 - **Favourites** — wallpapers and setups you mark as favourites
 - **AI-generated wallpapers** — prompts you submit and images generated
@@ -65,13 +65,6 @@ We use the following third-party services. Each has access only to the data nece
 
 | Service | Purpose | Privacy Policy |
 |---------|---------|----------------|
-| Google Sign-In / Firebase Auth | Authentication | [policies.google.com/privacy](https://policies.google.com/privacy) |
-| Firebase Analytics | App usage analytics | [firebase.google.com/policies/analytics](https://firebase.google.com/policies/analytics) |
-| Cloud Firestore | User data and content storage | [firebase.google.com/support/privacy](https://firebase.google.com/support/privacy) |
-| Firebase Storage | Image and file storage | [firebase.google.com/support/privacy](https://firebase.google.com/support/privacy) |
-| Firebase Remote Config | Feature flags and configuration | [firebase.google.com/support/privacy](https://firebase.google.com/support/privacy) |
-| Firebase Cloud Messaging | Push notifications | [firebase.google.com/support/privacy](https://firebase.google.com/support/privacy) |
-| Firebase In-App Messaging | In-app messages and announcements | [firebase.google.com/support/privacy](https://firebase.google.com/support/privacy) |
 | Sentry | Crash reporting and error monitoring (includes session replay for debug purposes) | [sentry.io/privacy](https://sentry.io/privacy) |
 | Mixpanel | Product analytics and event tracking | [mixpanel.com/legal/privacy-policy](https://mixpanel.com/legal/privacy-policy) |
 | RevenueCat | Subscription management and purchase validation | [revenuecat.com/privacy](https://www.revenuecat.com/privacy) |
@@ -84,7 +77,7 @@ We use the following third-party services. Each has access only to the data nece
 ## Data Retention
 
 - **Account data** — retained while your account is active. Deleted within 30 days of an account deletion request.
-- **Analytics data** — retained according to each provider's retention policies (typically 14 months for Firebase Analytics, 5 years for Mixpanel).
+- **Analytics data** — retained according to each provider's retention policies.
 - **Crash logs** — retained for 90 days in Sentry.
 - **Uploaded content** — retained until you delete it or request account deletion.
 - **Purchase history** — retained by RevenueCat and Apple as required for financial record-keeping.

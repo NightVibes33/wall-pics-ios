@@ -36,29 +36,8 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
-      - name: Remove Firebase from sideload iOS native plugins
-        run: python3 tool/strip_ios_firebase_registrant.py ios/Runner/GeneratedPluginRegistrant.m
-
       - name: Install CocoaPods
         run: sudo gem install cocoapods --no-document
-
-      - name: Prepare sideload compile stubs
-        run: |
-          cat > lib/firebase_options.dart <<'DART'
-          import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
-
-          class DefaultFirebaseOptions {
-            static FirebaseOptions get currentPlatform => const FirebaseOptions(
-              apiKey: 'AIzaSyDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD',
-              appId: '1:000000000000:ios:0000000000000000000000',
-              messagingSenderId: '000000000000',
-              projectId: 'wall-pics-stub',
-              iosBundleId: 'com.nightvibes.prism',
-            );
-          }
-          DART
-          rm -f ios/Runner/GoogleService-Info.plist
-
 
       - name: Refresh iOS pod lock
         run: |
@@ -69,7 +48,7 @@ jobs:
       - name: Build iOS app without codesigning
         run: |
           DART_DEFINES="$(./tool/dart_defines_from_env.sh)"
-          DART_DEFINES="$DART_DEFINES --dart-define=SKIP_FIREBASE_INIT=true --dart-define=SIDELOAD_BUILD=true"
+          DART_DEFINES="$DART_DEFINES --dart-define=SIDELOAD_BUILD=true"
           flutter build ios --release --no-codesign --no-pub $DART_DEFINES
 
       - name: Verify Wall Pics app bundle
@@ -86,14 +65,7 @@ jobs:
             echo "Unexpected bundle id: $BUNDLE_ID"
             exit 1
           fi
-          if [ -d "$APP_PATH/Frameworks" ]; then
-            FIREBASE_FRAMEWORKS="$(find "$APP_PATH/Frameworks" -maxdepth 1 \( -iname '*Firebase*' -o -iname 'cloud_firestore.framework' -o -iname 'cloud_functions.framework' -o -iname 'firebase_*.framework' \) -print)"
-            if [ -n "$FIREBASE_FRAMEWORKS" ]; then
-              echo "Firebase SDK frameworks are present, but Firebase plugin registration and init are disabled for sideload builds."
-              echo "$FIREBASE_FRAMEWORKS"
-            fi
-          fi
-          SECRET_FILES="$(find "$APP_PATH" \( -name 'GoogleService-Info.plist' -o -name 'AuthKey_*.p8' -o -name 'embedded.mobileprovision' \) -print)"
+          SECRET_FILES="$(find "$APP_PATH" \( -name 'AuthKey_*.p8' -o -name 'embedded.mobileprovision' \) -print)"
           if [ -n "$SECRET_FILES" ]; then
             echo "Unexpected signing/TestFlight material in sideload app:"
             echo "$SECRET_FILES"

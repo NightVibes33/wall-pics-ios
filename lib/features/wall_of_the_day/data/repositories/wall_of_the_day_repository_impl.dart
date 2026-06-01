@@ -1,20 +1,20 @@
 import 'package:Prism/core/error/failure.dart';
-import 'package:Prism/core/firestore/firestore_client.dart';
-import 'package:Prism/core/firestore/firestore_collections.dart';
+import 'package:Prism/core/remote_store/remote_store_client.dart';
+import 'package:Prism/core/remote_store/remote_collections.dart';
 import 'package:Prism/core/utils/result.dart';
 import 'package:Prism/features/prism_feed/domain/repositories/prism_wallpaper_repository.dart';
 import 'package:Prism/features/user_blocks/domain/repositories/user_block_repository.dart';
 import 'package:Prism/features/wall_of_the_day/data/wotd_entity_mapper.dart';
-import 'package:Prism/features/wall_of_the_day/data/wotd_firestore_pointer.dart';
+import 'package:Prism/features/wall_of_the_day/data/wotd_remote_store_pointer.dart';
 import 'package:Prism/features/wall_of_the_day/domain/entities/wall_of_the_day_entity.dart';
 import 'package:Prism/features/wall_of_the_day/domain/repositories/wall_of_the_day_repository.dart';
 import 'package:injectable/injectable.dart';
 
 @LazySingleton(as: WallOfTheDayRepository)
 class WallOfTheDayRepositoryImpl implements WallOfTheDayRepository {
-  WallOfTheDayRepositoryImpl(this._firestoreClient, this._prismWallpaperRepository, UserBlockRepository _);
+  WallOfTheDayRepositoryImpl(this._remoteStoreClient, this._prismWallpaperRepository, UserBlockRepository _);
 
-  final FirestoreClient _firestoreClient;
+  final RemoteStoreClient _remoteStoreClient;
   final PrismWallpaperRepository _prismWallpaperRepository;
 
   WallOfTheDayEntity? _cachedEntity;
@@ -30,10 +30,10 @@ class WallOfTheDayRepositoryImpl implements WallOfTheDayRepository {
   @override
   Future<Result<WallOfTheDayEntity?>> fetchToday() async {
     try {
-      final WallOfTheDayFirestorePointer? pointer = await _firestoreClient.getById<WallOfTheDayFirestorePointer>(
-        FirebaseCollections.wallOfTheDay,
+      final WallOfTheDayRemoteStorePointer? pointer = await _remoteStoreClient.getById<WallOfTheDayRemoteStorePointer>(
+        RemoteCollections.wallOfTheDay,
         'current',
-        (data, _) => WallOfTheDayFirestorePointer.fromMap(data),
+        (data, _) => WallOfTheDayRemoteStorePointer.fromMap(data),
         sourceTag: 'wotd.fetchToday.pointer',
         preferCacheFirst: true,
       );

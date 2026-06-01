@@ -124,9 +124,9 @@ class _DebugToolsPageState extends State<DebugToolsPage> with AutomaticKeepAlive
           _SectionHeader('Admin Shortcuts'),
           _ActionTile(
             icon: Icons.analytics_outlined,
-            title: 'Firestore Telemetry',
-            subtitle: 'View Firestore read/write profiling',
-            onTap: () => context.router.pushPath('/admin-firestore-telemetry'),
+            title: 'RemoteStore Telemetry',
+            subtitle: 'View RemoteStore read/write profiling',
+            onTap: () => context.router.pushPath('/admin-remote-store-telemetry'),
           ),
           _ActionTile(
             icon: Icons.admin_panel_settings_outlined,

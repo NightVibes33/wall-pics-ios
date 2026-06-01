@@ -1,6 +1,6 @@
-import 'package:Prism/core/firestore/firestore_collections.dart';
-import 'package:Prism/core/firestore/firestore_document.dart';
-import 'package:Prism/core/firestore/firestore_runtime.dart';
+import 'package:Prism/core/remote_store/remote_collections.dart';
+import 'package:Prism/core/remote_store/remote_store_document.dart';
+import 'package:Prism/core/remote_store/remote_store_runtime.dart';
 import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/router/notification_route_mapper.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
@@ -9,7 +9,6 @@ import 'package:Prism/logger/logger.dart';
 import 'package:Prism/theme/toasts.dart' as toasts;
 import 'package:auto_route/auto_route.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:rxdart/rxdart.dart';
 import 'package:timeago/timeago.dart' as timeago;
@@ -32,9 +31,9 @@ class _AdminReviewScreenState extends State<AdminReviewScreen> with SingleTicker
     super.initState();
     _controller = TabController(length: 4, vsync: this);
     _pendingCountsStream = Rx.combineLatest3<int, int, int, (int, int, int)>(
-      _repository.watchPendingWalls().map((List<FirestoreDocument> list) => list.length),
-      _repository.watchPendingSetups().map((List<FirestoreDocument> list) => list.length),
-      _repository.watchOpenContentReports().map((List<FirestoreDocument> list) => list.length),
+      _repository.watchPendingWalls().map((List<RemoteStoreDocument> list) => list.length),
+      _repository.watchPendingSetups().map((List<RemoteStoreDocument> list) => list.length),
+      _repository.watchOpenContentReports().map((List<RemoteStoreDocument> list) => list.length),
       (int a, int b, int c) => (a, b, c),
     );
   }
@@ -93,13 +92,13 @@ class _AdminReviewScreenState extends State<AdminReviewScreen> with SingleTicker
   }
 
   Widget _buildWallTab() {
-    return StreamBuilder<List<FirestoreDocument>>(
+    return StreamBuilder<List<RemoteStoreDocument>>(
       stream: _repository.watchPendingWalls(),
-      builder: (BuildContext context, AsyncSnapshot<List<FirestoreDocument>> snapshot) {
+      builder: (BuildContext context, AsyncSnapshot<List<RemoteStoreDocument>> snapshot) {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-        final List<FirestoreDocument> walls = snapshot.data!;
+        final List<RemoteStoreDocument> walls = snapshot.data!;
         if (walls.isEmpty) {
           return const Center(child: Text('No pending wallpapers'));
         }
@@ -125,13 +124,13 @@ class _AdminReviewScreenState extends State<AdminReviewScreen> with SingleTicker
   }
 
   Widget _buildSetupTab() {
-    return StreamBuilder<List<FirestoreDocument>>(
+    return StreamBuilder<List<RemoteStoreDocument>>(
       stream: _repository.watchPendingSetups(),
-      builder: (BuildContext context, AsyncSnapshot<List<FirestoreDocument>> snapshot) {
+      builder: (BuildContext context, AsyncSnapshot<List<RemoteStoreDocument>> snapshot) {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-        final List<FirestoreDocument> setups = snapshot.data!;
+        final List<RemoteStoreDocument> setups = snapshot.data!;
         if (setups.isEmpty) {
           return const Center(child: Text('No pending setups'));
         }
@@ -157,31 +156,31 @@ class _AdminReviewScreenState extends State<AdminReviewScreen> with SingleTicker
   }
 
   Widget _buildReportsTab() {
-    return StreamBuilder<List<FirestoreDocument>>(
+    return StreamBuilder<List<RemoteStoreDocument>>(
       stream: _repository.watchOpenContentReports(),
-      builder: (BuildContext context, AsyncSnapshot<List<FirestoreDocument>> snapshot) {
+      builder: (BuildContext context, AsyncSnapshot<List<RemoteStoreDocument>> snapshot) {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-        final List<FirestoreDocument> reports = snapshot.data!;
+        final List<RemoteStoreDocument> reports = snapshot.data!;
         if (reports.isEmpty) {
           return const Center(child: Text('No open reports'));
         }
         return ListView.builder(
           itemCount: reports.length,
           itemBuilder: (BuildContext context, int index) {
-            final FirestoreDocument r = reports[index];
+            final RemoteStoreDocument r = reports[index];
             final Map<String, dynamic> m = r.data();
             final String ct = m['contentType']?.toString() ?? '';
-            final String tid = m['targetFirestoreDocId']?.toString() ?? '';
+            final String tid = m['targetRemoteStoreDocId']?.toString() ?? '';
             final String reason = m['reason']?.toString() ?? '';
             final String uid = m['reporterUid']?.toString() ?? '';
             final Object? rawCreated = m['createdAt'];
             DateTime? created;
-            if (rawCreated is Timestamp) {
-              created = rawCreated.toDate();
-            } else if (rawCreated is DateTime) {
+            if (rawCreated is DateTime) {
               created = rawCreated;
+            } else {
+              created = DateTime.tryParse(rawCreated?.toString() ?? '');
             }
             final String timeStr = created != null ? timeago.format(created) : '';
             if (ct == 'wall' && tid.isNotEmpty) {
@@ -285,7 +284,7 @@ class _WallContentReportCard extends StatefulWidget {
     required this.onConfirmRemoveWithReason,
   });
 
-  final FirestoreDocument report;
+  final RemoteStoreDocument report;
   final String targetDocId;
   final String contentTypeLabel;
   final String reason;
@@ -304,8 +303,8 @@ class _WallContentReportCardState extends State<_WallContentReportCard> {
   @override
   void initState() {
     super.initState();
-    _wallFuture = firestoreClient.getById<Map<String, dynamic>>(
-      FirebaseCollections.walls,
+    _wallFuture = remoteStoreClient.getById<Map<String, dynamic>>(
+      RemoteCollections.walls,
       widget.targetDocId,
       (Map<String, dynamic> data, String _) => data,
       sourceTag: 'admin_review.report_wall_preview',
@@ -424,7 +423,7 @@ class _WallContentReportCardState extends State<_WallContentReportCard> {
                   child: FilledButton(
                     onPressed: () => widget.onConfirmRemoveWithReason(
                       onSubmit: (String reason) async {
-                        final bool removed = await widget.repository.rejectWallByFirestoreDocumentId(
+                        final bool removed = await widget.repository.rejectWallByRemoteStoreDocumentId(
                           widget.targetDocId,
                           reason: reason,
                         );
@@ -456,7 +455,7 @@ class _WallContentReportCardState extends State<_WallContentReportCard> {
 class _WallCard extends StatelessWidget {
   const _WallCard({required this.wall, required this.onApprove, required this.onReject});
 
-  final FirestoreDocument wall;
+  final RemoteStoreDocument wall;
   final Future<void> Function() onApprove;
   final Future<void> Function() onReject;
 
@@ -527,7 +526,7 @@ class _WallCard extends StatelessWidget {
 class _SetupCard extends StatelessWidget {
   const _SetupCard({required this.setup, required this.onApprove, required this.onReject});
 
-  final FirestoreDocument setup;
+  final RemoteStoreDocument setup;
   final Future<void> Function() onApprove;
   final Future<void> Function() onReject;
 
@@ -849,7 +848,7 @@ class _NotificationSenderTabState extends State<_NotificationSenderTab> {
 
     setState(() => _isSending = true);
     try {
-      await firestoreClient.addDoc(FirebaseCollections.notificationRequests, <String, dynamic>{
+      await remoteStoreClient.addDoc(RemoteCollections.notificationRequests, <String, dynamic>{
         'title': title,
         'body': body,
         'modifier': modifier,

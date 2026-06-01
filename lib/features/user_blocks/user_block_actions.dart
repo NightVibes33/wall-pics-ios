@@ -10,10 +10,9 @@ import 'package:Prism/features/user_blocks/domain/repositories/user_block_reposi
 import 'package:Prism/logger/logger.dart';
 import 'package:Prism/notifications/topic_subscription.dart';
 import 'package:Prism/theme/toasts.dart' as toasts;
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 
-/// Confirms and blocks a user; updates session following, unsubscribes FCM artist topic.
+/// Confirms and blocks a user; updates session following, unsubscribes the artist topic.
 Future<void> confirmAndBlockUser({
   required BuildContext context,
   required String targetUserId,
@@ -57,13 +56,12 @@ Future<void> confirmAndBlockUser({
     final String? topicBase = followersTopicFromEmail(targetEmail);
     if (topicBase != null && topicBase.isNotEmpty) {
       await unsubscribeFromTopicSafely(
-        FirebaseMessaging.instance,
         '${topicBase}_posts',
         sourceTag: 'user_block.unsubscribe_posts',
       );
     }
   } catch (e, st) {
-    logger.w('user_block: FCM unsubscribe failed', error: e, stackTrace: st);
+    logger.w('user_block: topic unsubscribe failed', error: e, stackTrace: st);
   }
 
   final SessionRepository session = getIt<SessionRepository>();

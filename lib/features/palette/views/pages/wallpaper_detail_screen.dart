@@ -1107,7 +1107,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
       if (!isLivePhoto) _SheetActionTapScale(child: EditButton(url: entity.fullUrl)),
     ];
     final String? reportWallDocId = switch (entity) {
-      PrismDetailEntity(:final wallpaper) => wallpaper.firestoreDocumentId,
+      PrismDetailEntity(:final wallpaper) => wallpaper.remoteStoreDocumentId,
       _ => null,
     };
     if (reportWallDocId != null && reportWallDocId.isNotEmpty) {
@@ -1118,7 +1118,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
             onTap: () => showContentReportSheet(
               context,
               contentType: 'wall',
-              targetFirestoreDocId: reportWallDocId,
+              targetRemoteStoreDocId: reportWallDocId,
               subtitle: entity.id,
             ),
             child: Container(

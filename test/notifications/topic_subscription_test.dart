@@ -8,7 +8,7 @@ void main() {
       expect(followersTopicFromEmail('   '), isNull);
     });
 
-    test('removes characters that are invalid for FCM topics', () {
+    test('removes characters that are invalid for push topics', () {
       expect(followersTopicFromEmail('john+alerts.test@example.com'), 'johnalerts.test');
       expect(followersTopicFromEmail(' name with space+tag@example.com '), 'namewithspacetag');
     });
@@ -17,7 +17,7 @@ void main() {
       expect(followersTopicFromEmail('++@example.com'), isNull);
     });
 
-    test('keeps supported FCM topic characters in local part', () {
+    test('keeps supported push topic characters in local part', () {
       expect(followersTopicFromEmail('Az-_.~%09@example.com'), 'Az-_.~%09');
     });
   });
