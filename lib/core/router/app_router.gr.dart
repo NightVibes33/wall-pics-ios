@@ -265,6 +265,513 @@ class NotFoundRoute extends PageRouteInfo<void> {
   );
 }
 
+/// Compatibility route for removed Prism flows.
+class AiTabRoute extends PageRouteInfo<void> {
+  const AiTabRoute({List<PageRouteInfo>? children})
+    : super(AiTabRoute.name, initialChildren: children);
+
+  static const String name = 'AiTabRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const NotFoundPage();
+    },
+  );
+}
+
+/// Compatibility route for removed Prism flows.
+class CoinTransactionsRoute extends PageRouteInfo<void> {
+  const CoinTransactionsRoute({List<PageRouteInfo>? children})
+    : super(CoinTransactionsRoute.name, initialChildren: children);
+
+  static const String name = 'CoinTransactionsRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const NotFoundPage();
+    },
+  );
+}
+
+/// Compatibility route for removed Prism flows.
+class ColorRoute extends PageRouteInfo<ColorRouteArgs> {
+  ColorRoute({
+    Key? key,
+    required String hexColor,
+    List<PageRouteInfo>? children,
+  }) : super(
+         ColorRoute.name,
+         args: ColorRouteArgs(key: key, hexColor: hexColor),
+         initialChildren: children,
+       );
+
+  static const String name = 'ColorRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const NotFoundPage();
+    },
+  );
+}
+
+class ColorRouteArgs {
+  const ColorRouteArgs({this.key, required this.hexColor});
+
+  final Key? key;
+
+  final String hexColor;
+}
+
+/// Compatibility route for removed Prism flows.
+class DraftSetupRoute extends PageRouteInfo<void> {
+  const DraftSetupRoute({List<PageRouteInfo>? children})
+    : super(DraftSetupRoute.name, initialChildren: children);
+
+  static const String name = 'DraftSetupRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const NotFoundPage();
+    },
+  );
+}
+
+/// Compatibility route for removed Prism flows.
+class EditProfilePanelRoute extends PageRouteInfo<void> {
+  const EditProfilePanelRoute({List<PageRouteInfo>? children})
+    : super(EditProfilePanelRoute.name, initialChildren: children);
+
+  static const String name = 'EditProfilePanelRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const NotFoundPage();
+    },
+  );
+}
+
+/// Compatibility route for removed Prism flows.
+class EditSetupReviewRoute extends PageRouteInfo<EditSetupReviewRouteArgs> {
+  EditSetupReviewRoute({
+    Key? key,
+    required Object? setupDoc,
+    List<PageRouteInfo>? children,
+  }) : super(
+         EditSetupReviewRoute.name,
+         args: EditSetupReviewRouteArgs(key: key, setupDoc: setupDoc),
+         initialChildren: children,
+       );
+
+  static const String name = 'EditSetupReviewRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const NotFoundPage();
+    },
+  );
+}
+
+class EditSetupReviewRouteArgs {
+  const EditSetupReviewRouteArgs({this.key, required this.setupDoc});
+
+  final Key? key;
+
+  final Object? setupDoc;
+}
+
+/// Compatibility route for removed Prism flows.
+class EditWallRoute extends PageRouteInfo<EditWallRouteArgs> {
+  EditWallRoute({
+    Key? key,
+    required File image,
+    List<PageRouteInfo>? children,
+  }) : super(
+         EditWallRoute.name,
+         args: EditWallRouteArgs(key: key, image: image),
+         initialChildren: children,
+       );
+
+  static const String name = 'EditWallRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const NotFoundPage();
+    },
+  );
+}
+
+class EditWallRouteArgs {
+  const EditWallRouteArgs({this.key, required this.image});
+
+  final Key? key;
+
+  final File image;
+}
+
+/// Compatibility route for removed Prism flows.
+class FavouriteSetupRoute extends PageRouteInfo<void> {
+  const FavouriteSetupRoute({List<PageRouteInfo>? children})
+    : super(FavouriteSetupRoute.name, initialChildren: children);
+
+  static const String name = 'FavouriteSetupRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const NotFoundPage();
+    },
+  );
+}
+
+/// Compatibility route for removed Prism flows.
+class FavSetupViewRoute extends PageRouteInfo<FavSetupViewRouteArgs> {
+  FavSetupViewRoute({
+    Key? key,
+    required int setupIndex,
+    List<PageRouteInfo>? children,
+  }) : super(
+         FavSetupViewRoute.name,
+         args: FavSetupViewRouteArgs(key: key, setupIndex: setupIndex),
+         initialChildren: children,
+       );
+
+  static const String name = 'FavSetupViewRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const NotFoundPage();
+    },
+  );
+}
+
+class FavSetupViewRouteArgs {
+  const FavSetupViewRouteArgs({this.key, required this.setupIndex});
+
+  final Key? key;
+
+  final int setupIndex;
+}
+
+/// Compatibility route for removed Prism flows.
+class FollowersRoute extends PageRouteInfo<FollowersRouteArgs> {
+  FollowersRoute({
+    Key? key,
+    required List<String> followers,
+    List<PageRouteInfo>? children,
+  }) : super(
+         FollowersRoute.name,
+         args: FollowersRouteArgs(key: key, followers: followers),
+         initialChildren: children,
+       );
+
+  static const String name = 'FollowersRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const NotFoundPage();
+    },
+  );
+}
+
+class FollowersRouteArgs {
+  const FollowersRouteArgs({this.key, required this.followers});
+
+  final Key? key;
+
+  final List<String> followers;
+}
+
+/// Compatibility route for removed Prism flows.
+class FollowingListRoute extends PageRouteInfo<FollowingListRouteArgs> {
+  FollowingListRoute({
+    Key? key,
+    required List<String> following,
+    List<PageRouteInfo>? children,
+  }) : super(
+         FollowingListRoute.name,
+         args: FollowingListRouteArgs(key: key, following: following),
+         initialChildren: children,
+       );
+
+  static const String name = 'FollowingListRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const NotFoundPage();
+    },
+  );
+}
+
+class FollowingListRouteArgs {
+  const FollowingListRouteArgs({this.key, required this.following});
+
+  final Key? key;
+
+  final List<String> following;
+}
+
+/// Compatibility route for removed Prism flows.
+class NotificationRoute extends PageRouteInfo<void> {
+  const NotificationRoute({List<PageRouteInfo>? children})
+    : super(NotificationRoute.name, initialChildren: children);
+
+  static const String name = 'NotificationRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const NotFoundPage();
+    },
+  );
+}
+
+/// Compatibility route for removed Prism flows.
+class ProfileRoute extends PageRouteInfo<ProfileRouteArgs> {
+  ProfileRoute({
+    Key? key,
+    String? profileIdentifier,
+    List<PageRouteInfo>? children,
+  }) : super(
+         ProfileRoute.name,
+         args: ProfileRouteArgs(
+           key: key,
+           profileIdentifier: profileIdentifier,
+         ),
+         rawPathParams: {'identifier': profileIdentifier},
+         initialChildren: children,
+       );
+
+  static const String name = 'ProfileRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const NotFoundPage();
+    },
+  );
+}
+
+class ProfileRouteArgs {
+  const ProfileRouteArgs({this.key, this.profileIdentifier});
+
+  final Key? key;
+
+  final String? profileIdentifier;
+}
+
+/// Compatibility route for removed Prism flows.
+class ReviewRoute extends PageRouteInfo<void> {
+  const ReviewRoute({List<PageRouteInfo>? children})
+    : super(ReviewRoute.name, initialChildren: children);
+
+  static const String name = 'ReviewRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const NotFoundPage();
+    },
+  );
+}
+
+/// Compatibility route for removed Prism flows.
+class SetupViewRoute extends PageRouteInfo<SetupViewRouteArgs> {
+  SetupViewRoute({
+    Key? key,
+    required int setupIndex,
+    List<PageRouteInfo>? children,
+  }) : super(
+         SetupViewRoute.name,
+         args: SetupViewRouteArgs(key: key, setupIndex: setupIndex),
+         initialChildren: children,
+       );
+
+  static const String name = 'SetupViewRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const NotFoundPage();
+    },
+  );
+}
+
+class SetupViewRouteArgs {
+  const SetupViewRouteArgs({this.key, required this.setupIndex});
+
+  final Key? key;
+
+  final int setupIndex;
+}
+
+/// Compatibility route for removed Prism flows.
+class StreakRoute extends PageRouteInfo<void> {
+  const StreakRoute({List<PageRouteInfo>? children})
+    : super(StreakRoute.name, initialChildren: children);
+
+  static const String name = 'StreakRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const NotFoundPage();
+    },
+  );
+}
+
+/// Compatibility route for removed Prism flows.
+class SwipeReviewRoute extends PageRouteInfo<void> {
+  const SwipeReviewRoute({List<PageRouteInfo>? children})
+    : super(SwipeReviewRoute.name, initialChildren: children);
+
+  static const String name = 'SwipeReviewRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const NotFoundPage();
+    },
+  );
+}
+
+/// Compatibility route for removed Prism flows.
+class UploadSetupRoute extends PageRouteInfo<UploadSetupRouteArgs> {
+  UploadSetupRoute({
+    Key? key,
+    required File image,
+    List<PageRouteInfo>? children,
+  }) : super(
+         UploadSetupRoute.name,
+         args: UploadSetupRouteArgs(key: key, image: image),
+         initialChildren: children,
+       );
+
+  static const String name = 'UploadSetupRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const NotFoundPage();
+    },
+  );
+}
+
+class UploadSetupRouteArgs {
+  const UploadSetupRouteArgs({this.key, required this.image});
+
+  final Key? key;
+
+  final File image;
+}
+
+/// Compatibility route for removed Prism flows.
+class UploadWallRoute extends PageRouteInfo<UploadWallRouteArgs> {
+  UploadWallRoute({
+    Key? key,
+    required File image,
+    required bool fromSetupRoute,
+    List<PageRouteInfo>? children,
+  }) : super(
+         UploadWallRoute.name,
+         args: UploadWallRouteArgs(
+           key: key,
+           image: image,
+           fromSetupRoute: fromSetupRoute,
+         ),
+         initialChildren: children,
+       );
+
+  static const String name = 'UploadWallRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const NotFoundPage();
+    },
+  );
+}
+
+class UploadWallRouteArgs {
+  const UploadWallRouteArgs({
+    this.key,
+    required this.image,
+    required this.fromSetupRoute,
+  });
+
+  final Key? key;
+
+  final File image;
+
+  final bool fromSetupRoute;
+}
+
+/// Compatibility route for removed Prism flows.
+class UserProfileSetupViewRoute
+    extends PageRouteInfo<UserProfileSetupViewRouteArgs> {
+  UserProfileSetupViewRoute({
+    Key? key,
+    required int setupIndex,
+    required String profileEmail,
+    List<PageRouteInfo>? children,
+  }) : super(
+         UserProfileSetupViewRoute.name,
+         args: UserProfileSetupViewRouteArgs(
+           key: key,
+           setupIndex: setupIndex,
+           profileEmail: profileEmail,
+         ),
+         initialChildren: children,
+       );
+
+  static const String name = 'UserProfileSetupViewRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const NotFoundPage();
+    },
+  );
+}
+
+class UserProfileSetupViewRouteArgs {
+  const UserProfileSetupViewRouteArgs({
+    this.key,
+    required this.setupIndex,
+    required this.profileEmail,
+  });
+
+  final Key? key;
+
+  final int setupIndex;
+
+  final String profileEmail;
+}
+
+/// Compatibility route for removed Prism flows.
+class UserSearchRoute extends PageRouteInfo<void> {
+  const UserSearchRoute({List<PageRouteInfo>? children})
+    : super(UserSearchRoute.name, initialChildren: children);
+
+  static const String name = 'UserSearchRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const NotFoundPage();
+    },
+  );
+}
+
 /// generated route for
 /// [OnboardingV2Shell]
 class OnboardingV2ShellRoute extends PageRouteInfo<void> {

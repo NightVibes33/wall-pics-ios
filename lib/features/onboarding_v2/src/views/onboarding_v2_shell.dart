@@ -160,7 +160,7 @@ class _OnboardingV2ShellState extends State<OnboardingV2Shell> {
   }
 
   Widget _pageFor(OnboardingV2Step step) {
-    const Widget page = _pages[0];
+    final Widget page = _pages[0];
     return KeyedSubtree(key: ValueKey(step), child: page);
   }
 
