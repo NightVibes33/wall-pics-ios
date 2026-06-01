@@ -35,29 +35,7 @@ jobs:
           PRISM_ENV: ${{ secrets.PRISM_ENV }}
           CATALOG_BASE_URL: ${{ secrets.PRISM_CATALOG_BASE_URL || vars.PRISM_CATALOG_BASE_URL || secrets.WALL_PICS_CATALOG_BASE_URL || vars.WALL_PICS_CATALOG_BASE_URL }}
           USER_STORE_API_BASE_URL: ${{ secrets.USER_STORE_API_BASE_URL || vars.USER_STORE_API_BASE_URL }}
-        run: |
-          if [ -n "$PRISM_ENV" ]; then
-            printf '%s\n' "$PRISM_ENV" | awk -F= '$1 !~ /^(GH_TOKEN|RC_API_KEY|RC_ANDROID_API_KEY|RC_IOS_API_KEY|PEXELS_API_KEY|AI_CLIENT_TOKEN)$/ { print }' > .env
-          else
-            : > .env
-          fi
-          if ! grep -q '^USER_STORE_API_BASE_URL=' .env && [ -n "$USER_STORE_API_BASE_URL" ]; then
-            printf '%s\n' "USER_STORE_API_BASE_URL=$USER_STORE_API_BASE_URL" >> .env
-          fi
-          if ! grep -q '^PRISM_CATALOG_BASE_URL=' .env && [ -n "$CATALOG_BASE_URL" ]; then
-            printf '%s\n' "PRISM_CATALOG_BASE_URL=$CATALOG_BASE_URL" >> .env
-          fi
-          if ! grep -q '^PRISM_CATALOG_BASE_URL=' .env; then
-            API_BASE="$(awk -F= '$1 == "USER_STORE_API_BASE_URL" { sub(/^[^=]*=/, ""); print }' .env | tail -n 1)"
-            if [ -n "$API_BASE" ]; then
-              API_BASE="${API_BASE%/}"
-              printf '%s\n' "PRISM_CATALOG_BASE_URL=$API_BASE/v1/catalog" >> .env
-            fi
-          fi
-          if ! grep -q '^PRISM_CATALOG_BASE_URL=' .env; then
-            echo "Missing PRISM_CATALOG_BASE_URL, WALL_PICS_CATALOG_BASE_URL, or USER_STORE_API_BASE_URL"
-            exit 1
-          fi
+        run: sh tool/write_prism_env.sh
 
       - name: Flutter pub get
         run: flutter pub get

@@ -334,7 +334,7 @@ class PrismCatalogDataSource {
       final base = remoteBase.endsWith('/') ? remoteBase.substring(0, remoteBase.length - 1) : remoteBase;
       try {
         final response = await http.get(Uri.parse('$base/$fileName')).timeout(const Duration(seconds: 8));
-        if (response.statusCode >= 200 && response.statusCode < 300 && response.body.trim().isNotEmpty) {
+        if (response.statusCode >= 200 && response.statusCode < 300 && _looksLikeJson(response.body)) {
           return response.body;
         }
       } catch (_) {
@@ -373,6 +373,11 @@ class PrismCatalogDataSource {
       }
       rethrow;
     }
+  }
+
+  bool _looksLikeJson(String body) {
+    final trimmed = body.trimLeft();
+    return trimmed.startsWith('{') || trimmed.startsWith('[');
   }
 
   String _scope({required String slug, required String contentType}) => '$contentType.$slug';

@@ -5,6 +5,7 @@ import 'package:Prism/features/theme_dark/domain/entities/theme_dark.dart';
 import 'package:Prism/features/theme_light/domain/entities/theme_light.dart';
 import 'package:Prism/features/theme_light/domain/repositories/theme_repository.dart';
 import 'package:Prism/features/theme_mode/domain/entities/theme_mode.dart';
+import 'package:flutter/material.dart' show Color;
 import 'package:injectable/injectable.dart';
 
 @LazySingleton(as: ThemeRepository)
@@ -36,16 +37,84 @@ class ThemeRepositoryImpl implements ThemeRepository {
 
   ThemeLightEntity _readLightTheme() {
     return ThemeLightEntity(
-      themeId: _settingsLocal.get<String>('lightThemeID', defaultValue: _defaultLightTheme),
-      accentColorValue: _settingsLocal.get<int>('lightAccent', defaultValue: _defaultAccent),
+      themeId: _readThemeId(
+        key: 'lightThemeID',
+        fallback: _defaultLightTheme,
+        allowedThemeIds: _lightThemeDefaultAccents.keys,
+      ),
+      accentColorValue: _readColorValue('lightAccent', fallback: _defaultAccent),
     );
   }
 
   ThemeDarkEntity _readDarkTheme() {
     return ThemeDarkEntity(
-      themeId: _settingsLocal.get<String>('darkThemeID', defaultValue: _defaultDarkTheme),
-      accentColorValue: _settingsLocal.get<int>('darkAccent', defaultValue: _defaultAccent),
+      themeId: _readThemeId(
+        key: 'darkThemeID',
+        fallback: _defaultDarkTheme,
+        allowedThemeIds: _darkThemeDefaultAccents.keys,
+      ),
+      accentColorValue: _readColorValue('darkAccent', fallback: _defaultAccent),
     );
+  }
+
+  Object? _readRawSetting(String key) {
+    try {
+      return _settingsLocal.get<Object?>(key, defaultValue: null, hasDefault: true);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _readThemeId({required String key, required String fallback, required Iterable<String> allowedThemeIds}) {
+    final value = _readRawSetting(key)?.toString().trim() ?? '';
+    final allowed = allowedThemeIds.toSet();
+    return allowed.contains(value) ? value : fallback;
+  }
+
+  int _readColorValue(String key, {required int fallback}) {
+    final raw = _readRawSetting(key);
+    if (raw == null) {
+      return fallback;
+    }
+    if (raw is int) {
+      return raw;
+    }
+    if (raw is num) {
+      return raw.toInt();
+    }
+    if (raw is Color) {
+      return raw.toARGB32();
+    }
+
+    final value = raw.toString().trim();
+    final hexMatch = RegExp(r'0x[0-9a-fA-F]+').firstMatch(value);
+    if (hexMatch != null) {
+      return int.tryParse(hexMatch.group(0)!) ?? fallback;
+    }
+    if (RegExp(r'^-?\d+$').hasMatch(value)) {
+      return int.tryParse(value) ?? fallback;
+    }
+
+    final alpha = RegExp(r'alpha:\s*([0-9]*\.?[0-9]+)').firstMatch(value);
+    final red = RegExp(r'red:\s*([0-9]*\.?[0-9]+)').firstMatch(value);
+    final green = RegExp(r'green:\s*([0-9]*\.?[0-9]+)').firstMatch(value);
+    final blue = RegExp(r'blue:\s*([0-9]*\.?[0-9]+)').firstMatch(value);
+    if (alpha != null && red != null && green != null && blue != null) {
+      final a = _to8BitChannel(double.tryParse(alpha.group(1)!) ?? 1.0);
+      final r = _to8BitChannel(double.tryParse(red.group(1)!) ?? 0.0);
+      final g = _to8BitChannel(double.tryParse(green.group(1)!) ?? 0.0);
+      final b = _to8BitChannel(double.tryParse(blue.group(1)!) ?? 0.0);
+      return (a << 24) | (r << 16) | (g << 8) | b;
+    }
+
+    return fallback;
+  }
+
+  int _to8BitChannel(double value) {
+    final channel = (value * 255).round();
+    if (channel < 0) return 0;
+    if (channel > 255) return 255;
+    return channel;
   }
 
   @override
@@ -111,11 +180,17 @@ class ThemeRepositoryImpl implements ThemeRepository {
   @override
   Future<Result<ThemeModeEntity>> getThemeMode() async {
     try {
-      final mode = _settingsLocal.get<String>('themeMode', defaultValue: _defaultMode);
+      final mode = _readThemeMode();
       return Result.success(ThemeModeEntity(mode: mode));
     } catch (error) {
       return Result.error(CacheFailure('Unable to read mode: $error'));
     }
+  }
+
+  String _readThemeMode() {
+    const allowedModes = <String>{'Light', 'Dark', 'System'};
+    final mode = _readRawSetting('themeMode')?.toString().trim() ?? '';
+    return allowedModes.contains(mode) ? mode : _defaultMode;
   }
 
   @override

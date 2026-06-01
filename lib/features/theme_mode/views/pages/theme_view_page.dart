@@ -217,12 +217,14 @@ class _ThemeViewState extends State<ThemeView> {
                         color: Theme.of(context).hintColor,
                         padding: EdgeInsets.zero,
                         onPressed: () {
-                          context.setPrismLightTheme(prismLightThemes.keys.toList()[index]);
+                          final themeId = prismLightThemes.keys.elementAt(index);
+                          final accentColor = prismLightThemes[themeId]!.colorScheme.error;
+                          context.setPrismLightTheme(themeId);
                           logger.d(selectedAccentColor.toString());
                           setState(() {
                             changingLight = true;
                             selectedTheme = index;
-                            selectedAccentColor = Color(context.prismLightAccentValue(listen: false));
+                            selectedAccentColor = accentColor;
                           });
                           logger.d(selectedAccentColor.toString());
                         },
@@ -304,12 +306,14 @@ class _ThemeViewState extends State<ThemeView> {
                         color: Theme.of(context).hintColor,
                         padding: EdgeInsets.zero,
                         onPressed: () {
-                          context.setPrismDarkTheme(prismDarkThemes.keys.toList()[index]);
+                          final themeId = prismDarkThemes.keys.elementAt(index);
+                          final accentColor = prismDarkThemes[themeId]!.colorScheme.error;
+                          context.setPrismDarkTheme(themeId);
                           logger.d(selectedDarkAccentColor.toString());
                           setState(() {
                             changingLight = false;
                             selectedDarkTheme = index;
-                            selectedDarkAccentColor = Color(context.prismDarkAccentValue(listen: false));
+                            selectedDarkAccentColor = accentColor;
                           });
                           logger.d(selectedDarkAccentColor.toString());
                         },
