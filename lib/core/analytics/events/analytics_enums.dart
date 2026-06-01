@@ -129,7 +129,7 @@ enum AnalyticsReasonValue {
   notEligible,
 }
 
-enum SearchProviderValue { wallhaven, pexels, user }
+enum SearchProviderValue { prismCatalog, wallhaven, pexels, user }
 
 enum ItemTypeValue { wallpaper, user, notification }
 
@@ -537,6 +537,8 @@ extension AnalyticsReasonValueX on AnalyticsReasonValue {
 extension SearchProviderValueX on SearchProviderValue {
   String get wireValue {
     switch (this) {
+      case SearchProviderValue.prismCatalog:
+        return 'prism_catalog';
       case SearchProviderValue.wallhaven:
         return 'wallhaven';
       case SearchProviderValue.pexels:

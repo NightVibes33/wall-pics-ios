@@ -10,13 +10,9 @@ import 'package:Prism/core/persistence/data_sources/cache_maintenance_service.da
 import 'package:Prism/core/persistence/data_sources/settings_local_data_source.dart';
 import 'package:Prism/core/persistence/persistence_keys.dart';
 import 'package:Prism/core/platform/pigeon/prism_media_api.g.dart';
-import 'package:Prism/core/purchases/paywall_orchestrator.dart';
-import 'package:Prism/core/purchases/purchases_service.dart';
 import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:Prism/core/widgets/home/core/headingChipBar.dart';
-import 'package:Prism/core/widgets/popup/signInPopUp.dart';
-import 'package:Prism/data/share/createDynamicLink.dart';
 import 'package:Prism/features/favourite_walls/views/favourite_walls_bloc_adapter.dart';
 import 'package:Prism/logger/logger.dart';
 import 'package:Prism/main.dart' as main;
@@ -41,8 +37,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final CacheMaintenanceService _cacheMaintenance = getIt<CacheMaintenanceService>();
   final SettingsLocalDataSource _settingsLocal = getIt<SettingsLocalDataSource>();
 
-  late int _categories;
-  late int _purity;
   late bool _notifWotd;
   late bool _notifPromo;
   late String _downloadQuality;
@@ -50,8 +44,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _categories = _settingsLocal.get<int>('WHcategories', defaultValue: 100);
-    _purity = _settingsLocal.get<int>('WHpurity', defaultValue: 100);
     _notifWotd = _settingsLocal.get<bool>(PersistenceKeys.notifWotd, defaultValue: true);
     _notifPromo = _settingsLocal.get<bool>(PersistenceKeys.notifPromo, defaultValue: true);
     _downloadQuality = _settingsLocal.get<String>(PersistenceKeys.downloadQuality, defaultValue: 'original');
@@ -67,10 +59,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     );
-  }
-
-  void _trackSettingsToggle(SettingValue setting, bool value) {
-    unawaited(analytics.track(SettingsToggleChangedEvent(setting: setting, value: value)));
   }
 
   void _trackSettingsAuthResult({
@@ -144,40 +132,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _contentFiltersSection() {
+  Widget _downloadsSection() {
     return _sectionCard(
-      title: 'CONTENT FILTERS',
+      title: 'DOWNLOADS',
       children: [
-        SwitchListTile(
-          activeThumbColor: _accentColor,
-          secondary: const Icon(JamIcons.picture),
-          value: _categories == 111,
-          title: Text('Show Anime Wallpapers', style: _titleStyle),
-          subtitle: Text(
-            _categories == 111 ? 'Disable to hide anime wallpapers' : 'Enable to show anime wallpapers',
-            style: _subtitleStyle,
-          ),
-          onChanged: (value) {
-            setState(() => _categories = value ? 111 : 100);
-            _settingsLocal.set('WHcategories', _categories);
-            _trackSettingsToggle(SettingValue.animeWallpapers, value);
-          },
-        ),
-        SwitchListTile(
-          activeThumbColor: _accentColor,
-          secondary: const Icon(JamIcons.stop_sign),
-          value: _purity == 110,
-          title: Text('Show Sketchy Wallpapers', style: _titleStyle),
-          subtitle: Text(
-            _purity == 110 ? 'Disable to hide sketchy wallpapers' : 'Enable to show sketchy wallpapers',
-            style: _subtitleStyle,
-          ),
-          onChanged: (value) {
-            setState(() => _purity = value ? 110 : 100);
-            _settingsLocal.set('WHpurity', _purity);
-            _trackSettingsToggle(SettingValue.sketchyWallpapers, value);
-          },
-        ),
         ListTile(
           leading: const Icon(Icons.high_quality_outlined),
           title: Text('Download Quality', style: _titleStyle),
@@ -449,53 +407,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         const Divider(height: 1, indent: 16, endIndent: 16),
         ListTile(
-          leading: const Icon(JamIcons.check),
-          title: Text('Review Status', style: _titleStyle),
-          subtitle: const Text('Track your submitted wallpaper reviews', style: TextStyle(fontSize: 12)),
-          trailing: const Icon(Icons.chevron_right_rounded),
-          onTap: () => context.router.push(const ReviewRoute()),
-        ),
-        ListTile(
-          leading: const Icon(JamIcons.user_remove),
-          title: Text('Blocked accounts', style: _titleStyle),
-          subtitle: const Text('Manage users you have blocked', style: TextStyle(fontSize: 12)),
-          trailing: const Icon(Icons.chevron_right_rounded),
-          onTap: () => context.router.push(const BlockedAccountsRoute()),
-        ),
-        ListTile(
-          leading: const Icon(JamIcons.share_alt),
-          title: Text('Share your Profile', style: _titleStyle),
-          subtitle: const Text('Share a link to your Prism profile', style: TextStyle(fontSize: 12)),
-          onTap: () => createUserDynamicLink(
-            app_state.prismUser.name,
-            app_state.prismUser.username,
-            app_state.prismUser.email,
-            app_state.prismUser.bio,
-            app_state.prismUser.profilePhoto,
-            context: context,
-          ),
-        ),
-        ListTile(
           leading: const Icon(JamIcons.heart),
           title: Text('Clear favourite walls', style: _titleStyle),
           subtitle: const Text('Remove all favourite wallpapers', style: TextStyle(fontSize: 12)),
           onTap: () {
             _trackSettingsAction(AnalyticsActionValue.clearFavouriteWallsTapped);
             _showClearFavWallsDialog();
-          },
-        ),
-        ListTile(
-          leading: const Icon(Icons.restore_rounded),
-          title: Text('Restore Purchases', style: _titleStyle),
-          subtitle: const Text('Restore a previously purchased subscription', style: TextStyle(fontSize: 12)),
-          onTap: () async {
-            _trackSettingsAction(AnalyticsActionValue.restorePurchaseTapped);
-            try {
-              await PurchasesService.instance.restore();
-              toasts.codeSend('Purchases restored!');
-            } catch (e) {
-              toasts.error('Could not restore purchases. Please try again.');
-            }
           },
         ),
         ListTile(
@@ -522,7 +439,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 final settingsLocal = getIt<SettingsLocalDataSource>();
                 await settingsLocal.set('onboarded_v2_new', false);
                 await settingsLocal.set('onboarding_v2_interests', '');
-                await settingsLocal.set('onboarding_v2_followed_creators', '');
                 if (context.mounted) {
                   // ignore: use_build_context_synchronously
                   main.RestartWidget.restartApp(context);
@@ -588,7 +504,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         content: const SizedBox(
           width: 250,
           child: Text(
-            'This will permanently delete your account, remove your personal data, and sign you out.\n\nYour uploaded wallpapers and setups will remain visible as "Deleted Account".\n\nThis action cannot be undone.',
+            'This will permanently delete your account data and sign you out.\n\nThis action cannot be undone.',
           ),
         ),
         actions: [
@@ -651,43 +567,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _premiumSection() {
-    if (app_state.prismUser.premium == true) return const SizedBox.shrink();
-    return _sectionCard(
-      title: 'PREMIUM',
-      children: [
-        ListTile(
-          leading: const Icon(JamIcons.instant_picture_f),
-          title: Text('Buy Premium', style: _titleStyle),
-          subtitle: const Text('Get unlimited setups and filters.', style: TextStyle(fontSize: 12)),
-          trailing: const Icon(Icons.chevron_right_rounded),
-          onTap: () {
-            _trackSettingsAction(AnalyticsActionValue.buyPremiumTapped);
-            if (!app_state.prismUser.loggedIn) {
-              googleSignInPopUp(context, () {
-                if (app_state.prismUser.premium == true) {
-                  main.RestartWidget.restartApp(context);
-                } else {
-                  PaywallOrchestrator.instance.present(
-                    context,
-                    placement: PaywallPlacement.mainUpsell,
-                    source: 'settings_buy_premium',
-                  );
-                }
-              });
-            } else {
-              PaywallOrchestrator.instance.present(
-                context,
-                placement: PaywallPlacement.mainUpsell,
-                source: 'settings_buy_premium',
-              );
-            }
-          },
-        ),
-      ],
-    );
-  }
-
   Widget _adminSection() {
     if (!app_state.isAdminUser()) return const SizedBox.shrink();
     return _sectionCard(
@@ -699,13 +578,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           subtitle: const Text('Logs, network, tools, storage inspector', style: TextStyle(fontSize: 12)),
           trailing: const Icon(Icons.chevron_right_rounded),
           onTap: () => context.router.pushPath('/debug-panel'),
-        ),
-        ListTile(
-          leading: const Icon(JamIcons.shield_check),
-          title: Text('Admin Moderation', style: _titleStyle),
-          subtitle: const Text('Review and moderate submitted content', style: TextStyle(fontSize: 12)),
-          trailing: const Icon(Icons.chevron_right_rounded),
-          onTap: () => context.router.push(const AdminReviewRoute()),
         ),
         ListTile(
           leading: const Icon(JamIcons.file),
@@ -800,12 +672,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         padding: const EdgeInsets.only(top: 8, bottom: 32),
         children: [
           _appearanceSection(),
-          _contentFiltersSection(),
+          _downloadsSection(),
           _notificationsSection(),
           _androidWidgetsSection(),
           _storageSection(),
           _accountSection(),
-          _premiumSection(),
           _adminSection(),
           _aboutSection(),
         ],

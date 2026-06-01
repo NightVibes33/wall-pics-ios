@@ -3,19 +3,11 @@ import 'dart:io';
 
 import 'package:Prism/analytics/analytics_service.dart';
 import 'package:Prism/core/analytics/events/events.dart';
-import 'package:Prism/core/coins/coin_action.dart';
-import 'package:Prism/core/coins/coin_policy.dart';
-import 'package:Prism/core/coins/coins_service.dart';
 import 'package:Prism/core/platform/pigeon/prism_media_api.g.dart';
 import 'package:Prism/core/platform/wallpaper_capability.dart';
 import 'package:Prism/core/platform/wallpaper_service.dart';
-import 'package:Prism/core/purchases/paywall_orchestrator.dart';
-import 'package:Prism/core/state/app_state.dart' as app_state;
-import 'package:Prism/core/utils/status.dart';
 import 'package:Prism/core/widgets/animated/loader.dart';
 import 'package:Prism/core/widgets/menuButton/setWallpaperButton.dart';
-import 'package:Prism/core/widgets/popup/signInPopUp.dart';
-import 'package:Prism/features/ads/ads.dart';
 import 'package:Prism/features/palette/views/pages/custom_filters.dart';
 import 'package:Prism/features/theme_mode/views/theme_mode_bloc_utils.dart';
 import 'package:Prism/logger/logger.dart';
@@ -25,7 +17,6 @@ import 'package:auto_route/auto_route.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image/image.dart' as imagelib;
 import 'package:path_provider/path_provider.dart';
 import 'package:photo_view/photo_view.dart';
@@ -45,8 +36,6 @@ class WallpaperFilterScreen extends StatefulWidget {
   State<StatefulWidget> createState() => _WallpaperFilterScreenState();
 }
 
-enum _PremiumFilterLowBalanceAction { none, watchAd, upgrade }
-
 class _WallpaperFilterScreenState extends State<WallpaperFilterScreen> {
   String? filename;
   String? finalFilename;
@@ -56,7 +45,6 @@ class _WallpaperFilterScreenState extends State<WallpaperFilterScreen> {
   imagelib.Image? finalImage;
   late bool loading;
   late bool isLoading;
-  bool _premiumFilterUnlockedForSession = false;
   List<Filter> selectedFilters = [
     NoFilter(),
     AddictiveBlueFilter(),
@@ -207,203 +195,9 @@ class _WallpaperFilterScreenState extends State<WallpaperFilterScreen> {
     Navigator.of(context).pop();
   }
 
-  bool get _selectedFilterNeedsPremiumSpend => _filter != null && _filter is! NoFilter;
-
-  Future<void> _runWithPremiumFilterGate(Future<void> Function() action, {required String sourceTag}) async {
-    if (!_selectedFilterNeedsPremiumSpend || app_state.prismUser.premium || _premiumFilterUnlockedForSession) {
-      await action();
-      return;
-    }
-
-    if (!app_state.prismUser.loggedIn) {
-      toasts.codeSend('Sign in to use premium filters with coins.');
-      googleSignInPopUp(context, () {
-        unawaited(_runWithPremiumFilterGate(action, sourceTag: '$sourceTag.after_sign_in'));
-      });
-      return;
-    }
-
-    analytics.track(CoinPremiumFilterSpendAttemptEvent(sourceTag: sourceTag, filter: _filter?.name ?? ''));
-
-    CoinMutationResult spendResult;
-    try {
-      spendResult = await CoinsService.instance.spendForPremiumFilter(
-        sourceTag: '$sourceTag.spend',
-        reason: 'filter_${_filter?.name ?? ''}',
-      );
-    } catch (error, stackTrace) {
-      CoinsService.instance.logCoinError(sourceTag: '$sourceTag.spend', error: error, stackTrace: stackTrace);
-      toasts.error('Unable to process coins right now.');
-      return;
-    }
-
-    if (!spendResult.success) {
-      if (spendResult.insufficientBalance) {
-        await _showPremiumFilterLowBalanceNudge(
-          sourceTag: '$sourceTag.low_balance_nudge',
-          onWatchAd: () => _watchAdAndRetryPremiumFilter(action, sourceTag: '$sourceTag.watch_and_retry'),
-        );
-        return;
-      }
-      toasts.error('Unable to process coins right now.');
-      return;
-    }
-
-    _premiumFilterUnlockedForSession = true;
-    if (spendResult.changed) {
-      analytics.track(
-        CoinPremiumFilterSpendSuccessEvent(
-          sourceTag: sourceTag,
-          coinsSpent: CoinPolicy.premiumFilter,
-          filter: _filter?.name ?? '',
-        ),
-      );
-      toasts.codeSend('Premium filter unlocked for this edit (-${CoinPolicy.premiumFilter} coins).');
-    }
+  Future<void> _runFilterAction(Future<void> Function() action, {required String sourceTag}) async {
+    logger.d('Running wallpaper filter action.', fields: <String, Object?>{'sourceTag': sourceTag});
     await action();
-  }
-
-  Future<void> _showPremiumFilterLowBalanceNudge({
-    required String sourceTag,
-    required Future<void> Function() onWatchAd,
-  }) async {
-    if (!mounted) {
-      return;
-    }
-    CoinsService.instance.logLowBalanceNudge(sourceTag: sourceTag, requiredCoins: CoinPolicy.premiumFilter);
-    final _PremiumFilterLowBalanceAction action =
-        await showModalBottomSheet<_PremiumFilterLowBalanceAction>(
-          context: context,
-          backgroundColor: Theme.of(context).primaryColor,
-          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-          builder: (sheetContext) {
-            final int balance = CoinsService.instance.balanceNotifier.value;
-            final int missing = (CoinPolicy.premiumFilter - balance).clamp(0, CoinPolicy.premiumFilter);
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 32,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Theme.of(sheetContext).hintColor,
-                      borderRadius: BorderRadius.circular(99),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text('Need Coins for Premium Filter', style: Theme.of(sheetContext).textTheme.displaySmall),
-                  const SizedBox(height: 10),
-                  Text(
-                    'Applying this filter costs -5 coins. Need $missing more coins.',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(sheetContext).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: () => Navigator.of(sheetContext).pop(_PremiumFilterLowBalanceAction.watchAd),
-                      child: const Text('Watch Ad (+10)'),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.of(sheetContext).pop(_PremiumFilterLowBalanceAction.upgrade),
-                      child: const Text('Upgrade to Pro'),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        ) ??
-        _PremiumFilterLowBalanceAction.none;
-
-    switch (action) {
-      case _PremiumFilterLowBalanceAction.watchAd:
-        await onWatchAd();
-        return;
-      case _PremiumFilterLowBalanceAction.upgrade:
-        if (mounted) {
-          await PaywallOrchestrator.instance.present(
-            context,
-            placement: PaywallPlacement.lowBalance,
-            source: 'premium_filter_low_balance',
-          );
-        }
-        return;
-      case _PremiumFilterLowBalanceAction.none:
-        return;
-    }
-  }
-
-  Future<void> _watchAdAndRetryPremiumFilter(Future<void> Function() action, {required String sourceTag}) async {
-    analytics.track(CoinFilterWatchAndRetryUsedEvent(sourceTag: sourceTag, filter: _filter?.name ?? ''));
-    final bool watched = await _watchRewardedAd();
-    if (!watched) {
-      toasts.error('Ad was not completed.');
-      return;
-    }
-    try {
-      await CoinsService.instance.award(CoinEarnAction.rewardedAd, sourceTag: '$sourceTag.rewarded_ad');
-      if (mounted) {
-        await PaywallOrchestrator.instance.recordRewardedAdWatchAndMaybeUpsell(
-          context,
-          source: 'premium_filter_watch_ad',
-        );
-      }
-    } catch (error, stackTrace) {
-      CoinsService.instance.logCoinError(sourceTag: '$sourceTag.rewarded_ad', error: error, stackTrace: stackTrace);
-      toasts.error('Unable to credit coins right now.');
-      return;
-    }
-    await _runWithPremiumFilterGate(action, sourceTag: '$sourceTag.retry');
-  }
-
-  Future<bool> _ensureRewardedAdReady(AdsBloc bloc) async {
-    if (bloc.state.ads.adLoaded) {
-      return true;
-    }
-    if (!bloc.state.ads.loadingAd) {
-      bloc.add(const AdsEvent.started());
-    }
-    try {
-      final AdsState state = await bloc.stream
-          .firstWhere((state) => state.ads.adLoaded || state.ads.adFailed)
-          .timeout(const Duration(seconds: 30));
-      return state.ads.adLoaded;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  Future<bool> _watchRewardedAd() async {
-    final AdsBloc bloc = context.read<AdsBloc>();
-    if (!await _ensureRewardedAdReady(bloc)) {
-      return false;
-    }
-    bool watchRequested = false;
-    try {
-      final Future<AdsState> completion = bloc.stream
-          .firstWhere(
-            (state) => state.shouldUnlockDownload || state.actionStatus == ActionStatus.failure || state.ads.adFailed,
-          )
-          .timeout(const Duration(seconds: 60));
-      bloc.add(const AdsEvent.watchAdRequested());
-      watchRequested = true;
-      final AdsState result = await completion;
-      return result.shouldUnlockDownload;
-    } catch (_) {
-      return false;
-    } finally {
-      if (watchRequested) {
-        bloc.add(const AdsEvent.transientStateCleared());
-      }
-    }
   }
 
   Future<void> _handleDownloadAction() async {
@@ -505,7 +299,7 @@ class _WallpaperFilterScreenState extends State<WallpaperFilterScreen> {
             IconButton(
               icon: const Icon(JamIcons.download),
               onPressed: () =>
-                  unawaited(_runWithPremiumFilterGate(_handleDownloadAction, sourceTag: 'coins.filter.download')),
+                  unawaited(_runFilterAction(_handleDownloadAction, sourceTag: 'filter.download')),
             ),
           if (!hideSetWallpaperUi)
             if (loading)
@@ -513,7 +307,7 @@ class _WallpaperFilterScreenState extends State<WallpaperFilterScreen> {
             else
               IconButton(
                 icon: const Icon(JamIcons.check),
-                onPressed: () => unawaited(_runWithPremiumFilterGate(_handleSetAction, sourceTag: 'coins.filter.set')),
+                onPressed: () => unawaited(_runFilterAction(_handleSetAction, sourceTag: 'filter.set')),
               ),
         ],
       ),

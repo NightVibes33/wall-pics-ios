@@ -1,15 +1,12 @@
 import 'dart:async';
 
 import 'package:Prism/core/utils/status.dart';
-import 'package:Prism/core/wallpaper/wallpaper_source.dart';
 import 'package:Prism/core/widgets/home/core/headingChipBar.dart';
 import 'package:Prism/core/widgets/home/wallpapers/loading.dart';
 import 'package:Prism/data/collections/provider/collectionsWithoutProvider.dart';
 import 'package:Prism/features/category_feed/biz/bloc/category_feed_bloc.j.dart';
 import 'package:Prism/features/category_feed/views/category_feed_bloc_adapter.dart';
 import 'package:Prism/features/category_feed/views/widgets/collections_view_grid.dart';
-import 'package:Prism/features/category_feed/views/widgets/pexels_grid.dart';
-import 'package:Prism/features/category_feed/views/widgets/wallhaven_grid.dart';
 import 'package:Prism/features/category_feed/views/widgets/wallpaper_grid.dart';
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
@@ -28,9 +25,18 @@ class CollectionViewScreen extends StatefulWidget {
 class _CollectionViewScreenState extends State<CollectionViewScreen> {
   bool get _isCategoryView => widget.collectionName.startsWith('category:');
 
-  String get _decodedCategoryName {
+  String get _decodedCategoryPayload {
     final encoded = widget.collectionName.substring('category:'.length);
     return Uri.decodeComponent(encoded).trim();
+  }
+
+  String get _decodedCategoryName {
+    final payload = _decodedCategoryPayload;
+    if (payload.contains('|')) {
+      final parts = payload.split('|');
+      return parts.isNotEmpty ? parts.last.trim() : payload;
+    }
+    return payload;
   }
 
   @override
@@ -42,8 +48,18 @@ class _CollectionViewScreenState extends State<CollectionViewScreen> {
           return;
         }
         final choices = context.categoryChoiceList(listen: false);
+        final payload = _decodedCategoryPayload;
         final selected = choices.firstWhere(
-          (choice) => (choice.name ?? '').trim().toLowerCase() == _decodedCategoryName.toLowerCase(),
+          (choice) {
+            if (payload.contains('|')) {
+              final parts = payload.split('|');
+              final type = parts.isNotEmpty ? parts[0].trim().toLowerCase() : '';
+              final slug = parts.length > 1 ? parts[1].trim().toLowerCase() : '';
+              return (choice.catalogContentType ?? '').trim().toLowerCase() == type &&
+                  (choice.catalogSlug ?? '').trim().toLowerCase() == slug;
+            }
+            return (choice.name ?? '').trim().toLowerCase() == _decodedCategoryName.toLowerCase();
+          },
           orElse: () => choices.first,
         );
         unawaited(context.categoryChangeWallpaperFuture(selected, 'r'));
@@ -103,18 +119,7 @@ class _CategoryFeedContent extends StatelessWidget {
             ),
           );
         }
-        final source = state.selectedCategory?.source ?? WallpaperSource.prism;
-        switch (source) {
-          case WallpaperSource.wallhaven:
-            return const WallHavenGrid();
-          case WallpaperSource.pexels:
-            return const PexelsGrid();
-          case WallpaperSource.prism:
-            return const WallpaperGrid();
-          case WallpaperSource.downloaded:
-          case WallpaperSource.unknown:
-            return const WallpaperGrid();
-        }
+        return const WallpaperGrid();
       },
     );
   }

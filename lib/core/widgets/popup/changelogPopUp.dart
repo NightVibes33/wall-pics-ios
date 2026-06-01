@@ -30,7 +30,7 @@ class _ChangelogVersion {
   const _ChangelogVersion({required this.version, required this.changes});
 }
 
-const String _changelogUrl = 'https://raw.githubusercontent.com/NightVibes33/wall-pics-ios/main/CHANGELOG.md';
+const String _changelogUrl = 'https://raw.githubusercontent.com/NightVibes33/prism-ios/main/CHANGELOG.md';
 const String _changelogCacheKey = 'remote_changelog_markdown_cache';
 
 const List<_ChangelogVersion> _fallbackChangelog = [
@@ -174,7 +174,7 @@ void showChangelog(BuildContext context, VoidCallback func) {
     actions: [
       TextButton(
         onPressed: () {
-          openPrismLink(context, "https://github.com/NightVibes33/wall-pics-ios/releases");
+          openPrismLink(context, "https://github.com/NightVibes33/prism-ios/releases");
           func();
         },
         child: Text(

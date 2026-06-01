@@ -6,15 +6,15 @@ import MobileCoreServices
 import Photos
 import UniformTypeIdentifiers
 
-final class WallpicsLivePhotoSaver: NSObject {
+final class PrismLivePhotoSaver: NSObject {
   private static var retainedChannel: FlutterMethodChannel?
-  private static var retainedSaver: WallpicsLivePhotoSaver?
+  private static var retainedSaver: PrismLivePhotoSaver?
 
-  private let queue = DispatchQueue(label: "com.nightvibes.wallpics.live-photo", qos: .userInitiated)
+  private let queue = DispatchQueue(label: "com.nightvibes.prism.live-photo", qos: .userInitiated)
 
   static func register(binaryMessenger: FlutterBinaryMessenger) {
-    let channel = FlutterMethodChannel(name: "wallpics/live_photo", binaryMessenger: binaryMessenger)
-    let saver = WallpicsLivePhotoSaver()
+    let channel = FlutterMethodChannel(name: "prism/live_photo", binaryMessenger: binaryMessenger)
+    let saver = PrismLivePhotoSaver()
     retainedChannel = channel
     retainedSaver = saver
     channel.setMethodCallHandler { call, result in
@@ -56,7 +56,7 @@ final class WallpicsLivePhotoSaver: NSObject {
   }
 
   private func makeWorkDirectory() throws -> URL {
-    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("wallpics-live-\(UUID().uuidString)", isDirectory: true)
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("prism-live-\(UUID().uuidString)", isDirectory: true)
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     return dir
   }

@@ -1,13 +1,13 @@
 import 'package:Prism/features/navigation/views/widgets/prism_bottom_nav.dart';
-import 'package:Prism/features/navigation/views/widgets/prism_fab.dart';
 import 'package:Prism/theme/jam_icons_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_floating_bottom_bar/flutter_floating_bottom_bar.dart' as floating;
 
 class BottomBar extends StatefulWidget {
-  final Widget? child;
   const BottomBar({this.child, super.key});
+
+  final Widget? child;
 
   @override
   State<BottomBar> createState() => _BottomBarState();
@@ -15,6 +15,7 @@ class BottomBar extends StatefulWidget {
 
 class _BottomBarState extends State<BottomBar> {
   late final floating.BottomBarController _bottomBarController;
+
   @override
   void initState() {
     super.initState();
@@ -36,18 +37,7 @@ class _BottomBarState extends State<BottomBar> {
       iconWidth: 32,
       iconHeight: 32,
       barDecoration: BoxDecoration(color: Colors.transparent, borderRadius: BorderRadius.circular(500)),
-      child: const Align(
-        heightFactor: 1.0,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            IntrinsicWidth(child: PrismBottomNav()),
-            SizedBox(width: 12),
-            PrismFab(),
-          ],
-        ),
-      ),
+      child: const Align(heightFactor: 1.0, child: IntrinsicWidth(child: PrismBottomNav())),
       body: (context, scrollController) => _BottomBarScrollVisibility(
         controller: _bottomBarController,
         scrollController: scrollController,
@@ -58,11 +48,11 @@ class _BottomBarState extends State<BottomBar> {
 }
 
 class _BottomBarScrollVisibility extends StatefulWidget {
+  const _BottomBarScrollVisibility({required this.controller, required this.scrollController, required this.child});
+
   final floating.BottomBarController controller;
   final ScrollController scrollController;
   final Widget child;
-
-  const _BottomBarScrollVisibility({required this.controller, required this.scrollController, required this.child});
 
   @override
   State<_BottomBarScrollVisibility> createState() => _BottomBarScrollVisibilityState();

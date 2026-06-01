@@ -2,381 +2,181 @@ import 'dart:async';
 
 import 'package:Prism/analytics/analytics_service.dart';
 import 'package:Prism/core/analytics/events/events.dart';
-import 'package:Prism/core/di/injection.dart';
-import 'package:Prism/core/persistence/data_sources/settings_local_data_source.dart';
-import 'package:Prism/core/router/app_router.dart';
-import 'package:Prism/core/wallpaper/wallpaper_source.dart';
 import 'package:Prism/core/widgets/animated/loader.dart';
-import 'package:Prism/data/pexels/provider/pexelsWithoutProvider.dart' as pData;
-import 'package:Prism/data/share/createDynamicLink.dart';
-import 'package:Prism/data/wallhaven/provider/wallhavenWithoutProvider.dart' as wData;
-import 'package:Prism/features/palette/domain/entities/wallpaper_detail_entity.dart';
-import 'package:Prism/features/theme_mode/views/theme_mode_bloc_utils.dart';
+import 'package:Prism/core/widgets/home/wallpapers/loading.dart';
+import 'package:Prism/features/category_feed/domain/entities/feed_item_entity.dart';
+import 'package:Prism/features/category_feed/views/widgets/wallpaper_tile.dart';
+import 'package:Prism/features/prism_catalog/data/prism_catalog_data_source.dart';
 import 'package:Prism/logger/logger.dart';
-import 'package:auto_route/auto_route.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 class SearchGrid extends StatefulWidget {
+  const SearchGrid({super.key, required this.query});
+
   final String query;
-  final String? selectedProvider;
-  const SearchGrid({required this.query, required this.selectedProvider});
+
   @override
-  _SearchGridState createState() => _SearchGridState();
+  State<SearchGrid> createState() => _SearchGridState();
 }
 
-class _SearchGridState extends State<SearchGrid> with TickerProviderStateMixin {
-  final SettingsLocalDataSource _settingsLocal = getIt<SettingsLocalDataSource>();
-  AnimationController? _controller;
-  late AnimationController shakeController;
-  late Animation<Color?> animation;
-  int? longTapIndex;
-  GlobalKey<RefreshIndicatorState> refreshHomeKey = GlobalKey<RefreshIndicatorState>();
-
-  bool seeMoreLoader = false;
+class _SearchGridState extends State<SearchGrid> {
+  final GlobalKey<RefreshIndicatorState> _refreshKey = GlobalKey<RefreshIndicatorState>();
+  final List<PrismFeedItem> _items = <PrismFeedItem>[];
+  late Future<void> _initialLoad;
+  bool _hasMore = false;
+  bool _loadingMore = false;
   int _currentPage = 1;
-
-  SearchProviderValue get _providerValue {
-    if (widget.selectedProvider == "Pexels") {
-      return SearchProviderValue.pexels;
-    }
-    return SearchProviderValue.wallhaven;
-  }
 
   int get _queryLength => widget.query.trim().length;
 
-  int get _resultCount => widget.selectedProvider == "Pexels" ? pData.wallsPS.length : wData.wallsS.length;
+  @override
+  void initState() {
+    super.initState();
+    _initialLoad = _load(refresh: true);
+  }
+
+  @override
+  void didUpdateWidget(covariant SearchGrid oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.query != widget.query) {
+      _items.clear();
+      _hasMore = false;
+      _currentPage = 1;
+      _initialLoad = _load(refresh: true);
+    }
+  }
+
+  Future<void> _load({required bool refresh}) async {
+    final page = await PrismCatalogDataSource.instance.search(query: widget.query, refresh: refresh);
+    final incoming = page.items.whereType<PrismFeedItem>().toList(growable: false);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      if (refresh) {
+        _items
+          ..clear()
+          ..addAll(incoming);
+        _currentPage = 1;
+      } else {
+        final byId = <String, PrismFeedItem>{for (final item in _items) item.id: item};
+        for (final item in incoming) {
+          byId[item.id] = item;
+        }
+        _items
+          ..clear()
+          ..addAll(byId.values);
+        _currentPage += 1;
+      }
+      _hasMore = page.hasMore;
+    });
+    _trackResultsLoaded(page: _currentPage, result: _items.isEmpty ? EventResultValue.empty : EventResultValue.success);
+  }
 
   void _trackResultsLoaded({required int page, required EventResultValue result}) {
     analytics.track(
       SearchResultsLoadedEvent(
-        provider: _providerValue,
+        provider: SearchProviderValue.prismCatalog,
         queryLength: _queryLength,
-        resultCount: _resultCount,
+        resultCount: _items.length,
         page: page,
         result: result,
       ),
     );
   }
 
-  Future<bool> _requestPage({required int page}) async {
-    analytics.track(SearchPaginationRequestedEvent(provider: _providerValue, queryLength: _queryLength, page: page));
-    try {
-      if (widget.selectedProvider == "WallHaven") {
-        await wData.getWallsbyQueryPage(
-          widget.query,
-          _settingsLocal.get<int>('WHcategories'),
-          _settingsLocal.get<int>('WHpurity'),
-        );
-      } else if (widget.selectedProvider == "Pexels") {
-        await pData.getWallsPbyQueryPage(widget.query);
-      }
-      _trackResultsLoaded(page: page, result: _resultCount > 0 ? EventResultValue.success : EventResultValue.empty);
-      return true;
-    } catch (error, stackTrace) {
-      logger.e('Failed to load search results page.', error: error, stackTrace: stackTrace);
-      _trackResultsLoaded(page: page, result: EventResultValue.failure);
-      return false;
-    }
+  Future<void> _refresh() async {
+    _refreshKey.currentState?.show();
+    await _load(refresh: true);
   }
 
   Future<void> _requestNextPage() async {
-    if (seeMoreLoader) {
+    if (_loadingMore || !_hasMore) {
       return;
     }
-    setState(() {
-      seeMoreLoader = true;
-    });
-    final int nextPage = _currentPage + 1;
-    final bool success = await _requestPage(page: nextPage);
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      if (success) {
-        _currentPage = nextPage;
-      }
-    });
-    Future<void>.delayed(const Duration(seconds: 2)).then((_) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        seeMoreLoader = false;
-      });
-    });
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    shakeController = AnimationController(duration: const Duration(milliseconds: 300), vsync: this);
-    _controller = AnimationController(duration: const Duration(milliseconds: 800), vsync: this);
-    animation =
-        context.prismModeStyleForWindow(listen: false) == "Dark"
-              ? TweenSequence<Color?>([
-                  TweenSequenceItem(
-                    weight: 1.0,
-                    tween: ColorTween(begin: Colors.white10, end: const Color(0x22FFFFFF)),
-                  ),
-                  TweenSequenceItem(
-                    weight: 1.0,
-                    tween: ColorTween(begin: const Color(0x22FFFFFF), end: Colors.white10),
-                  ),
-                ]).animate(_controller!)
-              : TweenSequence<Color?>([
-                  TweenSequenceItem(
-                    weight: 1.0,
-                    tween: ColorTween(
-                      begin: Colors.black.withValues(alpha: .1),
-                      end: Colors.black.withValues(alpha: .14),
-                    ),
-                  ),
-                  TweenSequenceItem(
-                    weight: 1.0,
-                    tween: ColorTween(
-                      begin: Colors.black.withValues(alpha: .14),
-                      end: Colors.black.withValues(alpha: .1),
-                    ),
-                  ),
-                ]).animate(_controller!)
-          ..addListener(() {
-            setState(() {});
-          });
-    _controller!.repeat();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _trackResultsLoaded(page: 1, result: _resultCount > 0 ? EventResultValue.success : EventResultValue.empty);
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller?.dispose();
-    shakeController.dispose();
-    super.dispose();
-  }
-
-  Future<void> refreshList() async {
-    refreshHomeKey.currentState?.show();
-    _currentPage = 1;
+    setState(() => _loadingMore = true);
+    analytics.track(
+      SearchPaginationRequestedEvent(provider: SearchProviderValue.prismCatalog, queryLength: _queryLength, page: _currentPage + 1),
+    );
     try {
-      if (widget.selectedProvider == "WallHaven") {
-        wData.wallsS = [];
-        await wData.getWallsbyQuery(
-          widget.query,
-          _settingsLocal.get<int>('WHcategories'),
-          _settingsLocal.get<int>('WHpurity'),
-        );
-      } else if (widget.selectedProvider == "Pexels") {
-        pData.wallsPS = [];
-        await pData.getWallsPbyQuery(widget.query);
-      }
-      _trackResultsLoaded(page: 1, result: _resultCount > 0 ? EventResultValue.success : EventResultValue.empty);
+      await _load(refresh: false);
     } catch (error, stackTrace) {
-      logger.e('Failed to refresh search results.', error: error, stackTrace: stackTrace);
-      _trackResultsLoaded(page: 1, result: EventResultValue.failure);
+      logger.e('Failed to load Prism search results page.', error: error, stackTrace: stackTrace);
+      _trackResultsLoaded(page: _currentPage + 1, result: EventResultValue.failure);
+    } finally {
+      if (mounted) {
+        setState(() => _loadingMore = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final Animation<double> offsetAnimation =
-        Tween(begin: 0.0, end: 8.0).chain(CurveTween(curve: Curves.easeOutCubic)).animate(shakeController)
-          ..addStatusListener((status) {
-            if (status == AnimationStatus.completed) {
-              shakeController.reverse();
-            }
-          });
-    return RefreshIndicator(
-      backgroundColor: Theme.of(context).primaryColor,
-      key: refreshHomeKey,
-      onRefresh: refreshList,
-      child: NotificationListener<ScrollNotification>(
-        onNotification: (ScrollNotification scrollInfo) {
-          if (scrollInfo.metrics.pixels == scrollInfo.metrics.maxScrollExtent) {
-            if (!seeMoreLoader) {
-              unawaited(_requestNextPage());
-            }
-          }
-          return false;
-        },
-        child: GridView.builder(
-          padding: const EdgeInsets.fromLTRB(5, 4, 5, 4),
-          itemCount: widget.selectedProvider == "WallHaven"
-              ? wData.wallsS.isEmpty
-                    ? 24
-                    : wData.wallsS.length
-              : pData.wallsPS.isEmpty
-              ? 24
-              : pData.wallsPS.length,
-          shrinkWrap: true,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: MediaQuery.of(context).orientation == Orientation.portrait ? 3 : 5,
-            childAspectRatio: 0.5,
-            mainAxisSpacing: 0,
-            crossAxisSpacing: 0,
-          ),
-          itemBuilder: (context, index) {
-            if (widget.selectedProvider == "WallHaven") {
-              if (index == wData.wallsS.length - 1 && index >= 23) {
-                return MaterialButton(
-                  color: context.prismModeStyleForContext() == "Dark"
-                      ? Colors.white10
-                      : Colors.black.withValues(alpha: .1),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                  onPressed: () async {
-                    await _requestNextPage();
-                  },
-                  child: !seeMoreLoader ? const Text("See more") : Loader(),
-                );
+    return FutureBuilder<void>(
+      future: _initialLoad,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting && _items.isEmpty) {
+          return const LoadingCards();
+        }
+        if (snapshot.hasError && _items.isEmpty) {
+          return RefreshIndicator(
+            key: _refreshKey,
+            onRefresh: _refresh,
+            child: ListView(
+              children: const [
+                SizedBox(height: 220),
+                Center(child: Text("Can't load Prism results.")),
+              ],
+            ),
+          );
+        }
+        if (_items.isEmpty) {
+          return RefreshIndicator(
+            key: _refreshKey,
+            onRefresh: _refresh,
+            child: ListView(
+              children: const [
+                SizedBox(height: 220),
+                Center(child: Text('No Prism results found.')),
+              ],
+            ),
+          );
+        }
+        return RefreshIndicator(
+          key: _refreshKey,
+          backgroundColor: Theme.of(context).primaryColor,
+          onRefresh: _refresh,
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (scrollInfo) {
+              if (scrollInfo.metrics.pixels >= scrollInfo.metrics.maxScrollExtent - 240) {
+                unawaited(_requestNextPage());
               }
-            } else if (widget.selectedProvider == "Pexels") {
-              if (index == pData.wallsPS.length - 1 && index >= 23) {
-                return MaterialButton(
-                  color: context.prismModeStyleForContext() == "Dark"
-                      ? Colors.white10
-                      : Colors.black.withValues(alpha: .1),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                  onPressed: () async {
-                    await _requestNextPage();
-                  },
-                  child: !seeMoreLoader ? const Text("See more") : Loader(),
-                );
-              }
-            }
-
-            final tile = AnimatedBuilder(
-              animation: offsetAnimation,
-              builder: (buildContext, child) {
-                if (offsetAnimation.value < 0.0) {
-                  logger.d('${offsetAnimation.value + 8.0}');
+              return false;
+            },
+            child: GridView.builder(
+              padding: const EdgeInsets.fromLTRB(5, 4, 5, 120),
+              itemCount: _items.length + (_hasMore ? 1 : 0),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: MediaQuery.of(context).orientation == Orientation.portrait ? 3 : 5,
+                childAspectRatio: 0.5,
+                mainAxisSpacing: 0,
+                crossAxisSpacing: 0,
+              ),
+              itemBuilder: (context, index) {
+                if (index >= _items.length) {
+                  return MaterialButton(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    onPressed: _loadingMore ? null : _requestNextPage,
+                    child: _loadingMore ? Loader() : const Text('See more'),
+                  );
                 }
-                return Padding(
-                  padding: index == longTapIndex
-                      ? EdgeInsets.symmetric(vertical: offsetAnimation.value / 2, horizontal: offsetAnimation.value)
-                      : EdgeInsets.zero,
-                  child: Stack(
-                    children: [
-                      Container(
-                        decoration: widget.selectedProvider == "WallHaven"
-                            ? wData.wallsS.isEmpty
-                                  ? BoxDecoration(color: animation.value)
-                                  : () {
-                                      final String thumbUrl = wData.wallsS[index].thumbs?["original"]?.toString() ?? '';
-                                      final String fullUrl = wData.wallsS[index].core.fullUrl;
-                                      return BoxDecoration(
-                                        color: animation.value,
-                                        image: thumbUrl.isNotEmpty && thumbUrl != 'null'
-                                            ? DecorationImage(
-                                                image: CachedNetworkImageProvider(thumbUrl),
-                                                fit: BoxFit.cover,
-                                              )
-                                            : DecorationImage(
-                                                image: CachedNetworkImageProvider(fullUrl),
-                                                fit: BoxFit.cover,
-                                              ),
-                                      );
-                                    }()
-                            : pData.wallsPS.isEmpty
-                            ? BoxDecoration(color: animation.value)
-                            : BoxDecoration(
-                                color: animation.value,
-                                image: DecorationImage(
-                                  image: CachedNetworkImageProvider(pData.wallsPS[index].core.thumbnailUrl),
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                      ),
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          splashColor: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.3),
-                          highlightColor: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.1),
-                          onTap: () {
-                            if (widget.selectedProvider == "WallHaven") {
-                              if (wData.wallsS.isEmpty) {
-                              } else {
-                                final entity = WallhavenDetailEntity(wallpaper: wData.wallsS[index]);
-                                analytics.track(
-                                  SearchResultOpenedEvent(
-                                    provider: _providerValue,
-                                    itemType: ItemTypeValue.wallpaper,
-                                    itemId: wData.wallsS[index].id,
-                                    index: index,
-                                    queryLength: _queryLength,
-                                  ),
-                                );
-                                context.router.push(
-                                  WallpaperDetailRoute(
-                                    entity: entity,
-                                    analyticsSurface: AnalyticsSurfaceValue.searchWallpaperScreen,
-                                  ),
-                                );
-                              }
-                            } else if (widget.selectedProvider == "Pexels") {
-                              if (pData.wallsPS.isEmpty) {
-                              } else {
-                                final entity = PexelsDetailEntity(wallpaper: pData.wallsPS[index]);
-                                analytics.track(
-                                  SearchResultOpenedEvent(
-                                    provider: _providerValue,
-                                    itemType: ItemTypeValue.wallpaper,
-                                    itemId: pData.wallsPS[index].id,
-                                    index: index,
-                                    queryLength: _queryLength,
-                                  ),
-                                );
-                                context.router.push(
-                                  WallpaperDetailRoute(
-                                    entity: entity,
-                                    analyticsSurface: AnalyticsSurfaceValue.searchWallpaperScreen,
-                                  ),
-                                );
-                              }
-                            }
-                          },
-                          onLongPress: () {
-                            setState(() {
-                              longTapIndex = index;
-                            });
-                            shakeController.forward(from: 0.0);
-                            if (widget.selectedProvider == "WallHaven") {
-                              if (wData.wallsS.isEmpty) {
-                              } else {
-                                HapticFeedback.vibrate();
-                                createDynamicLink(
-                                  wData.wallsS[index].id,
-                                  WallpaperSource.wallhaven,
-                                  wData.wallsS[index].core.fullUrl,
-                                  wData.wallsS[index].core.thumbnailUrl,
-                                );
-                              }
-                            } else if (widget.selectedProvider == "Pexels") {
-                              if (pData.wallsPS.isEmpty) {
-                              } else {
-                                HapticFeedback.vibrate();
-                                createDynamicLink(
-                                  pData.wallsPS[index].id,
-                                  WallpaperSource.pexels,
-                                  pData.wallsPS[index].core.fullUrl,
-                                  pData.wallsPS[index].core.thumbnailUrl,
-                                );
-                              }
-                            }
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                );
+                return WallpaperTile(item: _items[index], index: index);
               },
-            );
-
-            return tile;
-          },
-        ),
-      ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

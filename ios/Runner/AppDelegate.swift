@@ -17,6 +17,6 @@ import UIKit
       binaryMessenger: messenger,
       api: PrismMediaHostApiImpl()
     )
-    WallpicsLivePhotoSaver.register(binaryMessenger: messenger)
+    PrismLivePhotoSaver.register(binaryMessenger: messenger)
   }
 }

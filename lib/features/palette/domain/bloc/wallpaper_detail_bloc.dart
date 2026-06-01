@@ -6,9 +6,7 @@ import 'package:Prism/features/palette/domain/bloc/wallpaper_detail_event.dart';
 import 'package:Prism/features/palette/domain/bloc/wallpaper_detail_state.dart';
 import 'package:Prism/features/palette/domain/entities/wallpaper_detail_entity.dart';
 import 'package:Prism/features/palette/palette.dart';
-import 'package:Prism/features/pexels_feed/domain/repositories/pexels_wallpaper_repository.dart';
 import 'package:Prism/features/prism_feed/domain/repositories/prism_wallpaper_repository.dart';
-import 'package:Prism/features/wallhaven_feed/domain/repositories/wallhaven_wallpaper_repository.dart';
 import 'package:Prism/features/wallpaper_detail/domain/usecases/wallpaper_views_usecase.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -18,8 +16,8 @@ import 'package:injectable/injectable.dart';
 class WallpaperDetailBloc extends Bloc<WallpaperDetailEvent, WallpaperDetailState> {
   WallpaperDetailBloc(
     this._prismRepository,
-    this._wallhavenRepository,
-    this._pexelsRepository,
+    Object? _,
+    Object? __,
     this._recordPrismWallpaperViewsUsecase,
     this._paletteBloc,
   ) : super(const WallpaperDetailInitial()) {
@@ -38,8 +36,6 @@ class WallpaperDetailBloc extends Bloc<WallpaperDetailEvent, WallpaperDetailStat
   }
 
   final PrismWallpaperRepository _prismRepository;
-  final WallhavenWallpaperRepository _wallhavenRepository;
-  final PexelsWallpaperRepository _pexelsRepository;
   final RecordPrismWallpaperViewsUsecase _recordPrismWallpaperViewsUsecase;
   final PaletteBloc _paletteBloc;
 
@@ -47,7 +43,6 @@ class WallpaperDetailBloc extends Bloc<WallpaperDetailEvent, WallpaperDetailStat
     emit(WallpaperDetailLoaded(entity: event.entity));
     _requestPalette(event.entity.thumbnailUrl);
     _fetchAndUpdateViews(event.entity);
-    await _enrichWallhavenFromFeedIfNeeded(event.entity, emit);
   }
 
   Future<void> _onLoadFromId(LoadFromId event, Emitter<WallpaperDetailState> emit) async {
@@ -205,27 +200,9 @@ class WallpaperDetailBloc extends Bloc<WallpaperDetailEvent, WallpaperDetailStat
         );
 
       case WallpaperSource.wallhaven:
-        final result = await _wallhavenRepository.fetchById(wallId);
-        return result.fold(
-          onFailure: (failure) => throw Exception(failure.message),
-          onSuccess: (wallpaper) {
-            if (wallpaper == null) throw Exception('Wallpaper not found');
-            return WallhavenDetailEntity(wallpaper: wallpaper);
-          },
-        );
-
       case WallpaperSource.pexels:
-        final result = await _pexelsRepository.fetchById(wallId);
-        return result.fold(
-          onFailure: (failure) => throw Exception(failure.message),
-          onSuccess: (wallpaper) {
-            if (wallpaper == null) throw Exception('Wallpaper not found');
-            return PexelsDetailEntity(wallpaper: wallpaper);
-          },
-        );
-
       default:
-        throw Exception('Unsupported source: $source');
+        throw Exception('Only Prism wallpapers are supported.');
     }
   }
 
@@ -242,39 +219,5 @@ class WallpaperDetailBloc extends Bloc<WallpaperDetailEvent, WallpaperDetailStat
     add(const FetchViews());
   }
 
-  /// Search/list responses often omit `uploader`; single-wall API includes it.
-  Future<void> _enrichWallhavenFromFeedIfNeeded(
-    WallpaperDetailEntity entity,
-    Emitter<WallpaperDetailState> emit,
-  ) async {
-    if (entity is! WallhavenDetailEntity) {
-      return;
-    }
-    final String? author = entity.wallpaper.core.authorName;
-    if (author != null && author.isNotEmpty) {
-      return;
-    }
-    final String wallId = entity.wallpaper.id;
-    final result = await _wallhavenRepository.fetchById(wallId);
-    result.fold(
-      onFailure: (_) {},
-      onSuccess: (WallhavenWallpaper? wallpaper) {
-        if (wallpaper == null) {
-          return;
-        }
-        final String? enrichedAuthor = wallpaper.core.authorName;
-        if (enrichedAuthor == null || enrichedAuthor.isEmpty) {
-          return;
-        }
-        final WallpaperDetailState latest = state;
-        if (latest is! WallpaperDetailLoaded) {
-          return;
-        }
-        if (latest.entity.id != wallId || latest.entity.source != WallpaperSource.wallhaven) {
-          return;
-        }
-        emit(latest.copyWith(entity: WallhavenDetailEntity(wallpaper: wallpaper)));
-      },
-    );
-  }
+
 }

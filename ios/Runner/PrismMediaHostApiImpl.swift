@@ -76,7 +76,7 @@ final class PrismMediaHostApiImpl: PrismMediaHostApi {
 
   private func downloadsDirectory() throws -> URL {
     let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-    let dir = docs.appendingPathComponent("WallPicsDownloads", isDirectory: true)
+    let dir = docs.appendingPathComponent("PrismDownloads", isDirectory: true)
     if !FileManager.default.fileExists(atPath: dir.path) {
       try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     }

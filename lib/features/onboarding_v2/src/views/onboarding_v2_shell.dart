@@ -5,7 +5,6 @@ import 'package:Prism/auth/apple_auth.dart';
 import 'package:Prism/auth/google_auth.dart';
 import 'package:Prism/core/audio/app_sound_manager.dart';
 import 'package:Prism/core/di/injection.dart';
-import 'package:Prism/core/purchases/paywall_orchestrator.dart';
 import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:Prism/core/state/auth_runtime.dart';
@@ -14,11 +13,7 @@ import 'package:Prism/core/utils/status.dart';
 import 'package:Prism/env/env.dart';
 import 'package:Prism/features/onboarding_v2/src/biz/onboarding_v2_bloc.j.dart';
 import 'package:Prism/features/onboarding_v2/src/theme/onboarding_theme.dart';
-import 'package:Prism/features/onboarding_v2/src/utils/onboarding_v2_config.dart';
 import 'package:Prism/features/onboarding_v2/src/views/pages/f0_auth_page.dart';
-import 'package:Prism/features/onboarding_v2/src/views/pages/f1_interests_page.dart';
-import 'package:Prism/features/onboarding_v2/src/views/pages/f3_ai_generate_page.dart';
-import 'package:Prism/features/onboarding_v2/src/views/pages/f3_first_wallpaper_page.dart';
 import 'package:Prism/features/onboarding_v2/src/views/widgets/onboarding_background.dart';
 import 'package:Prism/features/onboarding_v2/src/views/widgets/onboarding_copy.dart';
 import 'package:Prism/features/onboarding_v2/src/views/widgets/onboarding_frame.dart';
@@ -52,12 +47,7 @@ class _OnboardingV2ShellState extends State<OnboardingV2Shell> {
   bool _imagesPrecached = false;
   _AuthProvider? _loadingAuthProvider;
 
-  static const List<Widget> _pages = [
-    F0AuthPage(),
-    F1InterestsPage(),
-    F3AiGeneratePage(),
-    F3FirstWallpaperPage(),
-  ];
+  static const List<Widget> _pages = [F0AuthPage()];
 
   static final _systemUiStyle = edgeToEdgeOverlayStyle(
     statusBarIconBrightness: Brightness.dark,
@@ -102,16 +92,6 @@ class _OnboardingV2ShellState extends State<OnboardingV2Shell> {
   Future<void> _handleNavRequest(BuildContext context, OnboardingV2NavRequest request) async {
     switch (request) {
       case OnboardingV2NavRequest.openPaywall:
-        if (!context.mounted) return;
-        await PaywallOrchestrator.instance.present(
-          context,
-          placement: OnboardingV2Config.paywallPlacement,
-          source: OnboardingV2Config.paywallSource,
-        );
-        if (!context.mounted) return;
-        final isPremium = app_state.prismUser.premium;
-        _bloc.add(OnboardingV2Event.paywallResultReceived(didPurchase: isPremium));
-
       case OnboardingV2NavRequest.completeOnboarding:
         if (!context.mounted) return;
         context.router.replaceAll([const SplashWidgetRoute()]);
@@ -172,51 +152,15 @@ class _OnboardingV2ShellState extends State<OnboardingV2Shell> {
       case OnboardingV2Step.auth:
         _handleGoogleSignIn();
       case OnboardingV2Step.interests:
-        _bloc.add(const OnboardingV2Event.interestsConfirmed());
       case OnboardingV2Step.starterPack:
-        _bloc.add(OnboardingV2Event.aiGenerationRequested(targetSize: _targetSizeForDevice()));
       case OnboardingV2Step.aiGenerate:
-        // Success auto-advances via the shell listener; CTA always triggers or re-triggers generation.
-        _bloc.add(OnboardingV2Event.aiGenerationRequested(targetSize: _targetSizeForDevice()));
       case OnboardingV2Step.firstWallpaper:
-        final wallpaper = _bloc.state.wallpaperData.wallpaper;
-        if (wallpaper == null) {
-          _bloc.add(const OnboardingV2Event.firstWallpaperStepContinued());
-        } else {
-          _bloc.add(const OnboardingV2Event.firstWallpaperActionRequested());
-        }
+        _bloc.add(const OnboardingV2Event.firstWallpaperStepContinued());
     }
-  }
-
-  String _targetSizeForDevice() {
-    if (!mounted) return '1080x1920';
-    const int minShortEdge = 720;
-    const int maxLongEdge = 2048;
-    final media = MediaQuery.of(context);
-    final double dpr = media.devicePixelRatio.clamp(1.0, 3.0);
-    final int rawW = (media.size.width * dpr).round().clamp(360, 4096);
-    final int rawH = (media.size.height * dpr).round().clamp(640, 4096);
-    final bool portrait = rawH >= rawW;
-    final int longRaw = portrait ? rawH : rawW;
-    final int shortRaw = portrait ? rawW : rawH;
-    final double aspect = longRaw / shortRaw;
-    int shortTarget = shortRaw.clamp(minShortEdge, maxLongEdge);
-    int longTarget = (shortTarget * aspect).round();
-    if (longTarget > maxLongEdge) {
-      longTarget = maxLongEdge;
-      shortTarget = (longTarget / aspect).round().clamp(minShortEdge, maxLongEdge);
-    }
-    return portrait ? '${shortTarget}x$longTarget' : '${longTarget}x$shortTarget';
   }
 
   Widget _pageFor(OnboardingV2Step step) {
-    final Widget page = switch (step) {
-      OnboardingV2Step.auth => _pages[0],
-      OnboardingV2Step.interests => _pages[1],
-      OnboardingV2Step.starterPack => _pages[2],
-      OnboardingV2Step.aiGenerate => _pages[2],
-      OnboardingV2Step.firstWallpaper => _pages[3],
-    };
+    const Widget page = _pages[0];
     return KeyedSubtree(key: ValueKey(step), child: page);
   }
 
@@ -227,36 +171,14 @@ class _OnboardingV2ShellState extends State<OnboardingV2Shell> {
       child: BlocConsumer<OnboardingV2Bloc, OnboardingV2State>(
         listenWhen: (prev, curr) {
           final navChanged = curr.navRequest != null && prev.navRequest != curr.navRequest;
-          final wallpaperSucceeded =
-              curr.step == OnboardingV2Step.firstWallpaper &&
-              prev.wallpaperData.status != curr.wallpaperData.status &&
-              curr.wallpaperData.status == FirstWallpaperStatus.success;
-          final aiGenerationSucceeded =
-              curr.step == OnboardingV2Step.aiGenerate &&
-              prev.aiData.status != AiGenerateStatus.success &&
-              curr.aiData.status == AiGenerateStatus.success;
-          return navChanged || wallpaperSucceeded || aiGenerationSucceeded;
+          return navChanged;
         },
         listener: (context, state) {
           logger.d('listener fired step=${state.step} navRequest=${state.navRequest}', tag: 'OnboardingV2Shell');
           if (state.navRequest != null) _handleNavRequest(context, state.navRequest!);
-          if (state.navRequest == null && state.wallpaperData.status == FirstWallpaperStatus.success) {
-            toasts.success(defaultTargetPlatform == TargetPlatform.android ? 'Wallpaper set!' : 'Saved to Photos!');
-            _bloc.add(const OnboardingV2Event.firstWallpaperStepContinued());
-          }
-          if (state.step == OnboardingV2Step.aiGenerate && state.aiData.status == AiGenerateStatus.success) {
-            _bloc.add(const OnboardingV2Event.aiGenerationStepContinued());
-          }
         },
         buildWhen: (prev, curr) =>
-            prev.step != curr.step ||
-            prev.isAuthLoading != curr.isAuthLoading ||
-            prev.actionStatus != curr.actionStatus ||
-            prev.interestsData.selected.length != curr.interestsData.selected.length ||
-            prev.starterPackData.selectedEmails.length != curr.starterPackData.selectedEmails.length ||
-            prev.wallpaperData.status != curr.wallpaperData.status ||
-            prev.wallpaperData.wallpaper?.thumbnailUrl != curr.wallpaperData.wallpaper?.thumbnailUrl ||
-            prev.aiData != curr.aiData,
+            prev.step != curr.step || prev.isAuthLoading != curr.isAuthLoading || prev.actionStatus != curr.actionStatus,
         builder: (context, state) {
           return AnnotatedRegion<SystemUiOverlayStyle>(
             value: _systemUiStyle,
@@ -529,7 +451,9 @@ class _Headline extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = _headlineText(step);
-    final style = step == OnboardingV2Step.firstWallpaper
+    final style = step == OnboardingV2Step.auth
+        ? OnboardingTypography.headline.copyWith(fontSize: 35, height: 1.1)
+        : step == OnboardingV2Step.firstWallpaper
         ? OnboardingTypography.headline.copyWith(color: wallpaperColor)
         : OnboardingTypography.headline;
     return AnimatedPositioned(
@@ -543,7 +467,13 @@ class _Headline extends StatelessWidget {
         duration: const Duration(milliseconds: 1000),
         child: AnimatedSwitcher(
           duration: OnboardingMotion.short,
-          child: Text(key: ValueKey(text), text, style: style, textAlign: TextAlign.center),
+          child: Text(
+            key: ValueKey(text),
+            text,
+            style: style,
+            textAlign: TextAlign.center,
+            textScaler: TextScaler.noScaling,
+          ),
         ),
       ),
     );
@@ -618,12 +548,9 @@ class _CtaButton extends StatelessWidget {
 
     final label = switch (step) {
       OnboardingV2Step.auth => 'continue with Google',
-      OnboardingV2Step.interests => () {
-        final selected = state.interestsData.selected.length;
-        return selected < OnboardingV2Config.minInterests ? 'continue ($selected selected)' : 'continue';
-      }(),
-      OnboardingV2Step.starterPack => 'generate my wallpaper',
-      OnboardingV2Step.aiGenerate => 'generate my wallpaper',
+      OnboardingV2Step.interests => 'continue',
+      OnboardingV2Step.starterPack => 'continue',
+      OnboardingV2Step.aiGenerate => 'continue',
       OnboardingV2Step.firstWallpaper => 'set as wallpaper',
     };
 
@@ -760,11 +687,11 @@ class _BottomText extends StatelessWidget {
 
   String _helperText() => switch (step) {
     OnboardingV2Step.interests => 'select at least 3 categories to personalize your feed',
-    OnboardingV2Step.starterPack => 'your first wallpaper, generated by AI',
+    OnboardingV2Step.starterPack => 'your first wallpaper',
     OnboardingV2Step.aiGenerate => switch (aiGenerateStatus) {
       AiGenerateStatus.success => 'looking good! tap "use this wallpaper" to continue',
       AiGenerateStatus.failure => 'something went wrong — tap generate to try again',
-      _ => 'your first wallpaper, generated by AI',
+      _ => 'your first wallpaper',
     },
     _ =>
       (wallpaperCategory != null && wallpaperCategory!.isNotEmpty)
@@ -852,13 +779,7 @@ class _ProBadge extends StatelessWidget {
                       color: color,
                       fontWeight: FontWeight.w700,
                     ),
-                    children: const [
-                      TextSpan(
-                        text: 'PRO',
-                        style: TextStyle(decoration: TextDecoration.lineThrough, decorationThickness: 2.5),
-                      ),
-                      TextSpan(text: '  →  free for you'),
-                    ],
+                    children: const [TextSpan(text: 'Prism catalog')],
                   ),
                 ),
               ),

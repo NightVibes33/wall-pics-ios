@@ -68,7 +68,7 @@ class _SharePrismScreenState extends State<SharePrismScreen> {
             ),
             const SizedBox(height: 10),
             Text(
-              "Share Wall Pics with friends",
+              "Share Prism with friends",
               textAlign: TextAlign.center,
               style: Theme.of(
                 context,
@@ -87,7 +87,7 @@ class _SharePrismScreenState extends State<SharePrismScreen> {
             SizedBox(
               width: MediaQuery.of(context).size.width * 0.6,
               child: Text(
-                "They also get 100 coins for joining Wall Pics.",
+                "They also get 100 coins for joining Prism.",
                 textAlign: TextAlign.center,
                 style: Theme.of(
                   context,

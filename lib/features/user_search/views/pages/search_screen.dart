@@ -1,127 +1,74 @@
+import 'dart:async';
+
 import 'package:Prism/analytics/analytics_service.dart';
 import 'package:Prism/core/analytics/events/events.dart';
-import 'package:Prism/core/di/injection.dart';
-import 'package:Prism/core/persistence/data_sources/settings_local_data_source.dart';
-import 'package:Prism/core/widgets/home/wallpapers/loading.dart';
-import 'package:Prism/data/pexels/provider/pexelsWithoutProvider.dart' as pdata;
-import 'package:Prism/data/wallhaven/provider/wallhavenWithoutProvider.dart' as wdata;
-import 'package:Prism/features/user_search/biz/bloc/search_discovery_bloc.j.dart';
-import 'package:Prism/features/user_search/views/widgets/search_discovery_widget.dart';
 import 'package:Prism/features/user_search/views/widgets/search_grid.dart';
-import 'package:Prism/logger/logger.dart';
+import 'package:Prism/features/prism_catalog/data/prism_catalog_data_source.dart';
 import 'package:Prism/theme/jam_icons_icons.dart';
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 
 @RoutePage()
 class SearchScreen extends StatefulWidget {
+  const SearchScreen({super.key});
+
   @override
-  _SearchScreenState createState() => _SearchScreenState();
+  State<SearchScreen> createState() => _SearchScreenState();
 }
 
 class _SearchScreenState extends State<SearchScreen> {
-  final SettingsLocalDataSource _settingsLocal = getIt<SettingsLocalDataSource>();
+  final TextEditingController _searchController = TextEditingController();
+  late final Future<List<String>> _suggestionsFuture;
+  String _submittedQuery = '';
 
-  final List<String> tags = [
-    'Art',
-    'Abstract',
-    'Patterns',
-    'Geometry',
-    'Cyber',
-    'Cars',
-    'Comics',
-    'Anime',
-    'Illustrations',
-    'Games',
-    'Street',
-    'Flowers',
-    'Epic',
-    'Minimalism',
-    'Mountains',
-    'Field',
-    'Chocolate',
-    'Train',
-    'Walking',
-    'Food',
-    'Design',
-    'Love',
-    'Wildlife',
-    'Stock',
-    'Trees',
-    'Planets',
-    'Space',
-    'Winter',
-    'Beach',
-    'Ninja',
-    'Summer',
-    'Titan',
-    'White',
-    '8bit',
-    'Fantasy',
-    'Fashion',
-    'Fitness',
-    'Fruits',
-    'Futuristic',
-    'Gems',
-    'Graffiti',
-    'Halloween',
-    'Hipster',
-    'Holidays',
-    'Industry',
-    'Interiors',
-    'Kids',
-    'Landscapes',
-    'Macro',
-    'Nature',
-    'Night',
-    'People',
-    'Plants',
-    'Portraits',
-    'Retro',
-    'Robots',
-    'Science',
-    'Sports',
-    'Technics',
-    'Textures',
-    'Transport',
-    'Travel',
-    'Wedding',
-    'Zombies',
-    'Cute',
-    'Fairy',
-    'Fairytale',
-    'Funny',
-    'Geometric',
-    'Graphic',
-  ];
+  bool get _isSubmitted => _submittedQuery.trim().isNotEmpty;
 
-  late bool isSubmitted;
-  TextEditingController searchController = TextEditingController();
-  Future? _future;
+  @override
+  void initState() {
+    super.initState();
+    _suggestionsFuture = _loadSuggestions();
+  }
 
-  // Default provider for free-text/tag searches
-  static const String _defaultProvider = 'WallHaven';
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
-  SearchProviderValue _providerValueFromString(String provider) {
-    return provider == 'Pexels' ? SearchProviderValue.pexels : SearchProviderValue.wallhaven;
+  Future<List<String>> _loadSuggestions() async {
+    final seen = <String>{};
+    final suggestions = <String>[];
+
+    void add(String value) {
+      final trimmed = value.trim();
+      if (trimmed.isEmpty || !seen.add(trimmed.toLowerCase())) {
+        return;
+      }
+      suggestions.add(trimmed);
+    }
+
+    for (final query in await PrismCatalogDataSource.instance.popularSearches()) {
+      add(query);
+    }
+    final categories = await PrismCatalogDataSource.instance.loadCategories();
+    for (final category in categories.take(80)) {
+      add(category.name);
+    }
+    return suggestions;
   }
 
   int _queryWordCount(String query) {
     return query.trim().split(RegExp(r'\s+')).where((segment) => segment.trim().isNotEmpty).length;
   }
 
-  void _trackSearchSubmitted({
-    required String query,
-    required bool fromSuggestion,
-    required String sourceContext,
-    String provider = _defaultProvider,
-  }) {
-    final String trimmedQuery = query.trim();
-    if (trimmedQuery.isEmpty) return;
+  void _trackSearchSubmitted({required String query, required bool fromSuggestion, required String sourceContext}) {
+    final trimmedQuery = query.trim();
+    if (trimmedQuery.isEmpty) {
+      return;
+    }
     analytics.track(
       SearchSubmittedEvent(
-        provider: _providerValueFromString(provider),
+        provider: SearchProviderValue.prismCatalog,
         queryLength: trimmedQuery.length,
         queryWordCount: _queryWordCount(trimmedQuery),
         sourceContext: sourceContext,
@@ -130,28 +77,24 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
-  void _triggerSearch(String query, String provider) {
+  void _submitSearch(String query, {required bool fromSuggestion, required String sourceContext}) {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) {
+      return;
+    }
+    _trackSearchSubmitted(query: trimmed, fromSuggestion: fromSuggestion, sourceContext: sourceContext);
     setState(() {
-      isSubmitted = true;
-      if (provider == 'WallHaven') {
-        wdata.wallsS = [];
-        _future = wdata.getWallsbyQuery(
-          query,
-          _settingsLocal.get<int>('WHcategories', defaultValue: 100),
-          _settingsLocal.get<int>('WHpurity', defaultValue: 100),
-        );
-      } else {
-        pdata.wallsPS = [];
-        _future = pdata.getWallsPbyQuery(query);
-      }
+      _submittedQuery = trimmed;
+      _searchController.text = trimmed;
+      _searchController.selection = TextSelection.collapsed(offset: trimmed.length);
     });
   }
 
-  @override
-  void initState() {
-    isSubmitted = false;
-    tags.shuffle();
-    super.initState();
+  void _clearSearch() {
+    setState(() {
+      _submittedQuery = '';
+      _searchController.clear();
+    });
   }
 
   @override
@@ -164,124 +107,82 @@ class _SearchScreenState extends State<SearchScreen> {
         surfaceTintColor: Theme.of(context).primaryColor,
         automaticallyImplyLeading: false,
         titleSpacing: 0,
-        title: Row(
-          children: <Widget>[
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Padding(
-                  padding: const EdgeInsets.all(4),
-                  child: Column(
-                    children: [
-                      Container(
-                        decoration: BoxDecoration(borderRadius: BorderRadius.circular(500)),
-                        child: TextField(
-                          cursorColor: Theme.of(context).colorScheme.error,
-                          style: Theme.of(context).textTheme.headlineSmall!.copyWith(
-                            fontFamily: 'Satoshi',
-                            color: Theme.of(context).colorScheme.secondary,
-                          ),
-                          controller: searchController,
-                          onChanged: (text) {
-                            if (text.trim().isEmpty && isSubmitted) {
-                              setState(() => isSubmitted = false);
-                            }
-                          },
-                          decoration: InputDecoration(
-                            contentPadding: const EdgeInsets.only(left: 24, top: 12),
-                            border: InputBorder.none,
-                            disabledBorder: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            hintText: 'Search...',
-                            hintStyle: Theme.of(context).textTheme.headlineSmall!.copyWith(
-                              fontFamily: 'Satoshi',
-                              color: Theme.of(context).colorScheme.secondary,
-                            ),
-                            suffixIcon: Icon(JamIcons.search, color: Theme.of(context).colorScheme.secondary),
-                          ),
-                          onSubmitted: (tex) {
-                            final String query = tex.trim();
-                            if (query.isEmpty) return;
-                            _trackSearchSubmitted(
-                              query: query,
-                              fromSuggestion: false,
-                              sourceContext: 'search_textfield',
-                            );
-                            _triggerSearch(query, _defaultProvider);
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
+        title: Padding(
+          padding: const EdgeInsets.only(left: 8, right: 8, top: 6),
+          child: TextField(
+            cursorColor: Theme.of(context).colorScheme.error,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontFamily: 'Satoshi',
+                  color: Theme.of(context).colorScheme.secondary,
                 ),
+            controller: _searchController,
+            onChanged: (text) {
+              if (text.trim().isEmpty && _isSubmitted) {
+                _clearSearch();
+              }
+            },
+            decoration: InputDecoration(
+              contentPadding: const EdgeInsets.only(left: 24, top: 12),
+              border: InputBorder.none,
+              disabledBorder: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              hintText: 'Search Prism',
+              hintStyle: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontFamily: 'Satoshi',
+                    color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.68),
+                  ),
+              suffixIcon: IconButton(
+                tooltip: _isSubmitted ? 'Clear search' : 'Search',
+                icon: Icon(_isSubmitted ? Icons.close : JamIcons.search, color: Theme.of(context).colorScheme.secondary),
+                onPressed: _isSubmitted ? _clearSearch : () => _submitSearch(_searchController.text, fromSuggestion: false, sourceContext: 'search_icon'),
               ),
             ),
-            const SizedBox(width: 6),
-          ],
+            textInputAction: TextInputAction.search,
+            onSubmitted: (text) => _submitSearch(text, fromSuggestion: false, sourceContext: 'search_textfield'),
+          ),
         ),
       ),
-      body: isSubmitted
-          ? _SearchLoader(future: _future, query: searchController.text, selectedProvider: _defaultProvider)
-          : BlocProvider<SearchDiscoveryBloc>(
-              create: (_) => getIt<SearchDiscoveryBloc>()..add(const SearchDiscoveryEvent.fetchRequested()),
-              child: SearchDiscoveryWidget(
-                tags: tags,
-                selectedTag: searchController.text,
-                onTagPressed: (tag) {
-                  analytics.track(
-                    SearchTagSelectedEvent(
-                      provider: _providerValueFromString(_defaultProvider),
-                      tag: tag.toLowerCase(),
-                    ),
-                  );
-                  _trackSearchSubmitted(query: tag, fromSuggestion: true, sourceContext: 'search_tag');
-                  searchController.text = tag;
-                  _triggerSearch(tag, _defaultProvider);
-                },
-              ),
-            ),
+      body: _isSubmitted ? SearchGrid(query: _submittedQuery) : _SearchSuggestions(future: _suggestionsFuture, onSelected: _submitSearch),
     );
   }
 }
 
-class _SearchLoader extends StatefulWidget {
-  final Future? future;
-  final String query;
-  final String? selectedProvider;
-  const _SearchLoader({required this.future, required this.query, required this.selectedProvider});
-  @override
-  _SearchLoaderState createState() => _SearchLoaderState();
-}
+class _SearchSuggestions extends StatelessWidget {
+  const _SearchSuggestions({required this.future, required this.onSelected});
 
-class _SearchLoaderState extends State<_SearchLoader> {
-  Future? _future;
-
-  @override
-  void initState() {
-    if (widget.selectedProvider == 'WallHaven') {
-      wdata.wallsS = [];
-      wdata.pageGetQuery = 1;
-      _future = widget.future;
-    } else if (widget.selectedProvider == 'Pexels') {
-      pdata.wallsPS = [];
-      pdata.pageGetQueryP = 1;
-      _future = widget.future;
-    }
-    super.initState();
-  }
+  final Future<List<String>> future;
+  final void Function(String query, {required bool fromSuggestion, required String sourceContext}) onSelected;
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder(
-      future: _future,
-      builder: (ctx, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting || snapshot.connectionState == ConnectionState.none) {
-          logger.d('snapshot none, waiting');
-          return const LoadingCards();
-        } else {
-          return SearchGrid(query: widget.query, selectedProvider: widget.selectedProvider);
+    return FutureBuilder<List<String>>(
+      future: future,
+      builder: (context, snapshot) {
+        final suggestions = snapshot.data ?? const <String>[];
+        if (snapshot.connectionState == ConnectionState.waiting && suggestions.isEmpty) {
+          return const Center(child: CircularProgressIndicator());
         }
+        return CustomScrollView(
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 120),
+              sliver: SliverToBoxAdapter(
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final suggestion in suggestions)
+                      ActionChip(
+                        label: Text(suggestion, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        onPressed: () => onSelected(suggestion, fromSuggestion: true, sourceContext: 'search_suggestion'),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
       },
     );
   }

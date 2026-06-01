@@ -10,43 +10,46 @@ import 'package:Prism/features/category_feed/domain/entities/category_entity.dar
 import 'package:Prism/features/category_feed/domain/entities/category_feed_page.dart';
 import 'package:Prism/features/category_feed/domain/entities/feed_item_entity.dart';
 import 'package:Prism/features/category_feed/domain/repositories/category_feed_repository.dart';
-import 'package:Prism/features/pexels_feed/domain/repositories/pexels_wallpaper_repository.dart';
-import 'package:Prism/features/prism_feed/domain/repositories/prism_wallpaper_repository.dart';
-import 'package:Prism/features/wallpics_catalog/data/wallpics_catalog_data_source.dart';
-import 'package:Prism/features/wallhaven_feed/domain/repositories/wallhaven_wallpaper_repository.dart';
+import 'package:Prism/features/prism_catalog/data/prism_catalog_data_source.dart';
 import 'package:Prism/logger/logger.dart';
 import 'package:injectable/injectable.dart';
 
 @LazySingleton(as: CategoryFeedRepository)
 class CategoryFeedRepositoryImpl implements CategoryFeedRepository {
   CategoryFeedRepositoryImpl(
-    this._settingsLocal,
+    SettingsLocalDataSource _,
     this._feedCacheLocal,
-    this._prismRepository,
-    this._wallhavenRepository,
-    this._pexelsRepository,
+    Object? __,
+    Object? ___,
+    Object? ____,
   );
 
-  final SettingsLocalDataSource _settingsLocal;
   final FeedCacheLocalDataSource _feedCacheLocal;
-  final PrismWallpaperRepository _prismRepository;
-  final WallhavenWallpaperRepository _wallhavenRepository;
-  final PexelsWallpaperRepository _pexelsRepository;
 
   static const int _feedTtlHours = 6;
 
   @override
   Future<Result<List<CategoryEntity>>> getCategories() async {
+    try {
+      final categories = await PrismCatalogDataSource.instance.loadCategories();
+      if (categories.isNotEmpty) {
+        return Result.success(categories);
+      }
+    } catch (error, stackTrace) {
+      logger.w('Failed to load Prism categories; using bundled fallback.', error: error, stackTrace: stackTrace);
+    }
+
     final categories = category_data.categoryDefinitions
+        .where((def) => def.source == WallpaperSource.prism)
         .map(
           (def) => CategoryEntity(
             name: def.name,
-            source: def.source,
+            source: WallpaperSource.prism,
             searchType: def.searchType,
             image: def.imageUrl,
             image2: def.secondaryImageUrl,
-            wallpicsSlug: def.wallpicsSlug,
-            wallpicsContentType: def.wallpicsContentType,
+            catalogSlug: def.catalogSlug,
+            catalogContentType: def.catalogContentType,
           ),
         )
         .toList(growable: false);
@@ -68,67 +71,19 @@ class CategoryFeedRepositoryImpl implements CategoryFeedRepository {
     );
 
     try {
-      late final List<FeedItemEntity> items;
-      late final bool hasMore;
-      switch (category.source) {
-        case WallpaperSource.prism:
-          final wallpicsPage = await WallpicsCatalogDataSource.instance.fetchCategoryFeed(
-            category: category,
-            refresh: refresh,
-          );
-          if (wallpicsPage != null) {
-            items = wallpicsPage.items;
-            hasMore = wallpicsPage.hasMore;
-            break;
-          }
-
-          final result = await _prismRepository.fetchFeed(refresh: refresh);
-          if (result.isFailure || result.data == null) {
-            return await _cachedOrFailure(
-              category: category,
-              mode: mode,
-              failure: result.failure ?? const UnknownFailure('Failed to fetch Prism feed'),
-            );
-          }
-          final walls = result.data!;
-          items = walls.map((wall) => PrismFeedItem(id: wall.id, wallpaper: wall)).toList(growable: false);
-          hasMore = _prismRepository.hasMore;
-
-        case WallpaperSource.wallhaven:
-          final result = await _wallhavenRepository.fetchFeed(
-            categoryName: category.name,
-            refresh: refresh,
-            categories: _settingsLocal.get<int>('WHcategories', defaultValue: 100),
-            purity: _settingsLocal.get<int>('WHpurity', defaultValue: 100),
-          );
-          if (result.isFailure || result.data == null) {
-            return await _cachedOrFailure(
-              category: category,
-              mode: mode,
-              failure: result.failure ?? const UnknownFailure('Failed to fetch Wallhaven feed'),
-            );
-          }
-          final walls = result.data!;
-          items = walls.map((wall) => WallhavenFeedItem(id: wall.id, wallpaper: wall)).toList(growable: false);
-          hasMore = _wallhavenRepository.hasMoreForCategory(category.name);
-
-        case WallpaperSource.pexels:
-          final result = await _pexelsRepository.fetchFeed(categoryName: category.name, refresh: refresh);
-          if (result.isFailure || result.data == null) {
-            return await _cachedOrFailure(
-              category: category,
-              mode: mode,
-              failure: result.failure ?? const UnknownFailure('Failed to fetch Pexels feed'),
-            );
-          }
-          final walls = result.data!;
-          items = walls.map((wall) => PexelsFeedItem(id: wall.id, wallpaper: wall)).toList(growable: false);
-          hasMore = _pexelsRepository.hasMoreForCategory(category.name);
-
-        case WallpaperSource.downloaded:
-        case WallpaperSource.unknown:
-          return Result.error(const ValidationFailure('Unsupported category source'));
+      final catalogPage = await PrismCatalogDataSource.instance.fetchCategoryFeed(
+        category: category,
+        refresh: refresh,
+      );
+      if (catalogPage == null) {
+        return await _cachedOrFailure(
+          category: category,
+          mode: mode,
+          failure: const ValidationFailure('Unsupported Prism category'),
+        );
       }
+      final items = catalogPage.items;
+      final hasMore = catalogPage.hasMore;
 
       await _writeCache(
         category,
@@ -240,12 +195,12 @@ class CategoryFeedRepositoryImpl implements CategoryFeedRepository {
 
   String _scopeFor(CategoryEntity category) {
     final normalized = category.name.trim().toLowerCase().replaceAll(RegExp('[^a-z0-9]+'), '_');
-    final wallpicsPart = [category.wallpicsContentType, category.wallpicsSlug]
+    final catalogPart = [category.catalogContentType, category.catalogSlug]
         .where((part) => part != null && part.trim().isNotEmpty)
         .map((part) => part!.trim().toLowerCase().replaceAll(RegExp('[^a-z0-9]+'), '_'))
         .join('.');
-    if (wallpicsPart.isNotEmpty) {
-      return '${category.source.wireValue}.${category.searchType.name}.$wallpicsPart.$normalized';
+    if (catalogPart.isNotEmpty) {
+      return '${category.source.wireValue}.${category.searchType.name}.$catalogPart.$normalized';
     }
     return '${category.source.wireValue}.${category.searchType.name}.$normalized';
   }
@@ -378,43 +333,8 @@ FeedItemEntity? _decodeFeedItem(Map<String, dynamic> map) {
         ),
       );
     case 'wallhaven':
-      final thumbsMap = _asMap(wallpaperMap['thumbs']);
-      return WallhavenFeedItem(
-        id: id,
-        wallpaper: WallhavenWallpaper(
-          core: _decodeWallpaperCore(_asMap(wallpaperMap['core'])),
-          views: (wallpaperMap['views'] as num?)?.toInt(),
-          favorites: (wallpaperMap['favorites'] as num?)?.toInt(),
-          dimensionX: (wallpaperMap['dimensionX'] as num?)?.toInt(),
-          dimensionY: (wallpaperMap['dimensionY'] as num?)?.toInt(),
-          colors: (wallpaperMap['colors'] as List?)?.map((e) => e.toString()).toList(growable: false),
-          thumbs: thumbsMap.isEmpty ? null : thumbsMap.map((key, value) => MapEntry(key, value.toString())),
-          tags: (wallpaperMap['tags'] as List?)?.map((e) => e.toString()).toList(growable: false),
-          sizeBytes: (wallpaperMap['sizeBytes'] as num?)?.toInt(),
-        ),
-      );
     case 'pexels':
-      final srcMap = _asMap(wallpaperMap['src']);
-      return PexelsFeedItem(
-        id: id,
-        wallpaper: PexelsWallpaper(
-          core: _decodeWallpaperCore(_asMap(wallpaperMap['core'])),
-          photographer: wallpaperMap['photographer']?.toString(),
-          photographerUrl: wallpaperMap['photographerUrl']?.toString(),
-          src: srcMap.isEmpty
-              ? null
-              : PexelsSrc(
-                  original: srcMap['original']?.toString() ?? '',
-                  large2x: srcMap['large2x']?.toString(),
-                  large: srcMap['large']?.toString(),
-                  medium: srcMap['medium']?.toString(),
-                  small: srcMap['small']?.toString(),
-                  portrait: srcMap['portrait']?.toString(),
-                  landscape: srcMap['landscape']?.toString(),
-                  tiny: srcMap['tiny']?.toString(),
-                ),
-        ),
-      );
+      return null;
     default:
       return null;
   }

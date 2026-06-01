@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:math' show min;
-
 import 'package:Prism/analytics/analytics_service.dart';
 import 'package:Prism/core/analytics/events/events.dart';
 import 'package:Prism/core/analytics/trackers/content_load_tracker.dart';
@@ -11,7 +9,6 @@ import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:Prism/core/utils/edge_to_edge_overlay_style.dart';
 import 'package:Prism/core/utils/status.dart';
-import 'package:Prism/core/utils/url_launcher_compat.dart';
 import 'package:Prism/core/wallpaper/wallpaper_source.dart';
 import 'package:Prism/core/wallpaper/wallpaper_variants.dart';
 import 'package:Prism/core/widgets/menuButton/editButton.dart';
@@ -278,21 +275,21 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     );
   }
 
-  bool _isWallpicsLivePhoto(WallpaperDetailEntity entity) {
+  bool _isPrismLivePhoto(WallpaperDetailEntity entity) {
     return entity.when(
-      prism: (wallpaper) => wallpaper.aiMetadata?['wallpicsContentType'] == 'live_wallpaper',
+      prism: (wallpaper) => wallpaper.aiMetadata?['catalogContentType'] == 'live_wallpaper',
       wallhaven: (_) => false,
       pexels: (_) => false,
     );
   }
 
-  String? _wallpicsLiveStillUrl(WallpaperDetailEntity entity) {
+  String? _catalogLiveStillUrl(WallpaperDetailEntity entity) {
     return entity.when(
       prism: (wallpaper) {
         final metadata = wallpaper.aiMetadata;
-        final staticStill = metadata?['wallpicsStaticThumbnailUrl']?.toString().trim() ?? '';
+        final staticStill = metadata?['catalogStaticThumbnailUrl']?.toString().trim() ?? '';
         if (staticStill.isNotEmpty) return staticStill;
-        final preview = metadata?['wallpicsPreviewUrl']?.toString().trim() ?? '';
+        final preview = metadata?['catalogPreviewUrl']?.toString().trim() ?? '';
         if (preview.isNotEmpty) return preview;
         return wallpaper.thumbnailUrl.trim().isEmpty ? null : wallpaper.thumbnailUrl.trim();
       },
@@ -641,12 +638,13 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
   Widget _buildMetadataRow(BuildContext context, WallpaperDetailEntity entity, WallpaperDetailLoaded state) {
     return entity.when(
       prism: (wallpaper) => _buildPrismMetadata(context, wallpaper, state),
-      wallhaven: (wallpaper) => _buildWallhavenMetadata(context, wallpaper, entity),
-      pexels: (wallpaper) => _buildPexelsMetadata(context, wallpaper, entity),
+      wallhaven: (_) => _buildUnsupportedSourceMetadata(context),
+      pexels: (_) => _buildUnsupportedSourceMetadata(context),
     );
   }
 
   Widget _buildPrismMetadata(BuildContext context, PrismWallpaper wallpaper, WallpaperDetailLoaded state) {
+    final pairedPreviewUrls = _catalogPairedPreviewUrls(wallpaper);
     return Padding(
       padding: const EdgeInsets.fromLTRB(_sheetHPad, 4, _sheetHPad, 12),
       child: Row(
@@ -715,6 +713,10 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
                   _buildInfoRow(context, JamIcons.unordered_list, wallpaper.core.category!),
                   const SizedBox(height: 4),
                 ],
+                if (pairedPreviewUrls.isNotEmpty) ...[
+                  _buildPrismPairedPreviewRow(context, pairedPreviewUrls),
+                  const SizedBox(height: 8),
+                ],
                 if (wallpaper.core.resolution != null) ...[
                   _buildInfoRow(context, JamIcons.set_square, wallpaper.core.resolution!),
                   const SizedBox(height: 4),
@@ -750,299 +752,63 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     );
   }
 
-  Widget _buildWallhavenMetadata(BuildContext context, WallhavenWallpaper wallpaper, WallpaperDetailEntity entity) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(_sheetHPad, 4, _sheetHPad, 12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Flexible(
-            flex: 5,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildInfoTitle(context, wallpaper.id.toUpperCase()),
-                if (wallpaper.views != null) ...[
-                  const SizedBox(height: 4),
-                  _buildInfoRow(context, JamIcons.eye, wallpaper.views.toString()),
-                ],
-                if (wallpaper.core.favourites != null) ...[
-                  const SizedBox(height: 4),
-                  _buildInfoRow(context, JamIcons.heart_f, wallpaper.core.favourites.toString()),
-                ],
-                if (wallpaper.sizeBytes != null || wallpaper.core.sizeBytes != null) ...[
-                  const SizedBox(height: 4),
-                  _buildInfoRow(
-                    context,
-                    JamIcons.save,
-                    "${((wallpaper.sizeBytes ?? wallpaper.core.sizeBytes ?? 0) / 1000000).toStringAsFixed(2)} MB",
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Flexible(
-            flex: 4,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                if (wallpaper.core.authorName != null && wallpaper.core.authorName!.isNotEmpty) ...[
-                  _buildWallhavenAuthorLink(context, wallpaper.core.authorName!),
-                  const SizedBox(height: 4),
-                ],
-                if (wallpaper.core.category != null) ...[
-                  _buildInfoRow(
-                    context,
-                    JamIcons.unordered_list,
-                    wallpaper.core.category!,
-                    reversed: true,
-                    showIconLast: true,
-                  ),
-                  const SizedBox(height: 4),
-                ],
-                if (wallpaper.core.resolution != null) ...[
-                  _buildInfoRow(
-                    context,
-                    JamIcons.set_square,
-                    wallpaper.core.resolution!,
-                    reversed: true,
-                    showIconLast: true,
-                  ),
-                  const SizedBox(height: 4),
-                ],
-                _buildInfoRow(
-                  context,
-                  JamIcons.database,
-                  sourceDisplayName(entity.source),
-                  reversed: true,
-                  showIconLast: true,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+  List<String> _catalogPairedPreviewUrls(PrismWallpaper wallpaper) {
+    final rawUrls = wallpaper.aiMetadata?['catalogPairedPreviewUrls'];
+    if (rawUrls is! List) {
+      return const <String>[];
+    }
+    final seen = <String>{};
+    return rawUrls
+        .map((url) => url.toString().trim())
+        .where((url) => url.isNotEmpty && seen.add(url))
+        .take(4)
+        .toList(growable: false);
   }
 
-  Widget _buildPexelsMetadata(BuildContext context, PexelsWallpaper wallpaper, WallpaperDetailEntity entity) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(_sheetHPad, 4, _sheetHPad, 12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Flexible(
-            flex: 5,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildInfoTitle(context, wallpaper.id),
-                if (wallpaper.core.width != null && wallpaper.core.height != null) ...[
-                  const SizedBox(height: 4),
-                  _buildInfoRow(context, JamIcons.set_square, "${wallpaper.core.width}x${wallpaper.core.height}"),
-                ],
-              ],
-            ),
+  Widget _buildPrismPairedPreviewRow(BuildContext context, List<String> previewUrls) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildInfoRow(context, JamIcons.pictures, 'Paired images'),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 88,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: previewUrls.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            itemBuilder: (context, index) {
+              final url = previewUrls[index];
+              return ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: CachedNetworkImage(
+                  imageUrl: url,
+                  width: 58,
+                  height: 88,
+                  fit: BoxFit.cover,
+                  placeholder: (_, _) => Container(color: scheme.secondary.withValues(alpha: 0.1)),
+                  errorWidget: (_, _, _) => Container(
+                    color: scheme.secondary.withValues(alpha: 0.1),
+                    child: Icon(Icons.broken_image_outlined, color: scheme.secondary.withValues(alpha: 0.5)),
+                  ),
+                ),
+              );
+            },
           ),
-          const SizedBox(width: 12),
-          Flexible(
-            flex: 4,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                if (wallpaper.photographer != null && wallpaper.photographer!.isNotEmpty) ...[
-                  _buildPexelsPhotographerLink(context, wallpaper.photographer!, wallpaper.photographerUrl),
-                  const SizedBox(height: 4),
-                ],
-                _buildInfoRow(context, JamIcons.database, 'Pexels', reversed: true, showIconLast: true),
-              ],
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
   Widget _buildPrismAuthorRow(BuildContext context, PrismWallpaper wallpaper) {
-    final String nameTrimmed = wallpaper.core.authorName?.trim() ?? '';
-    final String photoTrimmed = wallpaper.core.authorPhoto?.trim() ?? '';
-    final String emailTrimmed = wallpaper.core.authorEmail?.trim() ?? '';
-    final bool hasName = nameTrimmed.isNotEmpty;
-    final bool hasPhoto = photoTrimmed.isNotEmpty;
-
-    final String? displayLabel = hasName
-        ? nameTrimmed
-        : emailTrimmed.isNotEmpty
-        ? emailTrimmed
-        : null;
-
-    if (displayLabel == null && !hasPhoto) {
-      return const SizedBox.shrink();
-    }
-
-    final String initialChar = displayLabel != null && displayLabel.isNotEmpty
-        ? displayLabel.characters.first.toUpperCase()
-        : '?';
-
-    final Color secondary = Theme.of(context).colorScheme.secondary;
-    final Widget avatar = CircleAvatar(
-      radius: 13,
-      backgroundColor: secondary.withValues(alpha: 0.15),
-      child: hasPhoto
-          ? ClipOval(
-              child: CachedNetworkImage(
-                imageUrl: photoTrimmed,
-                width: 26,
-                height: 26,
-                fit: BoxFit.cover,
-                errorWidget: (context, url, error) => Text(
-                  initialChar,
-                  style: TextStyle(color: secondary, fontWeight: FontWeight.w600, fontSize: 11),
-                ),
-              ),
-            )
-          : Text(
-              initialChar,
-              style: TextStyle(color: secondary, fontWeight: FontWeight.w600, fontSize: 11),
-            ),
-    );
-
-    // Prefer email; fall back to name as username (getUserProfile handles both).
-    final String profileIdentifier = emailTrimmed.isNotEmpty ? emailTrimmed : nameTrimmed;
-    final bool canNavigate = profileIdentifier.isNotEmpty;
-
-    if (displayLabel == null) {
-      final Widget solo = Padding(padding: const EdgeInsets.only(bottom: 4), child: avatar);
-      if (!canNavigate) {
-        return solo;
-      }
-      return Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => context.router.push(ProfileRoute(profileIdentifier: profileIdentifier)),
-          borderRadius: BorderRadius.circular(8),
-          child: solo,
-        ),
-      );
-    }
-
-    Widget row = Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Flexible(
-            child: Text(
-              displayLabel,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.end,
-              style: Theme.of(context).textTheme.bodyMedium!.copyWith(color: secondary),
-            ),
-          ),
-          const SizedBox(width: 10),
-          avatar,
-        ],
-      ),
-    );
-
-    if (canNavigate) {
-      row = Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => context.router.push(ProfileRoute(profileIdentifier: profileIdentifier)),
-          borderRadius: BorderRadius.circular(8),
-          child: row,
-        ),
-      );
-    }
-    return row;
+    return const SizedBox.shrink();
   }
 
-  Widget _buildWallhavenAuthorLink(BuildContext context, String username) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final maxW = constraints.maxWidth.isFinite ? min(constraints.maxWidth, 200.0) : 200.0;
-        return SizedBox(
-          width: maxW,
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(8),
-              onTap: () async {
-                final Uri uri = Uri.https('wallhaven.cc', '/user/${Uri.encodeComponent(username)}');
-                final bool ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-                if (!ok && context.mounted) {
-                  toasts.codeSend('Could not open profile');
-                }
-              },
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Text(
-                  username,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.end,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.headlineSmall!.copyWith(color: Theme.of(context).colorScheme.secondary),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildPexelsPhotographerLink(BuildContext context, String photographer, String? photographerUrl) {
-    final String urlForLaunch = photographerUrl?.trim() ?? '';
-    final bool hasUrl = urlForLaunch.isNotEmpty;
-    final TextStyle style = Theme.of(
-      context,
-    ).textTheme.headlineSmall!.copyWith(color: Theme.of(context).colorScheme.secondary);
+  Widget _buildUnsupportedSourceMetadata(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final maxW = constraints.maxWidth.isFinite ? min(constraints.maxWidth, 200.0) : 200.0;
-          return SizedBox(
-            width: maxW,
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: hasUrl
-                  ? InkWell(
-                      borderRadius: BorderRadius.circular(8),
-                      onTap: () async {
-                        final Uri? uri = Uri.tryParse(urlForLaunch);
-                        if (uri == null) {
-                          return;
-                        }
-                        final bool ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-                        if (!ok && context.mounted) {
-                          toasts.codeSend('Could not open profile');
-                        }
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Text(
-                          photographer,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.end,
-                          style: style,
-                        ),
-                      ),
-                    )
-                  : Text(photographer, overflow: TextOverflow.ellipsis, textAlign: TextAlign.end, style: style),
-            ),
-          );
-        },
-      ),
+      padding: const EdgeInsets.fromLTRB(_sheetHPad, 4, _sheetHPad, 12),
+      child: _buildInfoRow(context, JamIcons.database, 'Prism-only build'),
     );
   }
 
@@ -1080,8 +846,8 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
 
   Widget _buildActionButtons(BuildContext context, WallpaperDetailLoaded state) {
     final entity = state.entity;
-    final isLivePhoto = _isWallpicsLivePhoto(entity);
-    final liveStillUrl = isLivePhoto ? _wallpicsLiveStillUrl(entity) : null;
+    final isLivePhoto = _isPrismLivePhoto(entity);
+    final liveStillUrl = isLivePhoto ? _catalogLiveStillUrl(entity) : null;
     final url = isLivePhoto ? entity.fullUrl : (state.screenshotTaken && state.imageFile != null ? state.imageFile!.path : entity.fullUrl);
     final List<Widget> actions = <Widget>[
       _SheetActionTapScale(
@@ -1394,11 +1160,9 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
   }
 
   String sourceDisplayName(WallpaperSource source) => switch (source) {
-    WallpaperSource.prism => 'Wall Pics',
-    WallpaperSource.wallhaven => 'Wallhaven',
-    WallpaperSource.pexels => 'Pexels',
+    WallpaperSource.prism => 'Prism',
     WallpaperSource.downloaded => 'Downloaded',
-    WallpaperSource.unknown => 'Unknown',
+    WallpaperSource.wallhaven || WallpaperSource.pexels || WallpaperSource.unknown => 'Unsupported',
   };
 }
 

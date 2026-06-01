@@ -1,63 +1,102 @@
-import 'package:Prism/analytics/analytics_service.dart';
-import 'package:Prism/core/analytics/events/events.dart';
+import 'package:Prism/core/router/app_router.dart';
+import 'package:Prism/core/utils/status.dart';
 import 'package:Prism/core/widgets/animated/loader.dart';
-import 'package:Prism/data/collections/provider/collectionsWithoutProvider.dart';
-import 'package:Prism/features/category_feed/views/widgets/collections_grid.dart';
+import 'package:Prism/features/category_feed/biz/bloc/category_feed_bloc.j.dart';
+import 'package:Prism/features/category_feed/domain/entities/category_entity.dart';
+import 'package:auto_route/auto_route.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
-class CollectionScreen extends StatefulWidget {
+class CollectionScreen extends StatelessWidget {
   const CollectionScreen({super.key});
 
   @override
-  _CollectionScreenState createState() => _CollectionScreenState();
+  Widget build(BuildContext context) {
+    return BlocBuilder<CategoryFeedBloc, CategoryFeedState>(
+      builder: (context, state) {
+        if (state.status == LoadStatus.initial || (state.status == LoadStatus.loading && state.categories.isEmpty)) {
+          return Center(child: Loader());
+        }
+        if (state.status == LoadStatus.failure && state.categories.isEmpty) {
+          return RefreshIndicator(
+            onRefresh: () async => context.read<CategoryFeedBloc>().add(const CategoryFeedEvent.started()),
+            child: ListView(
+              children: const [
+                SizedBox(height: 220),
+                Center(child: Text("Can't load Prism categories.")),
+              ],
+            ),
+          );
+        }
+        return _PrismCategoryGrid(categories: state.categories);
+      },
+    );
+  }
 }
 
-class _CollectionScreenState extends State<CollectionScreen> with AutomaticKeepAliveClientMixin {
-  late Future<List?> _collectionsFuture;
+class _PrismCategoryGrid extends StatelessWidget {
+  const _PrismCategoryGrid({required this.categories});
 
-  @override
-  bool get wantKeepAlive => true;
-
-  @override
-  void initState() {
-    super.initState();
-    analytics.track(const CollectionsCheckedEvent());
-    _collectionsFuture = getCollections();
-  }
+  final List<CategoryEntity> categories;
 
   @override
   Widget build(BuildContext context) {
-    super.build(context);
-    return FutureBuilder<List?>(
-      future: _collectionsFuture,
-      builder: (BuildContext context, AsyncSnapshot<List?> snapshot) {
-        switch (snapshot.connectionState) {
-          case ConnectionState.waiting:
-            return Center(child: Loader());
-          case ConnectionState.none:
-            return Center(child: Loader());
-          default:
-            if (snapshot.hasError) {
-              return RefreshIndicator(
-                onRefresh: () async {
-                  setState(() {
-                    _collectionsFuture = getCollections();
-                  });
-                  await _collectionsFuture;
-                },
-                child: const Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: <Widget>[
-                    Spacer(),
-                    Center(child: Text("Can't connect to the Servers!")),
-                    Spacer(),
-                  ],
-                ),
+    final theme = Theme.of(context);
+    return GridView.builder(
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 120),
+      itemCount: categories.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 0.62,
+        mainAxisSpacing: 8,
+        crossAxisSpacing: 8,
+      ),
+      itemBuilder: (context, index) {
+        final category = categories[index];
+        final title = category.name.trim().isEmpty ? 'Prism' : category.name.trim();
+        final imageUrl = category.image.trim().isNotEmpty ? category.image.trim() : category.image2.trim();
+        return Material(
+          color: theme.colorScheme.surfaceContainer,
+          child: InkWell(
+            onTap: () {
+              final encodedName = Uri.encodeComponent(
+                '${category.catalogContentType ?? ''}|${category.catalogSlug ?? ''}|${category.name}',
               );
-            } else {
-              return CollectionsGrid();
-            }
-        }
+              context.router.push(CollectionViewRoute(collectionName: 'category:$encodedName'));
+            },
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  height: 42,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: imageUrl.isEmpty
+                      ? ColoredBox(color: theme.colorScheme.surfaceContainerHighest)
+                      : CachedNetworkImage(
+                          imageUrl: imageUrl,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => ColoredBox(color: theme.colorScheme.surfaceContainerHighest),
+                          errorWidget: (context, url, error) => ColoredBox(color: theme.colorScheme.surfaceContainerHighest),
+                        ),
+                ),
+              ],
+            ),
+          ),
+        );
       },
     );
   }

@@ -191,7 +191,7 @@ class _EnterCodePanelState extends State<EnterCodePanel> {
               child: SizedBox(
                 width: MediaQuery.of(context).size.width * 0.8,
                 child: Text(
-                  "Enter a valid Wall Pics code here, and if you are the first to redeem it, you get Wall Pics Premium or another reward.",
+                  "Enter a valid Prism code here, and if you are the first to redeem it, you get Prism Premium or another reward.",
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.secondary),
                 ),

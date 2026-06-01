@@ -40,9 +40,9 @@ class DeepLinkNavigation {
           analyticsSurface: AnalyticsSurfaceValue.shareWallpaperView,
         );
       case UserLinkIntent():
-        return ProfileRoute(profileIdentifier: action.profileIdentifier);
+        return const NotFoundRoute();
       case SetupLinkIntent():
-        return ShareSetupViewRoute(setupName: action.setupName, thumbnailUrl: action.thumbnailUrl);
+        return const NotFoundRoute();
       case ReferLinkIntent():
         return null;
       case ShortCodeIntent():

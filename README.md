@@ -1,6 +1,6 @@
-# Wall Pics
+# Prism
 
-Wall Pics is an iOS wallpaper app for browsing, saving, and organizing high-quality phone wallpapers and Live Photos.
+Prism is an iOS wallpaper app for browsing, saving, and organizing high-quality phone wallpapers and Live Photos.
 
 ## Features
 
@@ -11,8 +11,7 @@ Wall Pics is an iOS wallpaper app for browsing, saving, and organizing high-qual
 - Favorites library for saved picks
 - Wallpaper detail pages with metadata and color palette tools
 - Search, category browsing, and collection views
-- Optional account features for syncing favorites and profile data
-- Premium-ready flows for subscriptions, rewards, and gated downloads
+- Optional account login for syncing app data through the server API
 - App Store and TestFlight build workflows
 
 ## iOS
@@ -27,18 +26,15 @@ Supported build outputs:
 
 ## Catalog Updates
 
-Wall Pics supports a remote catalog endpoint configured at build time with:
+Prism supports a remote catalog endpoint configured at build time with:
 
 ```sh
---dart-define=WALL_PICS_CATALOG_BASE_URL=https://example.com/catalog
+--dart-define=PRISM_CATALOG_BASE_URL=https://example.com/catalog
 ```
 
-When the endpoint is configured, the app loads the newest catalog JSON at launch and falls back to the bundled catalog if the network is unavailable.
+Catalog files are served by the Worker at `/v1/catalog` from the private catalog repository. Set `PRISM_CATALOG_BASE_URL` directly, or set `USER_STORE_API_BASE_URL` and the app will use `<USER_STORE_API_BASE_URL>/v1/catalog`. Large catalog files stay outside the IPA and are fetched at runtime.
 
-Expected files:
-
-- `wallpics_regular.json`
-- `wallpics_live.json`
+Expected files include regular, live, matching, double, parallax, profile picture, charging animation, DIY template, live DIY template, sticker, filters, category tree, popular search, and search suggestion JSON.
 
 ## Development
 
@@ -48,11 +44,11 @@ flutter analyze
 flutter build ios --release --no-codesign
 ```
 
-For CI builds, set `WALL_PICS_CATALOG_BASE_URL` as a repository secret if a remote catalog endpoint is available.
+For CI builds, set `USER_STORE_API_BASE_URL` and/or `PRISM_CATALOG_BASE_URL` in `PRISM_ENV`. Do not put GitHub tokens in mobile dart-defines.
 
 ## Privacy
 
-Wall Pics only requests photo library access when saving wallpapers or Live Photos. Account, analytics, purchases, and notification behavior must match the privacy disclosures configured in App Store Connect.
+Prism only requests photo library access when saving wallpapers or Live Photos. Account, analytics, and notification behavior must match the privacy disclosures configured in App Store Connect. GitHub tokens and other server secrets must stay on the server side and are filtered from CI dart-defines.
 
 ## License
 

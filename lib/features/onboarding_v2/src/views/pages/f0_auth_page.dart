@@ -77,7 +77,7 @@ class _F0AuthPageState extends State<F0AuthPage> {
                     opacity: _bodyVisible ? 1.0 : 0.0,
                     duration: const Duration(milliseconds: 1000),
                     child: const OnboardingBodyText(
-                      text: 'access millions of premium wallpapers\ncreated by top digital artists.',
+                      text: 'access the full Prism catalog\nwith new wallpapers added daily.',
                     ),
                   ),
                 ),

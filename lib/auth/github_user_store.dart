@@ -11,7 +11,7 @@ class GitHubUserStore {
   const GitHubUserStore();
 
   static const Duration _timeout = Duration(seconds: 8);
-  static const String _userAgent = 'WallPics-iOS';
+  static const String _userAgent = 'Prism-iOS';
   static String? _sessionToken;
 
   Future<PrismUsersV2> signInOrCreate({

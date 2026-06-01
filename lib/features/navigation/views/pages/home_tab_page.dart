@@ -1,27 +1,14 @@
-import 'dart:async';
-
-import 'package:Prism/analytics/analytics_service.dart';
-import 'package:Prism/core/analytics/events/events.dart';
-import 'package:Prism/core/constants/app_constants.dart';
-import 'package:Prism/core/di/injection.dart';
-import 'package:Prism/core/persistence/data_sources/favorites_local_data_source.dart';
-import 'package:Prism/core/persistence/data_sources/settings_local_data_source.dart';
-import 'package:Prism/core/router/app_router.dart';
-import 'package:Prism/core/state/app_state.dart' as app_state;
-import 'package:Prism/core/widgets/popup/changelogPopUp.dart';
-import 'package:Prism/features/ads/ads.dart';
-import 'package:Prism/features/favourite_walls/views/favourite_walls_bloc_adapter.dart';
+import 'package:Prism/core/utils/status.dart';
+import 'package:Prism/core/widgets/home/wallpapers/loading.dart';
+import 'package:Prism/features/category_feed/biz/bloc/category_feed_bloc.j.dart';
+import 'package:Prism/features/category_feed/domain/entities/category_entity.dart';
+import 'package:Prism/features/category_feed/views/widgets/wallpaper_grid.dart';
 import 'package:Prism/features/navigation/views/widgets/offline_banner.dart';
-import 'package:Prism/features/navigation/views/widgets/personalized_feed_settings_bottom_sheet.dart';
 import 'package:Prism/features/navigation/views/widgets/prism_top_app_bar.dart';
-import 'package:Prism/features/personalized_feed/views/pages/personalized_feed_screen.dart';
-import 'package:Prism/logger/logger.dart';
-import 'package:Prism/notifications/topic_subscription.dart';
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:internet_connection_checker/internet_connection_checker.dart';
-import 'package:quick_actions/quick_actions.dart';
 
 @RoutePage()
 class HomeTabPage extends StatefulWidget {
@@ -32,152 +19,98 @@ class HomeTabPage extends StatefulWidget {
 }
 
 class _HomeTabPageState extends State<HomeTabPage> {
-  final FavoritesLocalDataSource _favoritesLocal = getIt<FavoritesLocalDataSource>();
-  final SettingsLocalDataSource _settingsLocal = getIt<SettingsLocalDataSource>();
-  int page = 0;
-  bool result = true;
-  String shortcut = "No Action Set";
-  bool _hasHandledQuickActionInvocation = false;
-  bool _isChangelogCheckPending = true;
-  int _personalizedFeedVersion = 0;
-
-  Future<void> _ensureDefaultTopicSubscriptions() async {
-    if (!_settingsLocal.get<bool>('subscribedToRecommendations', defaultValue: false)) {
-      final bool recommendationsSubscribed = await subscribeToTopicSafely(
-        'recommendations',
-        sourceTag: 'home_tab.init.recommendations',
-      );
-      final bool postsSubscribed = await subscribeToTopicSafely('posts', sourceTag: 'home_tab.init.posts');
-      if (recommendationsSubscribed && postsSubscribed) {
-        _settingsLocal.set('subscribedToRecommendations', true);
-      }
-    }
-  }
-
-  void _showChangelogCheck() {
-    final String? lastSeen = _settingsLocal.get<Object?>('lastSeenVersion') as String?;
-    if (lastSeen != currentAppVersion) {
-      showChangelog(context, () {
-        if (mounted) {
-          setState(() {
-            _isChangelogCheckPending = false;
-          });
-        }
-      });
-      _settingsLocal.set('lastSeenVersion', currentAppVersion);
-      return;
-    }
-    setState(() {
-      _isChangelogCheckPending = false;
-    });
-  }
-
-  void _trackQuickActionInvocation(String shortcutType) {
-    final AnalyticsActionValue action;
-    switch (shortcutType) {
-      case 'Personalized_Feed':
-        action = AnalyticsActionValue.quickActionFollowFeed;
-      case 'Collections':
-        action = AnalyticsActionValue.quickActionCollections;
-      case 'AI_Wallpapers':
-        action = AnalyticsActionValue.quickActionAiWallpapers;
-      case 'Downloads':
-        action = AnalyticsActionValue.quickActionDownloads;
-      default:
-        action = AnalyticsActionValue.quickActionUnknown;
-    }
-    analytics.track(
-      QuickActionInvokedEvent(
-        action: action,
-        launchState: _hasHandledQuickActionInvocation ? LaunchStateValue.foreground : LaunchStateValue.initialLaunch,
-      ),
-    );
-    _hasHandledQuickActionInvocation = true;
-  }
-
-  Future<void> checkConnection() async {
-    result = await InternetConnectionChecker.instance.hasConnection;
-    if (result) {
-      logger.d("Internet working as expected!");
-      setState(() {});
-    } else {
-      logger.d("Not connected to Internet!");
-      setState(() {});
-    }
-  }
-
-  Future<void> saveFavToLocal() async {
-    if (app_state.prismUser.loggedIn) {
-      final String userId = app_state.prismUser.id;
-      if (_favoritesLocal.isSeeded(userId)) {
-        return;
-      }
-      final value = await context.favouriteWallsAdapter(listen: false).getDataBase();
-      if (value != null && value.isNotEmpty) {
-        for (final element in value) {
-          await _favoritesLocal.setWallFavourite(userId, element.id, true);
-        }
-      }
-      await _favoritesLocal.setSeeded(userId, true);
-    }
-  }
+  bool _hasConnection = true;
 
   @override
   void initState() {
     super.initState();
-    context.read<AdsBloc>().add(const AdsEvent.started());
-    const QuickActions quickActions = QuickActions();
-    quickActions.initialize((String shortcutType) {
-      _trackQuickActionInvocation(shortcutType);
-      setState(() {
-        shortcut = shortcutType;
-      });
-      if (shortcutType == 'Downloads') {
-        logger.d('Downloads');
-        context.router.push(const DownloadRoute());
-      }
-    });
+    _checkConnection();
+  }
 
-    quickActions.setShortcutItems(<ShortcutItem>[
-      const ShortcutItem(type: 'Personalized_Feed', localizedTitle: 'For You', icon: '@drawable/ic_feed'),
-      const ShortcutItem(type: 'Collections', localizedTitle: 'Collections', icon: '@drawable/ic_collections'),
-      const ShortcutItem(type: 'Downloads', localizedTitle: 'Downloads', icon: '@drawable/ic_downloads'),
-    ]);
-    saveFavToLocal();
-    checkConnection();
-    unawaited(_ensureDefaultTopicSubscriptions());
+  Future<void> _checkConnection() async {
+    final result = await InternetConnectionChecker.instance.hasConnection;
+    if (mounted) {
+      setState(() => _hasConnection = result);
+    }
+  }
+
+  void _selectCategory(CategoryEntity category) {
+    context.read<CategoryFeedBloc>().add(CategoryFeedEvent.categorySelected(category: category));
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isChangelogCheckPending) {
-      Future<void>.delayed(Duration.zero).then((_) {
-        if (!mounted) {
-          return;
-        }
-        _showChangelogCheck();
-      });
-    }
-
     return Scaffold(
       backgroundColor: Theme.of(context).primaryColor,
-      appBar: PrismTopAppBar(
-        onLogoTap: () => unawaited(
-          openPersonalizedFeedSettingsBottomSheet(
-            context,
-            onPreferencesSaved: () {
-              if (mounted) {
-                setState(() => _personalizedFeedVersion += 1);
-              }
-            },
-          ),
-        ),
-      ),
+      appBar: const PrismTopAppBar(),
       body: Stack(
         children: <Widget>[
-          PersonalizedFeedScreen(key: ValueKey<int>(_personalizedFeedVersion)),
-          if (!result) ConnectivityWidget() else Container(),
+          BlocBuilder<CategoryFeedBloc, CategoryFeedState>(
+            builder: (context, state) {
+              if (state.status == LoadStatus.initial || (state.status == LoadStatus.loading && state.categories.isEmpty)) {
+                return const LoadingCards();
+              }
+              if (state.status == LoadStatus.failure && state.items.isEmpty) {
+                return RefreshIndicator(
+                  onRefresh: () async => context.read<CategoryFeedBloc>().add(const CategoryFeedEvent.started()),
+                  child: ListView(
+                    children: const [
+                      SizedBox(height: 220),
+                      Center(child: Text("Can't load Prism.")),
+                    ],
+                  ),
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _CategoryStrip(
+                    categories: state.categories,
+                    selected: state.selectedCategory,
+                    onSelected: _selectCategory,
+                  ),
+                  const Expanded(child: WallpaperGrid()),
+                ],
+              );
+            },
+          ),
+          if (!_hasConnection) ConnectivityWidget(),
         ],
+      ),
+    );
+  }
+}
+
+class _CategoryStrip extends StatelessWidget {
+  const _CategoryStrip({required this.categories, required this.selected, required this.onSelected});
+
+  final List<CategoryEntity> categories;
+  final CategoryEntity? selected;
+  final ValueChanged<CategoryEntity> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    if (categories.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final scheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      height: 48,
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        scrollDirection: Axis.horizontal,
+        itemBuilder: (context, index) {
+          final category = categories[index];
+          final isSelected = selected?.name == category.name && selected?.catalogContentType == category.catalogContentType;
+          return ChoiceChip(
+            label: Text(category.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+            selected: isSelected,
+            selectedColor: scheme.secondary.withValues(alpha: 0.16),
+            onSelected: (_) => onSelected(category),
+          );
+        },
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemCount: categories.length,
       ),
     );
   }

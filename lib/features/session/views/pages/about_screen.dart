@@ -7,7 +7,6 @@ import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:Prism/core/utils/url_launcher_compat.dart';
 import 'package:Prism/core/widgets/animated/loader.dart';
 import 'package:Prism/core/widgets/popup/contriPopUp.dart';
-import 'package:Prism/features/public_profile/views/widgets/prism_list.dart';
 import 'package:Prism/features/theme_mode/views/theme_mode_bloc_utils.dart';
 import 'package:Prism/logger/logger.dart';
 import 'package:Prism/theme/jam_icons_icons.dart';
@@ -59,7 +58,7 @@ class _AboutScreenState extends State<AboutScreen> {
 
   Future<List<Contributor>> printStream() async {
     final github = GitHub();
-    final Stream<Contributor> contri = github.repositories.listContributors(RepositorySlug("NightVibes33", "wall-pics-ios"));
+    final Stream<Contributor> contri = github.repositories.listContributors(RepositorySlug("NightVibes33", "prism-ios"));
     final List<Contributor> listContri = [];
     await for (final value in contri) {
       listContri.add(value);
@@ -90,7 +89,7 @@ class _AboutScreenState extends State<AboutScreen> {
             Padding(padding: const EdgeInsets.all(8.0), child: Image.asset("assets/images/prism.webp", height: 70)),
             const SizedBox(height: 10),
             Text(
-              "Wall Pics",
+              "Prism",
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium!.copyWith(color: Theme.of(context).colorScheme.secondary),
             ),
@@ -116,7 +115,7 @@ class _AboutScreenState extends State<AboutScreen> {
             const Wrap(
               alignment: WrapAlignment.center,
               children: [
-                ActionButton(icon: JamIcons.github, text: "GITHUB", link: "https://www.github.com/NightVibes33/wall-pics-ios"),
+                ActionButton(icon: JamIcons.github, text: "GITHUB", link: "https://www.github.com/NightVibes33/prism-ios"),
               ],
             ),
             const SizedBox(height: 10),
@@ -230,8 +229,6 @@ class _AboutScreenState extends State<AboutScreen> {
                 }
               },
             ),
-            const Divider(),
-            PrismList(),
           ],
         ),
       ),

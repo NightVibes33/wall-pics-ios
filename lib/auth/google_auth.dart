@@ -4,9 +4,7 @@ import 'package:Prism/analytics/analytics_service.dart';
 import 'package:Prism/auth/github_user_store.dart';
 import 'package:Prism/auth/userModel.dart';
 import 'package:Prism/core/analytics/events/events.dart';
-import 'package:Prism/core/coins/coins_service.dart';
 import 'package:Prism/core/monitoring/sentry_user_scope.dart';
-import 'package:Prism/core/purchases/purchases_service.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:Prism/data/notifications/notifications.dart';
 import 'package:Prism/logger/logger.dart';
@@ -150,16 +148,6 @@ class GoogleAuth {
       ..links = <String, String>{};
     await syncSentryUserScope(loggedIn: false, id: '', email: '');
     await app_state.persistPrismUser();
-    try {
-      await PurchasesService.instance.logOut();
-    } catch (e, st) {
-      logger.w(
-        'RevenueCat signOut failed; continuing local sign-out cleanup.',
-        tag: 'GoogleAuth',
-        error: e,
-        stackTrace: st,
-      );
-    }
     await _userStore.markLoggedOut(existingUserId);
     await analytics.setUserId(null);
     await analytics.setUserProperty(name: AnalyticsUserProperty.subscriptionTier.wireName, value: 'free');
@@ -200,14 +188,6 @@ class GoogleAuth {
       value: app_state.prismUser.premium ? '1' : '0',
     );
     await analytics.track(AuthLoginResultEvent(method: method, result: EventResultValue.success, sourceContext: sourceContext));
-    unawaited(() async {
-      await PurchasesService.instance.checkAndPersistPremium();
-      await CoinsService.instance.bootstrapForCurrentUser();
-      await CoinsService.instance.refreshBalance();
-      await CoinsService.instance.claimDailyLoginAndStreakIfEligible();
-      await CoinsService.instance.maybeAwardProDailyBonus();
-      await CoinsService.instance.processPendingReferralIfEligible();
-    }());
     await syncSentryUserScope(
       loggedIn: app_state.prismUser.loggedIn,
       id: app_state.prismUser.id,

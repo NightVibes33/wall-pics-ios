@@ -4,9 +4,7 @@ import 'package:Prism/analytics/analytics_service.dart';
 import 'package:Prism/core/analytics/events/events.dart';
 import 'package:Prism/core/analytics/trackers/content_load_tracker.dart';
 import 'package:Prism/core/analytics/trackers/scroll_milestone_tracker.dart';
-import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:Prism/core/widgets/home/wallpapers/seeMoreButton.dart';
-import 'package:Prism/core/widgets/premiumBanners/walls.dart';
 import 'package:Prism/features/category_feed/biz/bloc/category_feed_bloc.j.dart';
 import 'package:Prism/features/category_feed/domain/entities/feed_item_entity.dart';
 import 'package:Prism/features/category_feed/views/category_feed_bloc_adapter.dart';
@@ -158,14 +156,7 @@ class _WallpaperGridState extends State<WallpaperGrid> {
                 );
               }
               final PrismFeedItem item = subWalls[itemIndex];
-              return PremiumBannerWalls(
-                comparator: !app_state.isPremiumWall(
-                  app_state.premiumCollections,
-                  item.wallpaper.collections ?? const <String>[],
-                ),
-                defaultChild: WallpaperTile(item: item, index: itemIndex),
-                trueChild: WallpaperTile(item: item, index: itemIndex),
-              );
+              return WallpaperTile(item: item, index: itemIndex);
             },
           ),
         ),

@@ -12,11 +12,21 @@ CategoryMenu _toMenu(CategoryEntity category) => CategoryMenu(
   provider: category.source.legacyProviderString,
   image: category.image,
   image2: category.image2,
+  catalogSlug: category.catalogSlug,
+  catalogContentType: category.catalogContentType,
 );
 
 CategoryEntity _toEntity(CategoryMenu choice, List<CategoryEntity> categories) {
   final selectedName = (choice.name ?? '').trim();
+  final selectedSlug = (choice.catalogSlug ?? '').trim();
+  final selectedType = (choice.catalogContentType ?? '').trim();
   for (final category in categories) {
+    if (selectedSlug.isNotEmpty && selectedType.isNotEmpty) {
+      if (category.catalogSlug == selectedSlug && category.catalogContentType == selectedType) {
+        return category;
+      }
+      continue;
+    }
     if (category.name == selectedName) {
       return category;
     }
@@ -27,6 +37,8 @@ CategoryEntity _toEntity(CategoryMenu choice, List<CategoryEntity> categories) {
     searchType: CategorySearchType.search,
     image: choice.image ?? '',
     image2: choice.image2 ?? '',
+    catalogSlug: choice.catalogSlug,
+    catalogContentType: choice.catalogContentType,
   );
 }
 
@@ -37,6 +49,8 @@ final List<CategoryMenu> categoryChoices = category_data.categoryDefinitions
         provider: def.source.legacyProviderString,
         image: def.imageUrl,
         image2: def.secondaryImageUrl,
+        catalogSlug: def.catalogSlug,
+        catalogContentType: def.catalogContentType,
       ),
     )
     .toList(growable: false);

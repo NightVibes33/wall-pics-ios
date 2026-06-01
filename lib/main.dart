@@ -10,7 +10,6 @@ import 'package:Prism/core/analytics/providers/analytics_provider.dart';
 import 'package:Prism/core/analytics/providers/composite_analytics_provider.dart';
 import 'package:Prism/core/analytics/providers/mixpanel_analytics_provider.dart';
 import 'package:Prism/core/analytics/providers/noop_analytics_provider.dart';
-import 'package:Prism/core/coins/coins_service.dart';
 import 'package:Prism/core/debug/bloc_debug_observer.dart';
 import 'package:Prism/core/debug/debug_flags.dart';
 import 'package:Prism/core/debug/log_toast_overlay.dart';
@@ -22,7 +21,6 @@ import 'package:Prism/core/monitoring/sentry_user_scope.dart';
 import 'package:Prism/core/persistence/bootstrap/persistence_bootstrap.dart';
 import 'package:Prism/core/persistence/prefs_compat.dart';
 import 'package:Prism/core/platform/quick_tile_config_service.dart';
-import 'package:Prism/core/purchases/purchases_service.dart';
 import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/router/deep_link_navigation.dart';
 import 'package:Prism/core/router/deep_link_parser.dart';
@@ -33,7 +31,6 @@ import 'package:Prism/core/utils/status.dart';
 import 'package:Prism/core/utils/url_launcher_compat.dart' as launcher_compat;
 import 'package:Prism/data/notifications/notifications.dart';
 import 'package:Prism/env/env.dart';
-import 'package:Prism/features/ads/ads.dart';
 import 'package:Prism/features/category_feed/category_feed.dart';
 import 'package:Prism/features/deep_link/domain/entities/deep_link_action_entity.dart';
 import 'package:Prism/features/favourite_setups/favourite_setups.dart';
@@ -60,7 +57,6 @@ import 'package:flutter/material.dart' hide Badge;
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_displaymode/flutter_displaymode.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:http/http.dart' as http;
 import 'package:sentry_flutter/sentry_flutter.dart';
 
@@ -161,13 +157,12 @@ Future<void> main() async {
         } catch (_) {}
       };
 
-      const sideloadBuild = Env.sideloadBuild;
       final SentryConfig sentryConfig = _resolveSentryConfig();
 
       // Only truly-blocking tasks remain on the critical path.
       await Future.wait(<Future<Object?>>[PersistenceBootstrap.initialize(), _initializeMonitoring(sentryConfig)]);
 
-      // Defer MobileAds and Analytics to after first frame.
+      // Defer analytics wiring to after first frame.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         unawaited(_deferredStartup());
       });
@@ -213,12 +208,6 @@ Future<void> main() async {
       ]);
       applyEdgeToEdgeOverlayStyle(statusBarIconBrightness: currentMode == 'Light' ? Brightness.dark : Brightness.light);
 
-      if (!sideloadBuild) {
-        await PurchasesService.instance.configureEarly();
-      } else {
-        logger.w('Skipping purchases initialization for sideload build.');
-      }
-
       runApp(
         // SentryWidget(
         //   child:
@@ -226,7 +215,6 @@ Future<void> main() async {
           child: RestartWidget(
             child: MultiBlocProvider(
               providers: [
-                BlocProvider<AdsBloc>(create: (_) => getIt<AdsBloc>()),
                 BlocProvider<PaletteBloc>(create: (_) => getIt<PaletteBloc>()),
                 BlocProvider<WallpaperDetailBloc>(create: (_) => getIt<WallpaperDetailBloc>()),
                 BlocProvider<UserSearchBloc>(create: (_) => getIt<UserSearchBloc>()),
@@ -264,17 +252,12 @@ Future<void> main() async {
 }
 
 Future<void> _deferredStartup() async {
-  if (!Env.sideloadBuild) {
-    await MobileAds.instance.initialize();
-  } else {
-    logger.w('Skipping MobileAds initialization for sideload build.');
-  }
   await _configureAnalyticsRuntime();
 }
 
 SentryConfig _resolveSentryConfig() {
   const String fallbackEnvironment = kReleaseMode ? 'production' : 'staging';
-  final String fallbackRelease = 'WallPics@${app_state.currentAppVersion}+${app_state.currentAppVersionCode}';
+  final String fallbackRelease = 'Prism@${app_state.currentAppVersion}+${app_state.currentAppVersionCode}';
   return SentryConfig.fromEnvironment(
     fallbackEnvironment: fallbackEnvironment,
     fallbackRelease: fallbackRelease,
@@ -464,9 +447,6 @@ class _MyAppState extends State<_MyApp> with WidgetsBindingObserver {
   final List<DeepLinkActionEntity> _pendingDeepLinks = <DeepLinkActionEntity>[];
   bool _bootstrapCompleted = false;
   bool _processingPendingDeepLinks = false;
-  bool _coinSyncInFlight = false;
-  static const Duration _coinSyncCooldown = Duration(seconds: 30);
-  DateTime? _lastCoinSyncAt;
 
   Future<bool> getLoginStatus() async {
     bool value = await app_state.gAuth.isSignedIn();
@@ -508,8 +488,6 @@ class _MyAppState extends State<_MyApp> with WidgetsBindingObserver {
     app_state.prismUser.loggedIn = value;
     await _syncAnalyticsIdentityFromAppState(sourceTag: 'startup_login_status');
     if (value) {
-      await PurchasesService.instance.checkAndPersistPremium();
-      unawaited(_syncCoinEconomy(sourceTag: 'startup_login_status'));
     }
     app_state.persistPrismUser();
     await syncSentryUserScope(
@@ -557,10 +535,6 @@ class _MyAppState extends State<_MyApp> with WidgetsBindingObserver {
     );
   }
 
-  /// Minimum time between coin syncs triggered by app resume to reduce RemoteStore reads/writes.
-  static const Duration _coinSyncResumeThrottle = Duration(minutes: 10);
-  DateTime? _lastCoinSyncResume;
-
   /// Throttle getNotifs on resume to avoid repeated queries with 0 results.
   static const Duration _getNotifsResumeThrottle = Duration(minutes: 5);
   DateTime? _lastGetNotifsResume;
@@ -570,32 +544,6 @@ class _MyAppState extends State<_MyApp> with WidgetsBindingObserver {
       return;
     }
     getIt<InAppNotificationsBloc>().add(const InAppNotificationsEvent.localReloadRequested());
-  }
-
-  Future<void> _syncCoinEconomy({required String sourceTag}) async {
-    if (_coinSyncInFlight) {
-      return;
-    }
-    if (!app_state.prismUser.loggedIn || app_state.prismUser.id.trim().isEmpty) {
-      return;
-    }
-    final now = DateTime.now();
-    if (_lastCoinSyncAt != null && now.difference(_lastCoinSyncAt!) < _coinSyncCooldown) {
-      return;
-    }
-    _coinSyncInFlight = true;
-    _lastCoinSyncAt = now;
-    try {
-      await CoinsService.instance.bootstrapForCurrentUser();
-      // Skip redundant refreshBalance: bootstrap already reads usersv2 and applies balance locally.
-      await CoinsService.instance.claimDailyLoginAndStreakIfEligible();
-      await CoinsService.instance.maybeAwardProDailyBonus();
-      await CoinsService.instance.processPendingReferralIfEligible();
-    } catch (error, stackTrace) {
-      CoinsService.instance.logCoinError(sourceTag: 'coins.main.$sourceTag', error: error, stackTrace: stackTrace);
-    } finally {
-      _coinSyncInFlight = false;
-    }
   }
 
   Future<void> _configureDisplayMode() async {
@@ -614,21 +562,9 @@ class _MyAppState extends State<_MyApp> with WidgetsBindingObserver {
   Future<void> _configureLocalNotificationChannels() async {
     try {
       await localNotification.createNotificationChannel(
-        "followers",
-        "Followers",
-        "Get notifications for new followers.",
-        true,
-      );
-      await localNotification.createNotificationChannel(
         "recommendations",
         "Recommendations",
-        "Get notifications for recommendations from Wall Pics.",
-        true,
-      );
-      await localNotification.createNotificationChannel(
-        "posts",
-        "Posts",
-        "Get notifications for posts from artists you follow.",
+        "Get notifications for recommendations from Prism.",
         true,
       );
       await localNotification.createNotificationChannel(
@@ -641,12 +577,6 @@ class _MyAppState extends State<_MyApp> with WidgetsBindingObserver {
         "wall_of_the_day",
         "Wall of the Day",
         "Daily featured wallpaper notification at 9 AM.",
-        true,
-      );
-      await localNotification.createNotificationChannel(
-        "streak_reminder",
-        "Streak reminders",
-        "8 PM reminder to keep your login streak alive.",
         true,
       );
     } catch (e, st) {
@@ -709,41 +639,24 @@ class _MyAppState extends State<_MyApp> with WidgetsBindingObserver {
           ),
         );
       case UserLinkIntent():
-        _appRouter.push(ProfileRoute(profileIdentifier: action.profileIdentifier));
+        _appRouter.push(const NotFoundRoute());
         unawaited(
           analytics.track(
-            const DeepLinkNavigationResultEvent(targetType: TargetTypeValue.user, result: EventResultValue.navigated),
+            const DeepLinkNavigationResultEvent(targetType: TargetTypeValue.user, result: EventResultValue.failure),
           ),
         );
       case SetupLinkIntent():
-        _appRouter.push(ShareSetupViewRoute(setupName: action.setupName, thumbnailUrl: action.thumbnailUrl));
+        _appRouter.push(const NotFoundRoute());
         unawaited(
           analytics.track(
-            const DeepLinkNavigationResultEvent(targetType: TargetTypeValue.setup, result: EventResultValue.navigated),
+            const DeepLinkNavigationResultEvent(targetType: TargetTypeValue.setup, result: EventResultValue.failure),
           ),
         );
       case ReferLinkIntent():
-        if (action.inviterId.trim().isEmpty) {
-          unawaited(
-            analytics.track(
-              const DeepLinkNavigationResultEvent(
-                targetType: TargetTypeValue.refer,
-                result: EventResultValue.failure,
-                reason: AnalyticsReasonValue.missingData,
-              ),
-            ),
-          );
-          return;
-        }
-        unawaited(CoinsService.instance.setPendingReferralInviterId(action.inviterId));
-        if (app_state.prismUser.loggedIn) {
-          unawaited(CoinsService.instance.processPendingReferralIfEligible(inviterUserId: action.inviterId));
-        } else {
-          toasts.codeSend('Referral saved. Sign in to claim +100 coins.');
-        }
+        toasts.codeSend('Referral links are no longer used.');
         unawaited(
           analytics.track(
-            const DeepLinkNavigationResultEvent(targetType: TargetTypeValue.refer, result: EventResultValue.success),
+            const DeepLinkNavigationResultEvent(targetType: TargetTypeValue.refer, result: EventResultValue.failure),
           ),
         );
       case ShortCodeIntent():
@@ -928,10 +841,6 @@ class _MyAppState extends State<_MyApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       final now = DateTime.now();
-      if (_lastCoinSyncResume == null || now.difference(_lastCoinSyncResume!) >= _coinSyncResumeThrottle) {
-        _lastCoinSyncResume = now;
-        unawaited(_syncCoinEconomy(sourceTag: 'app_resumed'));
-      }
       if (_lastGetNotifsResume == null || now.difference(_lastGetNotifsResume!) >= _getNotifsResumeThrottle) {
         _lastGetNotifsResume = now;
         unawaited(syncInAppNotificationsFromRemote().then((_) => _reloadInAppNotificationsFromCache()));

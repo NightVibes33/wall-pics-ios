@@ -16,8 +16,7 @@ class _PrismBottomNavState extends State<PrismBottomNav> {
   static const List<_NavTabConfig> _tabs = <_NavTabConfig>[
     _NavTabConfig(index: 0, label: 'Home', icon: JamIcons.home_f, value: NavTabValue.home),
     _NavTabConfig(index: 1, label: 'Search', icon: JamIcons.search, value: NavTabValue.search),
-    _NavTabConfig(index: 2, label: 'Streak', icon: JamIcons.flame_f, value: NavTabValue.streak),
-    _NavTabConfig(index: 3, label: 'Collections', icon: JamIcons.grid_f, value: NavTabValue.collection),
+    _NavTabConfig(index: 2, label: 'Categories', icon: JamIcons.grid_f, value: NavTabValue.collection),
   ];
 
   TabsRouter? _tabsRouter;
@@ -89,12 +88,12 @@ class _PrismBottomNavState extends State<PrismBottomNav> {
 }
 
 class _TabButton extends StatelessWidget {
+  const _TabButton({required this.tooltip, required this.isActive, required this.icon, required this.onPressed});
+
   final String tooltip;
   final bool isActive;
   final IconData icon;
   final VoidCallback onPressed;
-
-  const _TabButton({required this.tooltip, required this.isActive, required this.icon, required this.onPressed});
 
   @override
   Widget build(BuildContext context) {
@@ -117,10 +116,10 @@ class _TabButton extends StatelessWidget {
 }
 
 class _NavTabConfig {
+  const _NavTabConfig({required this.index, required this.label, required this.icon, required this.value});
+
   final int index;
   final String label;
   final IconData icon;
   final NavTabValue value;
-
-  const _NavTabConfig({required this.index, required this.label, required this.icon, required this.value});
 }

@@ -36,13 +36,24 @@ jobs:
 
       - name: Prepare production env file
         env:
-          WALLPICS_ENV: ${{ secrets.WALLPICS_ENV }}
+          PRISM_ENV: ${{ secrets.PRISM_ENV }}
         run: |
-          if [ -z "$WALLPICS_ENV" ]; then
-            echo "Missing WALLPICS_ENV secret with Prism dart-defines"
+          if [ -z "$PRISM_ENV" ]; then
+            echo "Missing PRISM_ENV secret with Prism dart-defines"
             exit 1
           fi
-          printf '%s\n' "$WALLPICS_ENV" | awk -F= '$1 != "GH_TOKEN" { print }' > .env
+          printf '%s\n' "$PRISM_ENV" | awk -F= '$1 !~ /^(GH_TOKEN|RC_API_KEY|RC_ANDROID_API_KEY|RC_IOS_API_KEY|PEXELS_API_KEY|AI_CLIENT_TOKEN)$/ { print }' > .env
+          if ! grep -q '^PRISM_CATALOG_BASE_URL=' .env; then
+            API_BASE="$(awk -F= '$1 == "USER_STORE_API_BASE_URL" { sub(/^[^=]*=/, ""); print }' .env | tail -n 1)"
+            if [ -n "$API_BASE" ]; then
+              API_BASE="${API_BASE%/}"
+              printf '%s\n' "PRISM_CATALOG_BASE_URL=$API_BASE/v1/catalog" >> .env
+            fi
+          fi
+          if ! grep -q '^PRISM_CATALOG_BASE_URL=' .env; then
+            echo "Missing PRISM_CATALOG_BASE_URL or USER_STORE_API_BASE_URL in PRISM_ENV"
+            exit 1
+          fi
 
       - name: Install CocoaPods
         run: sudo gem install cocoapods --no-document
@@ -76,7 +87,7 @@ jobs:
             -scheme Runner \
             -configuration Release \
             -destination 'generic/platform=iOS' \
-            -archivePath build/WallPics.xcarchive \
+            -archivePath build/Prism.xcarchive \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
             CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
             CODE_SIGNING_ALLOWED=NO \
@@ -96,7 +107,7 @@ jobs:
           /usr/libexec/PlistBuddy -c "Add :teamID string $APPLE_TEAM_ID" build/ExportOptions.generated.plist
           xcodebuild \
             -exportArchive \
-            -archivePath build/WallPics.xcarchive \
+            -archivePath build/Prism.xcarchive \
             -exportOptionsPlist build/ExportOptions.generated.plist \
             -exportPath build/export \
             -allowProvisioningUpdates \

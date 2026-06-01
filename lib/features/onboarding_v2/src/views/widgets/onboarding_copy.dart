@@ -9,7 +9,12 @@ class OnboardingHeadline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(text, style: OnboardingTypography.headline, textAlign: center ? TextAlign.center : TextAlign.left);
+    return Text(
+      text,
+      style: OnboardingTypography.headline,
+      textAlign: center ? TextAlign.center : TextAlign.left,
+      textScaler: TextScaler.noScaling,
+    );
   }
 }
 
@@ -21,7 +26,12 @@ class OnboardingBodyText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(text, style: OnboardingTypography.body, textAlign: center ? TextAlign.center : TextAlign.left);
+    return Text(
+      text,
+      style: OnboardingTypography.body,
+      textAlign: center ? TextAlign.center : TextAlign.left,
+      textScaler: TextScaler.noScaling,
+    );
   }
 }
 

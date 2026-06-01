@@ -1,14 +1,5 @@
-import 'dart:math' as math;
-
-import 'package:Prism/core/di/injection.dart';
 import 'package:Prism/core/error/failure.dart';
-import 'package:Prism/core/persistence/data_sources/settings_local_data_source.dart';
-import 'package:Prism/core/personalization/personalized_interests_catalog.dart';
-import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:Prism/core/utils/status.dart';
-import 'package:Prism/features/ai_wallpaper/data/repositories/ai_generation_repository_impl.dart';
-import 'package:Prism/features/ai_wallpaper/domain/entities/ai_charge_mode.dart';
-import 'package:Prism/features/ai_wallpaper/domain/entities/ai_quality_tier.dart';
 import 'package:Prism/features/ai_wallpaper/domain/entities/ai_style_preset.dart';
 import 'package:Prism/features/category_feed/domain/repositories/category_feed_repository.dart';
 import 'package:Prism/features/onboarding_v2/src/data/repo/onboarding_v2_repo.dart';
@@ -16,11 +7,9 @@ import 'package:Prism/features/onboarding_v2/src/domain/usecases/complete_onboar
 import 'package:Prism/features/onboarding_v2/src/domain/usecases/fetch_starter_pack_usecase.dart';
 import 'package:Prism/features/onboarding_v2/src/domain/usecases/follow_starter_pack_usecase.dart';
 import 'package:Prism/features/onboarding_v2/src/domain/usecases/save_interests_usecase.dart';
-import 'package:Prism/features/onboarding_v2/src/services/first_wallpaper_service.dart';
 import 'package:Prism/features/onboarding_v2/src/utils/onboarding_v2_config.dart';
 import 'package:Prism/features/onboarding_v2/src/views/viewmodels/onboarding_creator_vm.j.dart';
 import 'package:Prism/features/onboarding_v2/src/views/viewmodels/onboarding_wallpaper_vm.j.dart';
-import 'package:Prism/logger/logger.dart';
 import 'package:bloc/bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:injectable/injectable.dart';
@@ -32,13 +21,13 @@ part 'onboarding_v2_state.dart';
 @injectable
 class OnboardingV2Bloc extends Bloc<OnboardingV2Event, OnboardingV2State> {
   OnboardingV2Bloc(
-    FetchStarterPackUseCase _fetchStarterPackUseCase,
-    this._saveInterestsUseCase,
-    FollowStarterPackUseCase _followStarterPackUseCase,
+    FetchStarterPackUseCase _,
+    SaveInterestsUseCase __,
+    FollowStarterPackUseCase ___,
     this._completeOnboardingUseCase,
-    this._firstWallpaperService,
-    this._categoryFeedRepository,
-    this._onboardingRepository,
+    Object? ____,
+    CategoryFeedRepository _____,
+    OnboardingV2Repository ______,
   ) : super(OnboardingV2State.initial()) {
     on<_Started>(_onStarted);
     on<_AuthCompleted>(_onAuthCompleted);
@@ -57,106 +46,15 @@ class OnboardingV2Bloc extends Bloc<OnboardingV2Event, OnboardingV2State> {
     on<_AiGenerationStepContinued>(_onAiGenerationStepContinued);
   }
 
-  final SaveInterestsUseCase _saveInterestsUseCase;
   final CompleteOnboardingV2UseCase _completeOnboardingUseCase;
-  final FirstWallpaperService _firstWallpaperService;
-  final CategoryFeedRepository _categoryFeedRepository;
-  final OnboardingV2Repository _onboardingRepository;
-
-  // Instantiated directly — same pattern as AiWallpaperTabPage.
-  final AiGenerationRepositoryImpl _aiRepository = AiGenerationRepositoryImpl();
-
-  final math.Random _random = math.Random();
-
-  DateTime? _f3EnteredAt;
 
   Future<void> _onStarted(_Started event, Emitter<OnboardingV2State> emit) async {
-    emit(state.copyWith(loadStatus: LoadStatus.loading, failure: null, navRequest: null));
-    final settingsLocal = getIt<SettingsLocalDataSource>();
-    final catalog = await PersonalizedInterestsCatalog.load(
-      settingsLocal: settingsLocal,
-    );
-    List<String> availableCategories = catalog.map((e) => e.name).toList(growable: false);
-    Map<String, String> categoryImages = <String, String>{for (final entry in catalog) entry.name: entry.imageUrl};
-    if (availableCategories.isEmpty) {
-      final categoriesResult = await _categoryFeedRepository.getCategories();
-      categoriesResult.fold(
-        onSuccess: (cats) {
-          final filtered = cats.where((c) => c.name != OnboardingV2Config.excludedCategory).toList(growable: false);
-          availableCategories = filtered.map((c) => c.name).toList(growable: false);
-          categoryImages = <String, String>{for (final entry in filtered) entry.name: entry.image};
-        },
-        onFailure: (_) {},
-      );
-    }
-
-    const List<OnboardingCreatorVm> creatorVms = <OnboardingCreatorVm>[];
-    const List<String> autoSelectedEmails = <String>[];
-
-    final wallpaperVm = await _firstWallpaperService.recommendForOnboarding(<String>[]);
-
-    emit(
-      state.copyWith(
-        loadStatus: LoadStatus.success,
-        interestsData: state.interestsData.copyWith(available: availableCategories, categoryImages: categoryImages),
-        starterPackData: OnboardingStarterPackData(creators: creatorVms, selectedEmails: autoSelectedEmails),
-        wallpaperData: OnboardingWallpaperData(wallpaper: wallpaperVm, status: FirstWallpaperStatus.idle),
-      ),
-    );
+    emit(state.copyWith(loadStatus: LoadStatus.success, failure: null, navRequest: null));
   }
 
   Future<void> _onAuthCompleted(_AuthCompleted event, Emitter<OnboardingV2State> emit) async {
-    emit(state.copyWith(isAuthLoading: true, navRequest: null));
-
-    final userId = app_state.prismUser.id;
-    bool skipInterests = false;
-    bool skipStarterPack = false;
-
-    if (!OnboardingV2Config.debugForceOnboarding && userId.isNotEmpty) {
-      final statusResult = await _onboardingRepository.fetchUserCompletionStatus(userId: userId);
-      statusResult.fold(
-        onSuccess: (status) {
-          skipInterests = status.hasInterests;
-          skipStarterPack = status.hasFollows;
-        },
-        onFailure: (_) {
-          // Fall back to showing all steps on error
-        },
-      );
-    }
-
-    final isPremium = app_state.prismUser.premium;
-
-    if (skipInterests && skipStarterPack) {
-      // All active onboarding steps are already done; go to paywall or finish.
-      emit(state.copyWith(isAuthLoading: false, skipInterests: true, skipStarterPack: true, navRequest: null));
-      if (isPremium) {
-        await _finishOnboarding(emit, didPurchase: true);
-      } else {
-        emit(state.copyWith(navRequest: OnboardingV2NavRequest.openPaywall));
-      }
-    } else if (skipInterests) {
-      emit(
-        state.copyWith(
-          isAuthLoading: false,
-          step: OnboardingV2Step.aiGenerate,
-          skipInterests: true,
-          skipStarterPack: true,
-          aiData: _pickRandomAiPrompt(const <String>[]),
-          navRequest: null,
-        ),
-      );
-    } else {
-      emit(
-        state.copyWith(
-          isAuthLoading: false,
-          step: OnboardingV2Step.interests,
-          skipInterests: false,
-          skipStarterPack: true,
-          navRequest: null,
-        ),
-      );
-    }
+    emit(state.copyWith(isAuthLoading: false, navRequest: null));
+    await _finishOnboarding(emit, didPurchase: false);
   }
 
   void _onAuthLoadingChanged(_AuthLoadingChanged event, Emitter<OnboardingV2State> emit) {
@@ -172,34 +70,7 @@ class OnboardingV2Bloc extends Bloc<OnboardingV2Event, OnboardingV2State> {
   }
 
   Future<void> _onInterestsConfirmed(_InterestsConfirmed event, Emitter<OnboardingV2State> emit) async {
-    if (!state.interestsData.canContinue) {
-      return;
-    }
-    emit(state.copyWith(actionStatus: ActionStatus.inProgress, failure: null, navRequest: null));
-
-    final selectedInterests = state.interestsData.selected;
-    final result = await _saveInterestsUseCase(SaveInterestsParams(interests: selectedInterests));
-
-    if (result.isFailure) {
-      emit(state.copyWith(actionStatus: ActionStatus.failure, failure: result.failure));
-      return;
-    }
-
-    final refreshedWallpaper = await _firstWallpaperService.recommendForOnboarding(selectedInterests);
-    final aiData = _pickRandomAiPrompt(selectedInterests);
-
-    emit(
-      state.copyWith(
-        actionStatus: ActionStatus.success,
-        step: OnboardingV2Step.aiGenerate,
-        skipStarterPack: true,
-        aiData: aiData,
-        wallpaperData: OnboardingWallpaperData(
-          wallpaper: refreshedWallpaper ?? state.wallpaperData.wallpaper,
-          status: FirstWallpaperStatus.idle,
-        ),
-      ),
-    );
+    await _finishOnboarding(emit, didPurchase: false);
   }
 
   void _onCreatorFollowToggled(_CreatorFollowToggled event, Emitter<OnboardingV2State> emit) {
@@ -221,42 +92,14 @@ class OnboardingV2Bloc extends Bloc<OnboardingV2Event, OnboardingV2State> {
   }
 
   Future<void> _onStarterPackConfirmed(_StarterPackConfirmed event, Emitter<OnboardingV2State> emit) async {
-    final aiData = _pickRandomAiPrompt(state.interestsData.selected);
-    emit(
-      state.copyWith(
-        actionStatus: ActionStatus.success,
-        step: OnboardingV2Step.aiGenerate,
-        skipStarterPack: true,
-        aiData: aiData,
-        navRequest: null,
-      ),
-    );
+    await _finishOnboarding(emit, didPurchase: false);
   }
 
   Future<void> _onFirstWallpaperActionRequested(
     _FirstWallpaperActionRequested event,
     Emitter<OnboardingV2State> emit,
   ) async {
-    final wallpaperVm = state.wallpaperData.wallpaper;
-    if (wallpaperVm == null) {
-      add(const OnboardingV2Event.firstWallpaperStepContinued());
-      return;
-    }
-
-    emit(
-      state.copyWith(
-        navRequest: null,
-        wallpaperData: state.wallpaperData.copyWith(status: FirstWallpaperStatus.loading),
-      ),
-    );
-
-    final startMs = DateTime.now().millisecondsSinceEpoch;
-    final success = await _firstWallpaperService.performAction(wallpaperVm.fullUrl);
-    final elapsedMs = DateTime.now().millisecondsSinceEpoch - startMs;
-
-    if (!isClosed) {
-      add(OnboardingV2Event.firstWallpaperActionCompleted(success: success, elapsedMs: elapsedMs));
-    }
+    await _finishOnboarding(emit, didPurchase: false);
   }
 
   void _onFirstWallpaperActionCompleted(_FirstWallpaperActionCompleted event, Emitter<OnboardingV2State> emit) {
@@ -274,11 +117,7 @@ class OnboardingV2Bloc extends Bloc<OnboardingV2Event, OnboardingV2State> {
     _FirstWallpaperStepContinued event,
     Emitter<OnboardingV2State> emit,
   ) async {
-    if (app_state.prismUser.premium) {
-      await _finishOnboarding(emit, didPurchase: true);
-    } else {
-      emit(state.copyWith(navRequest: OnboardingV2NavRequest.openPaywall));
-    }
+    await _finishOnboarding(emit, didPurchase: false);
   }
 
   Future<void> _onPaywallResultReceived(_PaywallResultReceived event, Emitter<OnboardingV2State> emit) async {
@@ -287,11 +126,8 @@ class OnboardingV2Bloc extends Bloc<OnboardingV2Event, OnboardingV2State> {
 
   Future<void> _finishOnboarding(Emitter<OnboardingV2State> emit, {required bool didPurchase}) async {
     emit(state.copyWith(actionStatus: ActionStatus.inProgress, failure: null, navRequest: null));
-    final totalMs = _f3EnteredAt != null
-        ? DateTime.now().millisecondsSinceEpoch - _f3EnteredAt!.millisecondsSinceEpoch
-        : 0;
     final result = await _completeOnboardingUseCase(
-      CompleteOnboardingParams(didPurchase: didPurchase, totalElapsedMs: totalMs),
+      CompleteOnboardingParams(didPurchase: didPurchase, totalElapsedMs: 0),
     );
     result.fold(
       onSuccess: (_) => emit(
@@ -318,90 +154,17 @@ class OnboardingV2Bloc extends Bloc<OnboardingV2Event, OnboardingV2State> {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // AI generation step handlers
-  // ---------------------------------------------------------------------------
-
+  // AI generation is intentionally disabled in onboarding. Login completion now finishes onboarding.
   Future<void> _onAiGenerationRequested(_AiGenerationRequested event, Emitter<OnboardingV2State> emit) async {
-    emit(state.copyWith(aiData: state.aiData.copyWith(status: AiGenerateStatus.loading), navRequest: null));
-
-    try {
-      final record = await _aiRepository.generate(
-        prompt: state.aiData.prompt,
-        stylePreset: state.aiData.stylePreset,
-        qualityTier: AiQualityTier.fast,
-        targetSize: event.targetSize,
-        chargeMode: AiChargeMode.freeTrial,
-        coinsSpent: 0,
-      );
-      if (!isClosed) {
-        add(
-          OnboardingV2Event.aiGenerationCompleted(imageUrl: record.imageUrl, thumbnailUrl: record.watermarkedImageUrl),
-        );
-      }
-    } catch (e) {
-      logger.e('AI onboarding generation failed: $e', tag: 'OnboardingV2Bloc');
-      if (!isClosed) {
-        add(const OnboardingV2Event.aiGenerationCompleted(imageUrl: null, thumbnailUrl: null));
-      }
-    }
+    await _finishOnboarding(emit, didPurchase: false);
   }
 
   void _onAiGenerationCompleted(_AiGenerationCompleted event, Emitter<OnboardingV2State> emit) {
-    final succeeded = event.imageUrl != null && event.imageUrl!.isNotEmpty;
-    final updatedAiData = state.aiData.copyWith(
-      status: succeeded ? AiGenerateStatus.success : AiGenerateStatus.failure,
-      imageUrl: event.imageUrl,
-      thumbnailUrl: event.thumbnailUrl,
-    );
-
-    if (succeeded) {
-      // Pre-populate wallpaperData with the generated image so F4 displays it.
-      final generatedVm = OnboardingWallpaperVm(
-        fullUrl: event.imageUrl!,
-        thumbnailUrl: event.thumbnailUrl ?? event.imageUrl!,
-        title: 'Your AI wallpaper',
-        authorName: 'AI',
-        sourceCategory: state.aiData.stylePreset.label,
-      );
-      emit(
-        state.copyWith(
-          aiData: updatedAiData,
-          wallpaperData: OnboardingWallpaperData(wallpaper: generatedVm, status: FirstWallpaperStatus.idle),
-        ),
-      );
-    } else {
-      emit(state.copyWith(aiData: updatedAiData));
-    }
+    emit(state.copyWith(aiData: state.aiData.copyWith(status: AiGenerateStatus.failure)));
   }
 
   Future<void> _onAiGenerationStepContinued(_AiGenerationStepContinued event, Emitter<OnboardingV2State> emit) async {
-    _f3EnteredAt = DateTime.now();
-    emit(state.copyWith(step: OnboardingV2Step.firstWallpaper, navRequest: null));
+    await _finishOnboarding(emit, didPurchase: false);
   }
 
-  /// Picks a style and prompt based on the user's selected interest categories.
-  /// Falls back to a random style from the curated pool if no keyword matches.
-  OnboardingAiData _pickRandomAiPrompt(List<String> selectedInterests) {
-    AiStylePreset? matchedStyle;
-
-    outer:
-    for (final interest in selectedInterests) {
-      final lower = interest.toLowerCase();
-      for (final entry in OnboardingV2Config.aiInterestStyleMap.entries) {
-        if (lower.contains(entry.key) || entry.key.contains(lower)) {
-          // Only match single-character keys if they are an exact full match.
-          if (entry.key.length == 1 && lower != entry.key) continue;
-          matchedStyle = entry.value;
-          break outer;
-        }
-      }
-    }
-
-    const styles = OnboardingV2Config.aiOnboardingStyles;
-    final style = matchedStyle ?? styles[_random.nextInt(styles.length)];
-    final prompts = OnboardingV2Config.aiOnboardingPromptPool[style] ?? <String>[];
-    final prompt = prompts.isNotEmpty ? prompts[_random.nextInt(prompts.length)] : 'a beautiful wallpaper';
-    return OnboardingAiData(prompt: prompt, stylePreset: style, status: AiGenerateStatus.idle);
-  }
 }

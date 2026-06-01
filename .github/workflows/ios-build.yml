@@ -51,13 +51,13 @@ jobs:
           DART_DEFINES="$DART_DEFINES --dart-define=SIDELOAD_BUILD=true"
           flutter build ios --release --no-codesign --no-pub $DART_DEFINES
 
-      - name: Verify Wall Pics app bundle
+      - name: Verify Prism app bundle
         run: |
           APP_PATH="build/ios/iphoneos/Runner.app"
           test -d "$APP_PATH"
           DISPLAY_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP_PATH/Info.plist")"
           BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
-          if [ "$DISPLAY_NAME" != "Wall Pics" ]; then
+          if [ "$DISPLAY_NAME" != "Prism" ]; then
             echo "Unexpected display name: $DISPLAY_NAME"
             exit 1
           fi

@@ -30,11 +30,11 @@ class CopyrightPopUp extends StatelessWidget {
             setup == true
                 ? openPrismLink(
                     context,
-                    "https://github.com/NightVibes33/wall-pics-ios/issues/new?title=Report%20setup&body=Link:%20$shortlink%0A%0ADescribe%20the%20issue%20below:",
+                    "https://github.com/NightVibes33/prism-ios/issues/new?title=Report%20setup&body=Link:%20$shortlink%0A%0ADescribe%20the%20issue%20below:",
                   )
                 : openPrismLink(
                     context,
-                    "https://github.com/NightVibes33/wall-pics-ios/issues/new?title=Report%20wallpaper&body=Link:%20$shortlink%0A%0ADescribe%20the%20issue%20below:",
+                    "https://github.com/NightVibes33/prism-ios/issues/new?title=Report%20wallpaper&body=Link:%20$shortlink%0A%0ADescribe%20the%20issue%20below:",
                   );
           },
           child: Text(

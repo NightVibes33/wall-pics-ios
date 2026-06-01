@@ -7,7 +7,6 @@ import 'package:Prism/auth/transactionModel.dart';
 import 'package:Prism/auth/userModel.dart';
 import 'package:Prism/core/error/failure.dart';
 import 'package:Prism/core/persistence/data_sources/session_local_data_source.dart';
-import 'package:Prism/core/purchases/purchases_service.dart';
 import 'package:Prism/core/state/auth_runtime.dart';
 import 'package:Prism/core/utils/result.dart';
 import 'package:Prism/features/session/domain/entities/badge_entity.dart';
@@ -155,15 +154,8 @@ class SessionRepositoryImpl implements SessionRepository {
 
   @override
   Future<Result<SessionEntity>> refreshPremium() async {
-    try {
-      if (_currentUser.loggedIn) {
-        await PurchasesService.instance.checkAndPersistPremium();
-      }
-      _syncFromPrefs();
-      return Result.success(_toEntity());
-    } catch (error) {
-      return Result.error(ServerFailure('Unable to refresh premium: $error'));
-    }
+    _syncFromPrefs();
+    return Result.success(_toEntity());
   }
 
   @override

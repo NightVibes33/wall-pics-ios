@@ -65,7 +65,7 @@ class PrismList extends StatelessWidget {
         ListTile(
           leading: const Icon(JamIcons.share_alt),
           title: Text(
-            "Share Wall Pics!",
+            "Share Prism!",
             style: TextStyle(
               color: Theme.of(context).colorScheme.secondary,
               fontWeight: FontWeight.w500,
@@ -92,11 +92,11 @@ class PrismList extends StatelessWidget {
               fontFamily: "Proxima Nova",
             ),
           ),
-          subtitle: const Text("Read Wall Pics' Privacy Policy.", style: TextStyle(fontSize: 12)),
+          subtitle: const Text("Read Prism' Privacy Policy.", style: TextStyle(fontSize: 12)),
           onTap: () async {
             _trackAction(AnalyticsActionValue.actionChipTapped, sourceContext: 'profile_prism_list_privacy');
             final bool launched = await launchUrl(
-              Uri.parse("https://github.com/NightVibes33/wall-pics-ios/blob/main/PRIVACY.md"),
+              Uri.parse("https://github.com/NightVibes33/prism-ios/blob/main/PRIVACY.md"),
             );
             _trackExternalLink(
               LinkDestinationValue.github,

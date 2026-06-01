@@ -144,8 +144,8 @@ Future<String> createDynamicLink(String id, WallpaperSource source, String? url,
         'thumb': thumbUrl,
       },
       preview: <String, dynamic>{
-        'title': '$id - Wall Pics',
-        'description': 'Check out this wallpaper from Wall Pics.',
+        'title': '$id - Prism',
+        'description': 'Check out this wallpaper from Prism.',
         'image_source_url': thumbUrl,
         'provider': source.legacyProviderString,
         'wall_id': id,
@@ -184,7 +184,7 @@ Future<void> createUserDynamicLink(
       payload: <String, dynamic>{'username': userIdentifier},
       preview: <String, dynamic>{
         'title': '$name (@$userIdentifier)',
-        'description': bio.isNotEmpty ? bio : 'Check out this creator profile on Wall Pics.',
+        'description': bio.isNotEmpty ? bio : 'Check out this creator profile on Prism.',
         'image_source_url': userPhoto,
         'username': userIdentifier,
       },
@@ -194,7 +194,7 @@ Future<void> createUserDynamicLink(
     if (context != null && !context.mounted) {
       return;
     }
-    await ShareService.shareText(text: 'Hey check out my profile on Wall Pics ➜ $link', context: context);
+    await ShareService.shareText(text: 'Hey check out my profile on Prism ➜ $link', context: context);
     _trackDynamicLinkCreateResult(shareType: ShareTypeValue.user, result: EventResultValue.success);
   } catch (error, stackTrace) {
     logger.e('Failed to create user dynamic link.', error: error, stackTrace: stackTrace);
@@ -215,8 +215,8 @@ Future<void> createSetupDynamicLink(String index, String name, String thumbUrl, 
       canonicalUri: canonical,
       payload: <String, dynamic>{'index': index, 'name': name, 'thumbUrl': thumbUrl},
       preview: <String, dynamic>{
-        'title': '$name - Wall Pics',
-        'description': 'Check out this setup shared from Wall Pics.',
+        'title': '$name - Prism',
+        'description': 'Check out this setup shared from Prism.',
         'image_source_url': thumbUrl,
         'setup_name': name,
       },
@@ -247,8 +247,8 @@ Future<String> createSharingPrismLink(String userID) async {
       canonicalUri: canonical,
       payload: <String, dynamic>{'userID': userID},
       preview: <String, dynamic>{
-        'title': 'Join Wall Pics',
-        'description': 'Download Wall Pics to discover wallpapers and setups.',
+        'title': 'Join Prism',
+        'description': 'Download Prism to discover wallpapers and setups.',
       },
     );
 
@@ -285,8 +285,8 @@ Future<String> createCopyrightLink(
     canonical = _canonicalLinkBuilder.setup(index: index!, name: name!, thumbUrl: thumbUrl!);
     payload = <String, dynamic>{'index': index, 'name': name, 'thumbUrl': thumbUrl};
     preview = <String, dynamic>{
-      'title': '$name - Wall Pics',
-      'description': 'Check out this setup shared from Wall Pics.',
+      'title': '$name - Prism',
+      'description': 'Check out this setup shared from Prism.',
       'image_source_url': thumbUrl,
       'setup_name': name,
     };
@@ -303,8 +303,8 @@ Future<String> createCopyrightLink(
       'thumb': thumbUrl,
     };
     preview = <String, dynamic>{
-      'title': '$id - Wall Pics',
-      'description': 'Check out this wallpaper from Wall Pics.',
+      'title': '$id - Prism',
+      'description': 'Check out this wallpaper from Prism.',
       'image_source_url': thumbUrl,
       'provider': resolvedSource.legacyProviderString,
       'wall_id': id,

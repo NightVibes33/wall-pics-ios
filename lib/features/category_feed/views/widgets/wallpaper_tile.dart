@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:Prism/analytics/analytics_service.dart';
 import 'package:Prism/core/analytics/events/events.dart';
 import 'package:Prism/core/router/app_router.dart';
-import 'package:Prism/core/wallpaper/wallpaper_source.dart';
 import 'package:Prism/features/category_feed/domain/entities/feed_item_entity.dart';
 import 'package:Prism/features/palette/domain/entities/wallpaper_detail_entity.dart';
 import 'package:auto_route/auto_route.dart';
@@ -20,17 +19,9 @@ class WallpaperTile extends StatelessWidget {
   /// When null, uses the app's standard grid (3 columns portrait, 5 landscape).
   final int? crossAxisCount;
 
-  AnalyticsSurfaceValue get _surface => switch (item.source) {
-    WallpaperSource.wallhaven => AnalyticsSurfaceValue.homeWallhavenGrid,
-    WallpaperSource.pexels => AnalyticsSurfaceValue.homePexelsGrid,
-    _ => AnalyticsSurfaceValue.homeWallpaperGrid,
-  };
+  AnalyticsSurfaceValue get _surface => AnalyticsSurfaceValue.homeWallpaperGrid;
 
-  String get _sourceContext => switch (item.source) {
-    WallpaperSource.wallhaven => 'home_wallhaven_grid_tile',
-    WallpaperSource.pexels => 'home_pexels_grid_tile',
-    _ => 'home_wallpaper_grid_tile',
-  };
+  String get _sourceContext => 'home_wallpaper_grid_tile';
 
   @override
   Widget build(BuildContext context) {

@@ -32,10 +32,23 @@ jobs:
 
       - name: Write optional app env
         env:
-          WALLPICS_ENV: ${{ secrets.WALLPICS_ENV }}
+          PRISM_ENV: ${{ secrets.PRISM_ENV }}
         run: |
-          if [ -n "$WALLPICS_ENV" ]; then
-            printf '%s\n' "$WALLPICS_ENV" | awk -F= '$1 != "GH_TOKEN" { print }' > .env
+          if [ -n "$PRISM_ENV" ]; then
+            printf '%s\n' "$PRISM_ENV" | awk -F= '$1 !~ /^(GH_TOKEN|RC_API_KEY|RC_ANDROID_API_KEY|RC_IOS_API_KEY|PEXELS_API_KEY|AI_CLIENT_TOKEN)$/ { print }' > .env
+          else
+            : > .env
+          fi
+          if ! grep -q '^PRISM_CATALOG_BASE_URL=' .env; then
+            API_BASE="$(awk -F= '$1 == "USER_STORE_API_BASE_URL" { sub(/^[^=]*=/, ""); print }' .env | tail -n 1)"
+            if [ -n "$API_BASE" ]; then
+              API_BASE="${API_BASE%/}"
+              printf '%s\n' "PRISM_CATALOG_BASE_URL=$API_BASE/v1/catalog" >> .env
+            fi
+          fi
+          if ! grep -q '^PRISM_CATALOG_BASE_URL=' .env; then
+            echo "Missing PRISM_CATALOG_BASE_URL or USER_STORE_API_BASE_URL in PRISM_ENV"
+            exit 1
           fi
 
       - name: Flutter pub get
@@ -66,7 +79,7 @@ jobs:
           fi
 
           DISPLAY_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP_PATH/Info.plist")"
-          if [ "$DISPLAY_NAME" != "Wall Pics" ]; then
+          if [ "$DISPLAY_NAME" != "Prism" ]; then
             echo "Unexpected display name: $DISPLAY_NAME"
             exit 1
           fi
@@ -97,21 +110,21 @@ jobs:
           echo "Framework signature count:"
           find "$APP_PATH/Frameworks" -maxdepth 2 -name '_CodeSignature' -print 2>/dev/null | wc -l
 
-          rm -rf build/unsigned build/WallPics-unsigned.ipa
+          rm -rf build/unsigned build/Prism-unsigned.ipa
           mkdir -p build/unsigned/Payload
           cp -R "$APP_PATH" build/unsigned/Payload/
-          cp assets/icon/ios.png build/WallPics-icon.png
+          cp assets/icon/ios.png build/Prism-icon.png
           cd build/unsigned
-          /usr/bin/zip -qry ../WallPics-unsigned.ipa Payload
+          /usr/bin/zip -qry ../Prism-unsigned.ipa Payload
           cd ../..
-          ls -lh build/WallPics-unsigned.ipa build/WallPics-icon.png
-          shasum -a 256 build/WallPics-unsigned.ipa
+          ls -lh build/Prism-unsigned.ipa build/Prism-icon.png
+          shasum -a 256 build/Prism-unsigned.ipa
 
       - name: Upload unsigned IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: WallPics-unsigned-ipa
+          name: Prism-unsigned-ipa
           path: |
-            build/WallPics-unsigned.ipa
-            build/WallPics-icon.png
+            build/Prism-unsigned.ipa
+            build/Prism-icon.png
           retention-days: 14

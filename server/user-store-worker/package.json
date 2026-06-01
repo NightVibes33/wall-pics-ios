@@ -1,5 +1,5 @@
 {
-  "name": "wall-pics-user-store-worker",
+  "name": "prism-user-store-worker",
   "private": true,
   "type": "module",
   "scripts": {

@@ -1,4 +1,4 @@
-name = "wall-pics-user-store"
+name = "prism-user-store"
 main = "src/index.ts"
 compatibility_date = "2026-05-31"
 
@@ -14,3 +14,9 @@ CORS_ORIGIN = "*"
 # wrangler secret put SESSION_SECRET
 # wrangler secret put GOOGLE_CLIENT_ID
 # wrangler secret put APPLE_BUNDLE_ID
+# Optional private catalog repo settings:
+# wrangler secret put CATALOG_GITHUB_TOKEN
+# wrangler secret put CATALOG_GITHUB_OWNER
+# wrangler secret put CATALOG_GITHUB_REPO
+# wrangler secret put CATALOG_GITHUB_REF
+# wrangler secret put CATALOG_GITHUB_PATH

@@ -1,6 +1,6 @@
 # Direct clone verification
 
-Wall Pics is now staged as a direct upstream Prism Flutter app, not a SwiftUI-inspired rewrite.
+Prism is now staged as a direct upstream Prism Flutter app, not a SwiftUI-inspired rewrite.
 
 ## Source of truth
 
@@ -21,14 +21,14 @@ These paths are copied from Prism and should not be rewritten unless we are inte
 - `ios/Runner/Pigeon/`
 - `pigeons/`
 
-## Wall Pics deltas allowed before push
+## Prism deltas allowed before push
 
 Only these changes are expected in the direct clone candidate:
 
-- iOS display name: `Wall Pics`
+- iOS display name: `Prism`
 - Bundle ID: `com.nightvibes.prism`
 - Apple Team ID: `39A8Q3T3TR`
-- GitHub Actions rewritten for the existing Wall Pics App Store Connect secrets and `macos-26-intel`
+- GitHub Actions rewritten for the existing Prism App Store Connect secrets and `macos-26-intel`
 - `ExportOptions.plist` for App Store Connect export
 - This verification document
 

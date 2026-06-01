@@ -3,6 +3,12 @@ interface Env {
   GITHUB_OWNER: string;
   GITHUB_REPO: string;
   SESSION_SECRET: string;
+  CATALOG_GITHUB_TOKEN?: string;
+  CATALOG_GITHUB_OWNER?: string;
+  CATALOG_GITHUB_REPO?: string;
+  CATALOG_GITHUB_REF?: string;
+  CATALOG_GITHUB_PATH?: string;
+  CATALOG_CACHE_TTL_SECONDS?: string;
   GOOGLE_CLIENT_ID?: string;
   APPLE_BUNDLE_ID?: string;
   CORS_ORIGIN?: string;
@@ -33,6 +39,16 @@ export default {
     }
 
     try {
+
+      if (request.method === 'GET' && url.pathname === '/v1/catalog') {
+        return catalogResponse('prism_index.json', request, env);
+      }
+
+      const catalogMatch = url.pathname.match(/^\/v1\/catalog\/([A-Za-z0-9_.-]+\.json)$/);
+      if (catalogMatch && request.method === 'GET') {
+        return catalogResponse(catalogMatch[1], request, env);
+      }
+
       if (request.method === 'POST' && url.pathname === '/v1/users/sign-in') {
         return jsonResponse(await handleSignIn(request, env), env);
       }
@@ -57,6 +73,74 @@ export default {
     }
   },
 };
+
+
+async function catalogResponse(fileName: string, request: Request, env: Env): Promise<Response> {
+  const safeFileName = safeCatalogFileName(fileName);
+  const cacheKey = new Request(request.url, request);
+  const cached = await caches.default.match(cacheKey);
+  if (cached) {
+    return withCors(cached, env);
+  }
+
+  const response = await fetch(catalogRawUrl(safeFileName, env), { headers: catalogGithubHeaders(env) });
+  if (response.status === 404) {
+    return jsonResponse({ error: 'Catalog file not found' }, env, 404);
+  }
+  if (!response.ok) {
+    throw new Error(`Catalog read failed: ${response.status}`);
+  }
+
+  const ttl = Math.max(60, numberValue(env.CATALOG_CACHE_TTL_SECONDS || 900));
+  const catalog = new Response(response.body, {
+    status: 200,
+    headers: {
+      ...corsHeaders(env),
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': `public, max-age=${ttl}`,
+    },
+  });
+  await caches.default.put(cacheKey, catalog.clone());
+  return catalog;
+}
+
+function withCors(response: Response, env: Env): Response {
+  const headers = new Headers(response.headers);
+  for (const [key, value] of Object.entries(corsHeaders(env))) {
+    headers.set(key, value);
+  }
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
+function catalogRawUrl(fileName: string, env: Env): string {
+  const owner = stringValue(env.CATALOG_GITHUB_OWNER) || env.GITHUB_OWNER;
+  const repo = stringValue(env.CATALOG_GITHUB_REPO) || env.GITHUB_REPO;
+  const ref = stringValue(env.CATALOG_GITHUB_REF) || 'main';
+  const prefix = normalizePathPrefix(stringValue(env.CATALOG_GITHUB_PATH) || 'public/catalog');
+  const path = `${prefix}/${fileName}`;
+  return `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${path.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(ref)}`;
+}
+
+function catalogGithubHeaders(env: Env): HeadersInit {
+  return {
+    Accept: 'application/vnd.github.raw',
+    Authorization: `Bearer ${stringValue(env.CATALOG_GITHUB_TOKEN) || env.GITHUB_TOKEN}`,
+    'User-Agent': 'PrismCatalogWorker',
+    'X-GitHub-Api-Version': '2022-11-28',
+  };
+}
+
+function safeCatalogFileName(value: string): string {
+  const fileName = value.trim();
+  if (!/^prism_[A-Za-z0-9_]+\.json$/.test(fileName)) {
+    throw new Error('Invalid catalog file');
+  }
+  return fileName;
+}
+
+function normalizePathPrefix(value: string): string {
+  return value.split('/').map((part) => part.trim()).filter(Boolean).join('/');
+}
 
 async function handleSignIn(request: Request, env: Env): Promise<JsonMap> {
   requireEnv(env);
@@ -97,7 +181,7 @@ async function handleSignIn(request: Request, env: Env): Promise<JsonMap> {
     updatedAt: now,
   });
 
-  await writeGithubJson(path, user, existing?.sha, `Sync Wall Pics user ${userId}`, env);
+  await writeGithubJson(path, user, existing?.sha, `Sync Prism user ${userId}`, env);
   return { user, sessionToken: await signSession({ sub: userId, provider: identity.provider }, env) };
 }
 
@@ -122,7 +206,7 @@ async function handlePatchUser(encodedUserId: string, request: Request, env: Env
     throw new Error('User not found');
   }
   const user = normalizeUser({ ...existing.data, ...updates, id: userId, updatedAt: new Date().toISOString() });
-  await writeGithubJson(path, user, existing.sha, `Update Wall Pics user ${userId}`, env);
+  await writeGithubJson(path, user, existing.sha, `Update Prism user ${userId}`, env);
   return { user };
 }
 
@@ -138,7 +222,7 @@ async function handleLogout(encodedUserId: string, request: Request, env: Env): 
     path,
     normalizeUser({ ...existing.data, loggedIn: false, lastLogoutAt: new Date().toISOString(), updatedAt: new Date().toISOString() }),
     existing.sha,
-    `Mark Wall Pics user logged out ${userId}`,
+    `Mark Prism user logged out ${userId}`,
     env,
   );
   return { ok: true };
@@ -394,7 +478,7 @@ function githubHeaders(env: Env): HeadersInit {
   return {
     Accept: 'application/vnd.github+json',
     Authorization: `Bearer ${env.GITHUB_TOKEN}`,
-    'User-Agent': 'WallPicsUserStoreWorker',
+    'User-Agent': 'PrismUserStoreWorker',
     'X-GitHub-Api-Version': '2022-11-28',
   };
 }
