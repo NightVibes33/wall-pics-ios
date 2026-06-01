@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:Prism/core/constants/app_constants.dart';
 import 'package:Prism/core/persistence/data_sources/settings_local_data_source.dart';
 import 'package:Prism/core/wallpaper/wallpaper_source.dart';
-import 'package:firebase_remote_config/firebase_remote_config.dart';
 
 class PersonalizedInterest {
   const PersonalizedInterest({required this.name, required this.query, required this.imageUrl, required this.sources});
@@ -20,16 +19,8 @@ class PersonalizedInterestsCatalog {
   const PersonalizedInterestsCatalog._();
 
   static Future<List<PersonalizedInterest>> load({
-    required FirebaseRemoteConfig remoteConfig,
     required SettingsLocalDataSource settingsLocal,
   }) async {
-    final remoteRaw = remoteConfig.getString(personalizedInterestsRemoteConfigKey).trim();
-    final remote = _decode(remoteRaw);
-    if (remote.isNotEmpty) {
-      await settingsLocal.set(personalizedInterestsLocalCacheKey, remoteRaw);
-      return remote;
-    }
-
     final cachedRaw = settingsLocal.get<String>(personalizedInterestsLocalCacheKey, defaultValue: '').trim();
     final cached = _decode(cachedRaw);
     if (cached.isNotEmpty) {

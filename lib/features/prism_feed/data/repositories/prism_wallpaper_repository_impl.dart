@@ -1,7 +1,7 @@
 import 'package:Prism/core/error/failure.dart';
-import 'package:Prism/core/firestore/firestore_client.dart';
-import 'package:Prism/core/firestore/firestore_collections.dart';
-import 'package:Prism/core/firestore/firestore_query_specs.dart';
+import 'package:Prism/core/remote_store/remote_store_client.dart';
+import 'package:Prism/core/remote_store/remote_collections.dart';
+import 'package:Prism/core/remote_store/remote_store_query_specs.dart';
 import 'package:Prism/core/persistence/data_sources/feed_cache_local_data_source.dart';
 import 'package:Prism/core/user_blocks/blocked_creators_filter.dart';
 import 'package:Prism/core/utils/result.dart';
@@ -17,9 +17,9 @@ import 'package:injectable/injectable.dart';
 
 @LazySingleton(as: PrismWallpaperRepository)
 class PrismWallpaperRepositoryImpl implements PrismWallpaperRepository {
-  PrismWallpaperRepositoryImpl(this._firestoreClient, this._feedCacheLocal, this._userBlockRepository);
+  PrismWallpaperRepositoryImpl(this._remoteStoreClient, this._feedCacheLocal, this._userBlockRepository);
 
-  final FirestoreClient _firestoreClient;
+  final RemoteStoreClient _remoteStoreClient;
   final FeedCacheLocalDataSource _feedCacheLocal;
   final UserBlockRepository _userBlockRepository;
 
@@ -52,7 +52,7 @@ class PrismWallpaperRepositoryImpl implements PrismWallpaperRepository {
         return Result.success(localWalls);
       }
     } catch (error, stackTrace) {
-      logger.w('[PrismWallpaperRepository] Wallpics catalog unavailable; falling back to Firestore', error: error, stackTrace: stackTrace);
+      logger.w('[PrismWallpaperRepository] Wallpics catalog unavailable; falling back to RemoteStore', error: error, stackTrace: stackTrace);
     }
 
     try {
@@ -63,18 +63,18 @@ class PrismWallpaperRepositoryImpl implements PrismWallpaperRepository {
       bool hasMoreSourceRows = false;
 
       while (visibleWalls.length < _pageSize) {
-        final List<_PrismRow> batch = await _firestoreClient.query<_PrismRow>(
-          FirestoreQuerySpec(
-            collection: FirebaseCollections.walls,
+        final List<_PrismRow> batch = await _remoteStoreClient.query<_PrismRow>(
+          RemoteStoreQuerySpec(
+            collection: RemoteCollections.walls,
             sourceTag: 'PrismWallpaperRepository.fetchFeed',
-            filters: const <FirestoreFilter>[
-              FirestoreFilter(field: 'review', op: FirestoreFilterOp.isEqualTo, value: true),
+            filters: const <RemoteStoreFilter>[
+              RemoteStoreFilter(field: 'review', op: RemoteStoreFilterOp.isEqualTo, value: true),
             ],
-            orderBy: const <FirestoreOrderBy>[FirestoreOrderBy(field: 'createdAt', descending: true)],
+            orderBy: const <RemoteStoreOrderBy>[RemoteStoreOrderBy(field: 'createdAt', descending: true)],
             startAfterDocId: nextCursor,
             limit: _pageSize,
             dedupeWindowMs: 1000,
-            cachePolicy: refresh ? FirestoreCachePolicy.networkOnly : FirestoreCachePolicy.memoryFirst,
+            cachePolicy: refresh ? RemoteStoreCachePolicy.networkOnly : RemoteStoreCachePolicy.memoryFirst,
           ),
           (data, docId) => _PrismRow(docId: docId, doc: PrismWallDocDto.fromJson(data)),
         );
@@ -132,13 +132,13 @@ class PrismWallpaperRepositoryImpl implements PrismWallpaperRepository {
   @override
   Future<Result<List<PrismWallpaper>>> fetchStreakShopWallpapers() async {
     try {
-      final List<_PrismRow> rows = await _firestoreClient.query<_PrismRow>(
-        const FirestoreQuerySpec(
-          collection: FirebaseCollections.walls,
+      final List<_PrismRow> rows = await _remoteStoreClient.query<_PrismRow>(
+        const RemoteStoreQuerySpec(
+          collection: RemoteCollections.walls,
           sourceTag: 'PrismWallpaperRepository.fetchStreakShop',
-          filters: <FirestoreFilter>[
-            FirestoreFilter(field: 'review', op: FirestoreFilterOp.isEqualTo, value: true),
-            FirestoreFilter(field: 'isStreakExclusive', op: FirestoreFilterOp.isEqualTo, value: true),
+          filters: <RemoteStoreFilter>[
+            RemoteStoreFilter(field: 'review', op: RemoteStoreFilterOp.isEqualTo, value: true),
+            RemoteStoreFilter(field: 'isStreakExclusive', op: RemoteStoreFilterOp.isEqualTo, value: true),
           ],
           limit: 50,
           dedupeWindowMs: 1000,
@@ -174,17 +174,17 @@ class PrismWallpaperRepositoryImpl implements PrismWallpaperRepository {
         return Result.success(local);
       }
     } catch (error, stackTrace) {
-      logger.w('[PrismWallpaperRepository] Wallpics fetchById fallback to Firestore', error: error, stackTrace: stackTrace);
+      logger.w('[PrismWallpaperRepository] Wallpics fetchById fallback to RemoteStore', error: error, stackTrace: stackTrace);
     }
 
     try {
-      final List<_PrismRow> results = await _firestoreClient.query<_PrismRow>(
-        FirestoreQuerySpec(
-          collection: FirebaseCollections.walls,
+      final List<_PrismRow> results = await _remoteStoreClient.query<_PrismRow>(
+        RemoteStoreQuerySpec(
+          collection: RemoteCollections.walls,
           sourceTag: 'PrismWallpaperRepository.fetchById',
-          filters: <FirestoreFilter>[
-            FirestoreFilter(field: 'id', op: FirestoreFilterOp.isEqualTo, value: id),
-            const FirestoreFilter(field: 'review', op: FirestoreFilterOp.isEqualTo, value: true),
+          filters: <RemoteStoreFilter>[
+            RemoteStoreFilter(field: 'id', op: RemoteStoreFilterOp.isEqualTo, value: id),
+            const RemoteStoreFilter(field: 'review', op: RemoteStoreFilterOp.isEqualTo, value: true),
           ],
           limit: 1,
         ),
@@ -211,8 +211,8 @@ class PrismWallpaperRepositoryImpl implements PrismWallpaperRepository {
       return Result.success(null);
     }
     try {
-      final Map<String, dynamic>? data = await _firestoreClient.getById<Map<String, dynamic>>(
-        FirebaseCollections.walls,
+      final Map<String, dynamic>? data = await _remoteStoreClient.getById<Map<String, dynamic>>(
+        RemoteCollections.walls,
         documentId,
         (d, _) => d,
         sourceTag: 'PrismWallpaperRepository.fetchByDocumentId',

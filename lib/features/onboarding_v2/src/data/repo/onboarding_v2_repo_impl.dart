@@ -1,31 +1,29 @@
 import 'dart:convert';
 
 import 'package:Prism/core/error/failure.dart';
-import 'package:Prism/core/firestore/firestore_client.dart';
-import 'package:Prism/core/firestore/firestore_collections.dart';
-import 'package:Prism/core/firestore/firestore_query_specs.dart';
-import 'package:Prism/core/firestore/firestore_sentinels.dart';
+import 'package:Prism/core/remote_store/remote_store_client.dart';
+import 'package:Prism/core/remote_store/remote_collections.dart';
+import 'package:Prism/core/remote_store/remote_store_query_specs.dart';
+import 'package:Prism/core/remote_store/remote_store_sentinels.dart';
 import 'package:Prism/core/persistence/data_sources/settings_local_data_source.dart';
 import 'package:Prism/core/utils/result.dart';
 import 'package:Prism/features/onboarding_v2/src/common/onboarding_v2_keys.dart';
 import 'package:Prism/features/onboarding_v2/src/data/repo/onboarding_v2_repo.dart';
 import 'package:Prism/features/onboarding_v2/src/domain/entities/onboarding_starter_creator_entity.dart';
 import 'package:Prism/features/onboarding_v2/src/utils/onboarding_v2_config.dart';
-import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:injectable/injectable.dart';
 
 @LazySingleton(as: OnboardingV2Repository)
 class OnboardingV2RepositoryImpl implements OnboardingV2Repository {
-  OnboardingV2RepositoryImpl(this._remoteConfig, this._firestoreClient, this._settingsLocal);
+  OnboardingV2RepositoryImpl(this._remoteStoreClient, this._settingsLocal);
 
-  final FirebaseRemoteConfig _remoteConfig;
-  final FirestoreClient _firestoreClient;
+  final RemoteStoreClient _remoteStoreClient;
   final SettingsLocalDataSource _settingsLocal;
 
   @override
   Future<Result<List<OnboardingStarterCreatorEntity>>> fetchStarterPack() async {
     try {
-      final raw = _remoteConfig.getString(OnboardingV2Config.remoteConfigStarterPackKey);
+      final raw = _settingsLocal.get<String>(OnboardingV2Config.remoteConfigStarterPackKey, defaultValue: '');
       if (raw.isEmpty) {
         return Result.success(<OnboardingStarterCreatorEntity>[]);
       }
@@ -56,13 +54,13 @@ class OnboardingV2RepositoryImpl implements OnboardingV2Repository {
     }
   }
 
-  /// Fetches live profile data and the last 5 wallpapers for [entry] from Firestore.
+  /// Fetches live profile data and the last 5 wallpapers for [entry] from RemoteStore.
   /// Gracefully falls back to the original (empty) entry values on any error.
   Future<OnboardingStarterCreatorEntity> _enrichCreator(OnboardingStarterCreatorEntity entry) async {
-    final results = await Future.wait([_fetchUserProfile(entry.email), _fetchPreviewUrls(entry.email)]);
-
-    final profile = results[0] as _CreatorProfile?;
-    final previewUrls = (results[1]! as List<dynamic>).cast<String>();
+    final profileFuture = _fetchUserProfile(entry.email);
+    final previewUrlsFuture = _fetchPreviewUrls(entry.email);
+    final profile = await profileFuture;
+    final previewUrls = await previewUrlsFuture;
 
     return OnboardingStarterCreatorEntity(
       userId: profile?.userId ?? entry.userId,
@@ -78,13 +76,13 @@ class OnboardingV2RepositoryImpl implements OnboardingV2Repository {
 
   Future<_CreatorProfile?> _fetchUserProfile(String email) async {
     try {
-      final rows = await _firestoreClient.query<_CreatorProfile?>(
-        FirestoreQuerySpec(
-          collection: FirebaseCollections.usersV2,
+      final rows = await _remoteStoreClient.query<_CreatorProfile?>(
+        RemoteStoreQuerySpec(
+          collection: RemoteCollections.usersV2,
           sourceTag: 'onboarding_v2.fetch_creator_profile',
-          filters: [FirestoreFilter(field: 'email', op: FirestoreFilterOp.isEqualTo, value: email)],
+          filters: [RemoteStoreFilter(field: 'email', op: RemoteStoreFilterOp.isEqualTo, value: email)],
           limit: 1,
-          cachePolicy: FirestoreCachePolicy.staleWhileRevalidate,
+          cachePolicy: RemoteStoreCachePolicy.staleWhileRevalidate,
           dedupeWindowMs: 60000,
         ),
         (data, docId) {
@@ -104,17 +102,17 @@ class OnboardingV2RepositoryImpl implements OnboardingV2Repository {
 
   Future<List<String>> _fetchPreviewUrls(String email) async {
     try {
-      final rows = await _firestoreClient.query<String>(
-        FirestoreQuerySpec(
-          collection: FirebaseCollections.walls,
+      final rows = await _remoteStoreClient.query<String>(
+        RemoteStoreQuerySpec(
+          collection: RemoteCollections.walls,
           sourceTag: 'onboarding_v2.fetch_creator_walls',
           filters: [
-            FirestoreFilter(field: 'email', op: FirestoreFilterOp.isEqualTo, value: email),
-            const FirestoreFilter(field: 'review', op: FirestoreFilterOp.isEqualTo, value: true),
+            RemoteStoreFilter(field: 'email', op: RemoteStoreFilterOp.isEqualTo, value: email),
+            const RemoteStoreFilter(field: 'review', op: RemoteStoreFilterOp.isEqualTo, value: true),
           ],
-          orderBy: [const FirestoreOrderBy(field: 'createdAt', descending: true)],
+          orderBy: [const RemoteStoreOrderBy(field: 'createdAt', descending: true)],
           limit: 5,
-          cachePolicy: FirestoreCachePolicy.staleWhileRevalidate,
+          cachePolicy: RemoteStoreCachePolicy.staleWhileRevalidate,
           dedupeWindowMs: 60000,
         ),
         (data, _) {
@@ -132,7 +130,7 @@ class OnboardingV2RepositoryImpl implements OnboardingV2Repository {
   @override
   Future<Result<void>> saveInterests({required String userId, required List<String> interests}) async {
     try {
-      await _firestoreClient.updateDoc(FirebaseCollections.usersV2, userId, <String, dynamic>{
+      await _remoteStoreClient.updateDoc(RemoteCollections.usersV2, userId, <String, dynamic>{
         'interestCategories': interests,
         'onboardingV2.selectedInterests': interests,
       }, sourceTag: 'onboarding_v2.save_interests');
@@ -150,16 +148,16 @@ class OnboardingV2RepositoryImpl implements OnboardingV2Repository {
     required List<OnboardingStarterCreatorEntity> creators,
   }) async {
     try {
-      await _firestoreClient.runBatch((batch) async {
-        batch.updateDoc(FirebaseCollections.usersV2, currentUserId, <String, dynamic>{
-          'following': FirestoreSentinels.arrayUnion(creators.map((c) => c.email).toList()),
+      await _remoteStoreClient.runBatch((batch) async {
+        batch.updateDoc(RemoteCollections.usersV2, currentUserId, <String, dynamic>{
+          'following': RemoteStoreSentinels.arrayUnion(creators.map((c) => c.email).toList()),
         });
         for (final creator in creators) {
           if (creator.userId.isEmpty) {
             continue;
           }
-          batch.updateDoc(FirebaseCollections.usersV2, creator.userId, <String, dynamic>{
-            'followers': FirestoreSentinels.arrayUnion([currentUserEmail]),
+          batch.updateDoc(RemoteCollections.usersV2, creator.userId, <String, dynamic>{
+            'followers': RemoteStoreSentinels.arrayUnion([currentUserEmail]),
           });
         }
       }, sourceTag: 'onboarding_v2.follow_creators');
@@ -174,7 +172,7 @@ class OnboardingV2RepositoryImpl implements OnboardingV2Repository {
   @override
   Future<Result<OnboardingUserStatus>> fetchUserCompletionStatus({required String userId}) async {
     try {
-      final status = await _firestoreClient.getById<OnboardingUserStatus>(FirebaseCollections.usersV2, userId, (
+      final status = await _remoteStoreClient.getById<OnboardingUserStatus>(RemoteCollections.usersV2, userId, (
         data,
         _,
       ) {
@@ -197,7 +195,7 @@ class OnboardingV2RepositoryImpl implements OnboardingV2Repository {
   Future<Result<void>> completeOnboarding({required String userId}) async {
     try {
       final now = DateTime.now().toIso8601String();
-      await _firestoreClient.updateDoc(FirebaseCollections.usersV2, userId, <String, dynamic>{
+      await _remoteStoreClient.updateDoc(RemoteCollections.usersV2, userId, <String, dynamic>{
         'onboardingV2': <String, dynamic>{'completed': true, 'completedAt': now, 'version': 2},
       }, sourceTag: 'onboarding_v2.complete');
       await _settingsLocal.set(OnboardingV2Keys.onboardedNew, true);

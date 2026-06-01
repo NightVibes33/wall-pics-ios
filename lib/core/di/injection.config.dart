@@ -10,9 +10,6 @@
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'package:app_links/app_links.dart' as _i327;
-import 'package:cloud_firestore/cloud_firestore.dart' as _i974;
-import 'package:firebase_auth/firebase_auth.dart' as _i59;
-import 'package:firebase_remote_config/firebase_remote_config.dart' as _i627;
 import 'package:get_it/get_it.dart' as _i174;
 import 'package:http/http.dart' as _i519;
 import 'package:injectable/injectable.dart' as _i526;
@@ -20,10 +17,10 @@ import 'package:internet_connection_checker/internet_connection_checker.dart'
     as _i973;
 import 'package:quick_actions/quick_actions.dart' as _i578;
 
-import '../../data/content_reports/firebase_content_report_repository.dart'
+import '../../data/content_reports/local_content_report_repository.dart'
     as _i1058;
-import '../../data/user_blocks/firebase_user_block_repository.dart' as _i545;
-import '../../data/view_stats/firebase_view_stats_repository.dart' as _i818;
+import '../../data/user_blocks/local_user_block_repository.dart' as _i545;
+import '../../data/view_stats/noop_view_stats_repository.dart' as _i818;
 import '../../features/admin_review/biz/bloc/review_batch_bloc.dart' as _i711;
 import '../../features/admin_review/data/review_batch_repository.dart' as _i122;
 import '../../features/ads/biz/bloc/ads_bloc.j.dart' as _i567;
@@ -199,8 +196,7 @@ import '../../features/wallhaven_feed/domain/repositories/wallhaven_wallpaper_re
 import '../../features/wallpaper_detail/domain/usecases/wallpaper_views_usecase.dart'
     as _i231;
 import '../content_reports/content_report_repository.dart' as _i177;
-import '../firestore/firestore_client.dart' as _i349;
-import '../firestore/firestore_telemetry.dart' as _i393;
+import '../remote_store/remote_store_client.dart' as _i349;
 import '../network/connectivity_service.dart' as _i491;
 import '../persistence/data_sources/app_icons_local_data_source.dart' as _i1003;
 import '../persistence/data_sources/cache_maintenance_service.dart' as _i601;
@@ -222,13 +218,7 @@ _i174.GetIt initGetIt(
 }) {
   final gh = _i526.GetItHelper(getIt, environment, environmentFilter);
   final appModule = _$AppModule();
-  gh.lazySingleton<_i974.FirebaseFirestore>(() => appModule.firebaseFirestore);
-  gh.lazySingleton<_i393.FirestoreTelemetrySink>(
-    () => appModule.firestoreTelemetrySink,
-  );
-  gh.lazySingleton<_i59.FirebaseAuth>(() => appModule.firebaseAuth);
   gh.lazySingleton<_i327.AppLinks>(() => appModule.appLinks);
-  gh.lazySingleton<_i627.FirebaseRemoteConfig>(() => appModule.remoteConfig);
   gh.lazySingleton<_i973.InternetConnectionChecker>(
     () => appModule.internetConnectionChecker,
   );
@@ -254,7 +244,7 @@ _i174.GetIt initGetIt(
     () => _i1073.SettingsLocalDataSource(gh<_i496.LocalStore>()),
   );
   gh.lazySingleton<_i602.ViewStatsRepository>(
-    () => _i818.FirebaseViewStatsRepository(),
+    () => const _i818.NoopViewStatsRepository(),
   );
   gh.lazySingleton<_i1055.AdsRepository>(() => _i418.AdsRepositoryImpl());
   gh.lazySingleton<_i604.WallhavenWallpaperRepository>(
@@ -275,7 +265,7 @@ _i174.GetIt initGetIt(
         _i231.RecordPrismWallpaperViewsUsecase(gh<_i602.ViewStatsRepository>()),
   );
   gh.lazySingleton<_i177.ContentReportRepository>(
-    () => _i1058.FirebaseContentReportRepository(),
+    () => const _i1058.LocalContentReportRepository(),
   );
   gh.lazySingleton<_i1019.PaletteRepository>(
     () => _i401.PaletteRepositoryImpl(),
@@ -284,15 +274,10 @@ _i174.GetIt initGetIt(
     () => _i857.DeepLinkRepositoryImpl(gh<_i327.AppLinks>()),
     dispose: (i) => i.dispose(),
   );
-  gh.lazySingleton<_i349.FirestoreClient>(
-    () => appModule.firestoreClient(
-      gh<_i974.FirebaseFirestore>(),
-      gh<_i393.FirestoreTelemetrySink>(),
-    ),
-  );
+  gh.lazySingleton<_i349.RemoteStoreClient>(() => appModule.remoteStoreClient);
   gh.lazySingleton<_i643.FavouriteWallsRepository>(
     () => _i176.FavouriteWallsRepositoryImpl(
-      gh<_i349.FirestoreClient>(),
+      gh<_i349.RemoteStoreClient>(),
       gh<_i640.FavoritesLocalDataSource>(),
     ),
   );
@@ -341,7 +326,7 @@ _i174.GetIt initGetIt(
   );
   gh.lazySingleton<_i841.FavouriteSetupsRepository>(
     () => _i934.FavouriteSetupsRepositoryImpl(
-      gh<_i349.FirestoreClient>(),
+      gh<_i349.RemoteStoreClient>(),
       gh<_i640.FavoritesLocalDataSource>(),
     ),
   );
@@ -380,10 +365,10 @@ _i174.GetIt initGetIt(
     () => _i663.ObserveDeepLinkActionsUseCase(gh<_i226.DeepLinkRepository>()),
   );
   gh.lazySingleton<_i204.UserSearchRepository>(
-    () => _i352.UserSearchRepositoryImpl(gh<_i349.FirestoreClient>()),
+    () => _i352.UserSearchRepositoryImpl(gh<_i349.RemoteStoreClient>()),
   );
   gh.lazySingleton<_i112.UserBlockRepository>(
-    () => _i545.FirebaseUserBlockRepository(gh<_i738.SessionRepository>()),
+    () => _i545.LocalUserBlockRepository(gh<_i738.SessionRepository>()),
   );
   gh.lazySingleton<_i986.GetSessionUseCase>(
     () => _i986.GetSessionUseCase(gh<_i738.SessionRepository>()),
@@ -396,8 +381,7 @@ _i174.GetIt initGetIt(
   );
   gh.lazySingleton<_i897.OnboardingV2Repository>(
     () => _i794.OnboardingV2RepositoryImpl(
-      gh<_i627.FirebaseRemoteConfig>(),
-      gh<_i349.FirestoreClient>(),
+      gh<_i349.RemoteStoreClient>(),
       gh<_i1073.SettingsLocalDataSource>(),
     ),
   );
@@ -422,7 +406,7 @@ _i174.GetIt initGetIt(
     ),
   );
   gh.lazySingleton<_i122.ReviewBatchRepository>(
-    () => _i122.ReviewBatchRepository(gh<_i349.FirestoreClient>()),
+    () => _i122.ReviewBatchRepository(gh<_i349.RemoteStoreClient>()),
   );
   gh.lazySingleton<_i474.FetchNotificationsUseCase>(
     () => _i474.FetchNotificationsUseCase(gh<_i366.NotificationsRepository>()),
@@ -513,20 +497,20 @@ _i174.GetIt initGetIt(
   );
   gh.lazySingleton<_i727.PrismWallpaperRepository>(
     () => _i759.PrismWallpaperRepositoryImpl(
-      gh<_i349.FirestoreClient>(),
+      gh<_i349.RemoteStoreClient>(),
       gh<_i954.FeedCacheLocalDataSource>(),
       gh<_i112.UserBlockRepository>(),
     ),
   );
   gh.lazySingleton<_i817.PublicProfileRepository>(
     () => _i769.PublicProfileRepositoryImpl(
-      gh<_i349.FirestoreClient>(),
+      gh<_i349.RemoteStoreClient>(),
       gh<_i112.UserBlockRepository>(),
     ),
   );
   gh.lazySingleton<_i563.ProfileSetupsRepository>(
     () => _i983.ProfileSetupsRepositoryImpl(
-      gh<_i349.FirestoreClient>(),
+      gh<_i349.RemoteStoreClient>(),
       gh<_i112.UserBlockRepository>(),
     ),
   );
@@ -551,7 +535,7 @@ _i174.GetIt initGetIt(
   );
   gh.lazySingleton<_i489.WallOfTheDayRepository>(
     () => _i1070.WallOfTheDayRepositoryImpl(
-      gh<_i349.FirestoreClient>(),
+      gh<_i349.RemoteStoreClient>(),
       gh<_i727.PrismWallpaperRepository>(),
       gh<_i112.UserBlockRepository>(),
     ),
@@ -566,7 +550,7 @@ _i174.GetIt initGetIt(
   );
   gh.lazySingleton<_i567.PersonalizedFeedRepository>(
     () => _i903.PersonalizedFeedRepositoryImpl(
-      gh<_i349.FirestoreClient>(),
+      gh<_i349.RemoteStoreClient>(),
       gh<_i954.FeedCacheLocalDataSource>(),
       gh<_i1073.SettingsLocalDataSource>(),
       gh<_i604.WallhavenWallpaperRepository>(),
@@ -583,7 +567,7 @@ _i174.GetIt initGetIt(
   );
   gh.lazySingleton<_i411.SetupsRepository>(
     () => _i415.SetupsRepositoryImpl(
-      gh<_i349.FirestoreClient>(),
+      gh<_i349.RemoteStoreClient>(),
       gh<_i954.FeedCacheLocalDataSource>(),
       gh<_i112.UserBlockRepository>(),
     ),

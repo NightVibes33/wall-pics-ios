@@ -1,7 +1,6 @@
 import 'package:Prism/features/ai_wallpaper/domain/entities/ai_charge_mode.dart';
 import 'package:Prism/features/ai_wallpaper/domain/entities/ai_quality_tier.dart';
 import 'package:Prism/features/ai_wallpaper/domain/entities/ai_style_preset.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AiGenerationRecord {
   const AiGenerationRecord({
@@ -84,7 +83,6 @@ class AiGenerationRecord {
 
     DateTime parseDate(dynamic raw) {
       if (raw is DateTime) return raw.toUtc();
-      if (raw is Timestamp) return raw.toDate().toUtc();
       return DateTime.tryParse(raw?.toString() ?? '')?.toUtc() ?? DateTime.now().toUtc();
     }
 

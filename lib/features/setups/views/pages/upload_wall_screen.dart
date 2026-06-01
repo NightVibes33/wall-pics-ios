@@ -8,7 +8,7 @@ import 'package:Prism/core/analytics/events/events.dart';
 import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:Prism/core/widgets/common/safe_rive_asset.dart';
-import 'package:Prism/data/upload/wallpaper/wallfirestore.dart' as WallStore;
+import 'package:Prism/data/upload/wallpaper/wall_remote_store.dart' as WallStore;
 import 'package:Prism/env/env.dart';
 import 'package:Prism/logger/logger.dart';
 import 'package:Prism/theme/jam_icons_icons.dart';

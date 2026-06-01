@@ -1,10 +1,10 @@
 import 'dart:async';
 
 import 'package:Prism/core/di/injection.dart';
-import 'package:Prism/core/firestore/firestore_collections.dart';
-import 'package:Prism/core/firestore/firestore_error.dart';
-import 'package:Prism/core/firestore/firestore_query_specs.dart';
-import 'package:Prism/core/firestore/firestore_runtime.dart';
+import 'package:Prism/core/remote_store/remote_collections.dart';
+import 'package:Prism/core/remote_store/remote_store_error.dart';
+import 'package:Prism/core/remote_store/remote_store_query_specs.dart';
+import 'package:Prism/core/remote_store/remote_store_runtime.dart';
 import 'package:Prism/core/persistence/data_sources/notifications_local_data_source.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:Prism/core/user_blocks/blocked_creators_filter.dart';
@@ -65,21 +65,21 @@ Future<List<Map<String, dynamic>>> _fetchNotificationsSince({
   required DateTime sinceUtc,
   required String sourceTag,
   int limit = _defaultNotifLimit,
-  FirestoreCachePolicy cachePolicy = FirestoreCachePolicy.networkOnly,
+  RemoteStoreCachePolicy cachePolicy = RemoteStoreCachePolicy.networkOnly,
 }) async {
   final List<String> modifiers = _notificationModifiers();
   if (modifiers.isEmpty) {
     return <Map<String, dynamic>>[];
   }
-  return firestoreClient.query<Map<String, dynamic>>(
-    FirestoreQuerySpec(
-      collection: FirebaseCollections.notifications,
+  return remoteStoreClient.query<Map<String, dynamic>>(
+    RemoteStoreQuerySpec(
+      collection: RemoteCollections.notifications,
       sourceTag: sourceTag,
-      filters: <FirestoreFilter>[
-        FirestoreFilter(field: 'createdAt', op: FirestoreFilterOp.isGreaterThan, value: sinceUtc),
-        FirestoreFilter(field: 'modifier', op: FirestoreFilterOp.whereIn, value: modifiers),
+      filters: <RemoteStoreFilter>[
+        RemoteStoreFilter(field: 'createdAt', op: RemoteStoreFilterOp.isGreaterThan, value: sinceUtc),
+        RemoteStoreFilter(field: 'modifier', op: RemoteStoreFilterOp.whereIn, value: modifiers),
       ],
-      orderBy: const <FirestoreOrderBy>[FirestoreOrderBy(field: 'createdAt', descending: true)],
+      orderBy: const <RemoteStoreOrderBy>[RemoteStoreOrderBy(field: 'createdAt', descending: true)],
       limit: limit,
       dedupeWindowMs: 1500,
       cachePolicy: cachePolicy,
@@ -229,7 +229,7 @@ Future<bool> _syncInAppNotificationsFromRemoteBody({required bool force}) async 
     final List<Map<String, dynamic>> snap = await _fetchNotificationsSince(
       sinceUtc: lastFetchTime,
       sourceTag: 'notifications.latest',
-      cachePolicy: FirestoreCachePolicy.memoryFirst,
+      cachePolicy: RemoteStoreCachePolicy.memoryFirst,
     );
     final entities = _filterBlockedActors(snap.map(_asMap).map(_toEntity).toList(growable: false), blocked);
     if (entities.isNotEmpty) {
@@ -237,7 +237,7 @@ Future<bool> _syncInAppNotificationsFromRemoteBody({required bool force}) async 
     }
     await notificationsLocal.setLastFetchAtUtc(nowUtc);
     return true;
-  } on FirestoreError catch (e) {
+  } on RemoteStoreError catch (e) {
     logger.w('syncInAppNotificationsFromRemote failed (code=${e.code}): ${e.message}');
     return false;
   } catch (e) {

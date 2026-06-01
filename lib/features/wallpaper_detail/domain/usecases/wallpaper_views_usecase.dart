@@ -2,7 +2,7 @@ import 'package:Prism/core/utils/result.dart';
 import 'package:Prism/core/view_stats/view_stats_repository.dart';
 import 'package:injectable/injectable.dart';
 
-/// Records a Prism wallpaper detail view and returns the updated count (Firestore via callable).
+/// Records a Prism wallpaper detail view and returns the updated count (RemoteStore via callable).
 @lazySingleton
 class RecordPrismWallpaperViewsUsecase {
   RecordPrismWallpaperViewsUsecase(this._viewStatsRepository);

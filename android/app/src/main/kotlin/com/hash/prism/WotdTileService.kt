@@ -22,7 +22,7 @@ import java.util.concurrent.Executors
  * success state (via [QuickTileConfigService.pushWotdUrl]).
  *
  * Because the URL is pre-cached, this tile works instantly without needing
- * a Firestore call at tap time.
+ * a RemoteStore call at tap time.
  *
  * Requires API 24+ (Android 7.0) for TileService.
  */

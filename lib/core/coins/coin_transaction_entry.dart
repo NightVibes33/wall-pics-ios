@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 class CoinTransactionEntry {
   const CoinTransactionEntry({
@@ -76,7 +75,6 @@ class CoinTransactionEntry {
 
     DateTime parseDate(dynamic raw) {
       if (raw is DateTime) return raw.toUtc();
-      if (raw is Timestamp) return raw.toDate().toUtc();
       return DateTime.tryParse(raw?.toString() ?? '')?.toUtc() ?? DateTime.now().toUtc();
     }
 

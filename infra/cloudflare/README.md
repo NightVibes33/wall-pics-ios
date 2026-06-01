@@ -147,9 +147,7 @@ Verify response contains `route`, `route_v2`, and `canonical_identifier`.
 - Replace `REPLACE_WITH_PLAY_APP_SIGNING_SHA256` before release.
 - Replace `REPLACE_WITH_CLOUDFLARE_ACCOUNT_ID` in `wrangler.toml`.
 - Replace `REPLACE_WITH_AI_STATE_KV_ID` and `REPLACE_WITH_AI_STATE_KV_PREVIEW_ID` in `wrangler.toml`.
-- Set Firebase auth verification vars:
-  - `FIREBASE_PROJECT_ID` (for Prism this is `prism-wallpapers`)
-  - Optional debug logs: `FIREBASE_AUTH_DEBUG=true` in non-prod only
+- Optional: set `AI_CLIENT_TOKEN` and send the same value as `X-Prism-Client-Token` for AI endpoints.
 - If Browser Rendering is unavailable, `og:image` falls back to source image URL.
 
 ## AI routing config
@@ -168,14 +166,3 @@ Config supports:
   - `70%` usage: route fallbacks to cheaper providers first
   - `85%` usage: pick cheapest provider as primary, downgrade `quality -> balanced`
   - `95%` usage: aggressively downgrade `balanced -> fast` and avoid near-exhausted provider when alternatives exist
-
-## AI watermark backfill
-
-To migrate existing AI community walls to watermarked publish URLs:
-
-```bash
-node tool/backfill_ai_watermarked_walls.mjs --dry-run
-node tool/backfill_ai_watermarked_walls.mjs
-```
-
-The script is idempotent and marks migrated records with `aiWatermarkMigratedAt`.

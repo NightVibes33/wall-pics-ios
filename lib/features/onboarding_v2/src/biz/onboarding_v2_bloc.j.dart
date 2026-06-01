@@ -22,7 +22,6 @@ import 'package:Prism/features/onboarding_v2/src/views/viewmodels/onboarding_cre
 import 'package:Prism/features/onboarding_v2/src/views/viewmodels/onboarding_wallpaper_vm.j.dart';
 import 'package:Prism/logger/logger.dart';
 import 'package:bloc/bloc.dart';
-import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:injectable/injectable.dart';
 
@@ -77,7 +76,6 @@ class OnboardingV2Bloc extends Bloc<OnboardingV2Event, OnboardingV2State> {
     emit(state.copyWith(loadStatus: LoadStatus.loading, failure: null, navRequest: null));
     final settingsLocal = getIt<SettingsLocalDataSource>();
     final catalog = await PersonalizedInterestsCatalog.load(
-      remoteConfig: FirebaseRemoteConfig.instance,
       settingsLocal: settingsLocal,
     );
     List<String> availableCategories = catalog.map((e) => e.name).toList(growable: false);

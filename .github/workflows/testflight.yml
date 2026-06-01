@@ -34,26 +34,14 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
-      - name: Prepare production Firebase and env files
+      - name: Prepare production env file
         env:
-          FIREBASE_OPTIONS_DART_BASE64: ${{ secrets.FIREBASE_OPTIONS_DART_BASE64 }}
-          GOOGLE_SERVICE_INFO_PLIST_BASE64: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST_BASE64 }}
           WALLPICS_ENV: ${{ secrets.WALLPICS_ENV }}
         run: |
-          if [ -z "$FIREBASE_OPTIONS_DART_BASE64" ]; then
-            echo "Missing FIREBASE_OPTIONS_DART_BASE64 secret"
-            exit 1
-          fi
-          if [ -z "$GOOGLE_SERVICE_INFO_PLIST_BASE64" ]; then
-            echo "Missing GOOGLE_SERVICE_INFO_PLIST_BASE64 secret"
-            exit 1
-          fi
           if [ -z "$WALLPICS_ENV" ]; then
             echo "Missing WALLPICS_ENV secret with Prism dart-defines"
             exit 1
           fi
-          printf '%s' "$FIREBASE_OPTIONS_DART_BASE64" | base64 --decode > lib/firebase_options.dart
-          printf '%s' "$GOOGLE_SERVICE_INFO_PLIST_BASE64" | base64 --decode > ios/Runner/GoogleService-Info.plist
           printf '%s\n' "$WALLPICS_ENV" > .env
 
       - name: Install CocoaPods

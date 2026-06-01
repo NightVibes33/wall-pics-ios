@@ -1,7 +1,7 @@
 import 'package:Prism/core/error/failure.dart';
-import 'package:Prism/core/firestore/dtos/wall_doc_dto.dart';
-import 'package:Prism/core/firestore/firestore_client.dart';
-import 'package:Prism/core/firestore/firestore_query_specs.dart';
+import 'package:Prism/core/remote_store/dtos/wall_doc_dto.dart';
+import 'package:Prism/core/remote_store/remote_store_client.dart';
+import 'package:Prism/core/remote_store/remote_store_query_specs.dart';
 import 'package:Prism/core/persistence/data_sources/favorites_local_data_source.dart';
 import 'package:Prism/core/utils/result.dart';
 import 'package:Prism/core/wallpaper/wallpaper_core.dart';
@@ -13,19 +13,19 @@ import 'package:injectable/injectable.dart';
 
 @LazySingleton(as: FavouriteWallsRepository)
 class FavouriteWallsRepositoryImpl implements FavouriteWallsRepository {
-  FavouriteWallsRepositoryImpl(this._firestoreClient, this._favoritesLocal);
+  FavouriteWallsRepositoryImpl(this._remoteStoreClient, this._favoritesLocal);
 
-  final FirestoreClient _firestoreClient;
+  final RemoteStoreClient _remoteStoreClient;
   final FavoritesLocalDataSource _favoritesLocal;
 
   String _collectionPath(String userId) => 'usersv2/$userId/images';
 
   Future<List<FavouriteWallEntity>> _read(String userId) async {
-    final rows = await _firestoreClient.query<_FavouriteWallRow>(
-      FirestoreQuerySpec(
+    final rows = await _remoteStoreClient.query<_FavouriteWallRow>(
+      RemoteStoreQuerySpec(
         collection: _collectionPath(userId),
         sourceTag: 'favourite_walls.read',
-        cachePolicy: FirestoreCachePolicy.memoryFirst,
+        cachePolicy: RemoteStoreCachePolicy.memoryFirst,
         dedupeWindowMs: 1500,
       ),
       (data, docId) => _FavouriteWallRow(docId: docId, doc: FavouriteWallDocDto.fromJson(data)),
@@ -62,12 +62,12 @@ class FavouriteWallsRepositoryImpl implements FavouriteWallsRepository {
   }) async {
     try {
       if (currentlyFavourited) {
-        await _firestoreClient.deleteDoc(_collectionPath(userId), wall.id, sourceTag: 'favourite_walls.toggle.delete');
+        await _remoteStoreClient.deleteDoc(_collectionPath(userId), wall.id, sourceTag: 'favourite_walls.toggle.delete');
         await _favoritesLocal.setWallFavourite(userId, wall.id, false);
         return Result.success(false);
       } else {
-        final Map<String, dynamic> payload = _toFirestoreDoc(wall);
-        await _firestoreClient.setDoc(
+        final Map<String, dynamic> payload = _toRemoteStoreDoc(wall);
+        await _remoteStoreClient.setDoc(
           _collectionPath(userId),
           wall.id,
           payload,
@@ -102,7 +102,7 @@ class FavouriteWallsRepositoryImpl implements FavouriteWallsRepository {
               createdAt: dto.createdAt,
             ),
             collections: dto.collections.isEmpty ? null : dto.collections,
-            firestoreDocumentId: docId,
+            remoteStoreDocumentId: docId,
           ),
         );
       case WallpaperSource.wallhaven:
@@ -166,7 +166,7 @@ class FavouriteWallsRepositoryImpl implements FavouriteWallsRepository {
     }
   }
 
-  Map<String, dynamic> _toFirestoreDoc(FavouriteWallEntity wall) {
+  Map<String, dynamic> _toRemoteStoreDoc(FavouriteWallEntity wall) {
     final Map<String, dynamic> doc;
     switch (wall) {
       case PrismFavouriteWall():
@@ -228,7 +228,7 @@ class FavouriteWallsRepositoryImpl implements FavouriteWallsRepository {
   @override
   Future<Result<bool>> removeFavourite({required String userId, required String wallId}) async {
     try {
-      await _firestoreClient.deleteDoc(_collectionPath(userId), wallId, sourceTag: 'favourite_walls.remove');
+      await _remoteStoreClient.deleteDoc(_collectionPath(userId), wallId, sourceTag: 'favourite_walls.remove');
       await _favoritesLocal.setWallFavourite(userId, wallId, false);
       return Result.success(true);
     } catch (error) {
@@ -242,7 +242,7 @@ class FavouriteWallsRepositoryImpl implements FavouriteWallsRepository {
       for (final String rawId in wallIds) {
         final String id = rawId.trim();
         if (id.isEmpty) continue;
-        await _firestoreClient.deleteDoc(_collectionPath(userId), id, sourceTag: 'favourite_walls.clear_all.delete');
+        await _remoteStoreClient.deleteDoc(_collectionPath(userId), id, sourceTag: 'favourite_walls.clear_all.delete');
         await _favoritesLocal.setWallFavourite(userId, id, false);
       }
       return Result.success(true);

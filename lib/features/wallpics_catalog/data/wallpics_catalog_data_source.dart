@@ -266,7 +266,7 @@ class _WallpicsItem {
         'wallpicsThumbnailVideoUrl': thumbnailVideoUrl,
         'wallpicsIsPremium': isPremium,
       },
-      firestoreDocumentId: 'wallpics-$id',
+      remoteStoreDocumentId: 'wallpics-$id',
     );
   }
 }

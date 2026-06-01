@@ -26,8 +26,6 @@ out_path = sys.argv[2]
 with open(tmp_path, "r", encoding="utf-8") as source_file:
     data = json.load(source_file)
 
-if not os.path.exists("android/app/google-services.json"):
-    data["SKIP_FIREBASE_INIT"] = "true"
 
 for key in ("SENTRY_ENV", "SENTRY_RELEASE", "SENTRY_DIST", "SENTRY_ENABLED"):
     value = os.environ.get(key)

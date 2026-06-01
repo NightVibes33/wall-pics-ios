@@ -9,7 +9,6 @@ import 'package:Prism/features/public_profile/domain/entities/user_summary_entit
 import 'package:Prism/features/public_profile/domain/usecases/public_profile_usecases.dart';
 import 'package:Prism/notifications/topic_subscription.dart';
 import 'package:bloc/bloc.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:injectable/injectable.dart';
 
@@ -231,7 +230,6 @@ class PublicProfileBloc extends Bloc<PublicProfileEvent, PublicProfileState> {
         if (artistEmailPrefix.isNotEmpty) {
           unawaited(
             subscribeToTopicSafely(
-              FirebaseMessaging.instance,
               '${artistEmailPrefix}_posts',
               sourceTag: 'follow.subscribe_posts_topic',
             ),
@@ -273,7 +271,6 @@ class PublicProfileBloc extends Bloc<PublicProfileEvent, PublicProfileState> {
         if (artistEmailPrefix.isNotEmpty) {
           unawaited(
             unsubscribeFromTopicSafely(
-              FirebaseMessaging.instance,
               '${artistEmailPrefix}_posts',
               sourceTag: 'unfollow.unsubscribe_posts_topic',
             ),
@@ -434,7 +431,6 @@ class PublicProfileBloc extends Bloc<PublicProfileEvent, PublicProfileState> {
       if (artistEmailPrefix.isNotEmpty) {
         unawaited(
           subscribeToTopicSafely(
-            FirebaseMessaging.instance,
             '${artistEmailPrefix}_posts',
             sourceTag: 'follow_from_list.subscribe_posts_topic',
           ),
@@ -477,7 +473,6 @@ class PublicProfileBloc extends Bloc<PublicProfileEvent, PublicProfileState> {
       if (artistEmailPrefix.isNotEmpty) {
         unawaited(
           unsubscribeFromTopicSafely(
-            FirebaseMessaging.instance,
             '${artistEmailPrefix}_posts',
             sourceTag: 'unfollow_from_list.unsubscribe_posts_topic',
           ),

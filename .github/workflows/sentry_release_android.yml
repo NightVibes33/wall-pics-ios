@@ -49,13 +49,11 @@ jobs:
 
       - name: Inject required app secrets
         run: |
-          FIREBASE_SECRET="$(doppler secrets get FIREBASE_SECRET --plain --project "$DOPPLER_PROJECT" --config "$DOPPLER_CONFIG")"
           GITKEY_DART="$(doppler secrets get GITKEY_DART --plain --project "$DOPPLER_PROJECT" --config "$DOPPLER_CONFIG")"
-          if [ -z "$FIREBASE_SECRET" ] || [ -z "$GITKEY_DART" ]; then
-            echo "FIREBASE_SECRET and GITKEY_DART secrets are required."
+          if [ -z "$GITKEY_DART" ]; then
+            echo "GITKEY_DART secret is required."
             exit 1
           fi
-          echo "$FIREBASE_SECRET" > android/app/google-services.json
           echo "$GITKEY_DART" > lib/gitkey.dart
 
       - name: Resolve Sentry environment variables

@@ -1,13 +1,13 @@
 import 'dart:io';
 
 import 'package:Prism/core/analytics/events/analytics_enums.dart';
-import 'package:Prism/core/firestore/firestore_document.dart';
+import 'package:Prism/core/remote_store/remote_store_document.dart';
 import 'package:Prism/core/router/not_found_page.dart';
 import 'package:Prism/core/router/route_guards.dart';
 import 'package:Prism/core/wallpaper/wallpaper_source.dart';
 import 'package:Prism/core/widgets/popup/editProfilePanel.dart';
 import 'package:Prism/features/admin_review/views/pages/admin_review_screen.dart';
-import 'package:Prism/features/admin_review/views/pages/firestore_telemetry_screen.dart';
+import 'package:Prism/features/admin_review/views/pages/remote_store_telemetry_screen.dart';
 import 'package:Prism/features/admin_review/views/pages/swipe_review_screen.dart';
 import 'package:Prism/features/ads/views/pages/ads_not_loading_page.dart';
 import 'package:Prism/features/category_feed/views/pages/collection_view_screen.dart';
@@ -158,7 +158,7 @@ class AppRouter extends RootStackRouter {
     AutoRoute(path: '/ads-not-loading', page: AdsNotLoadingRoute.page),
     AutoRoute(path: '/admin-review', page: AdminReviewRoute.page, guards: [_adminGuard]),
     AutoRoute(path: '/admin-review/swipe', page: SwipeReviewRoute.page, guards: [_adminGuard]),
-    AutoRoute(path: '/admin-firestore-telemetry', page: FirestoreTelemetryRoute.page, guards: [_adminGuard]),
+    AutoRoute(path: '/admin-remote-store-telemetry', page: RemoteStoreTelemetryRoute.page, guards: [_adminGuard]),
     AutoRoute(path: '/debug-panel', page: DebugPanelRoute.page, guards: [_adminGuard]),
     AutoRoute(path: '/quick-tile-settings', page: QuickTileSettingsRoute.page),
     AutoRoute(path: '/streak', page: StreakRoute.page),

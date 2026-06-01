@@ -1,10 +1,10 @@
 import 'package:Prism/analytics/analytics_service.dart';
 import 'package:Prism/core/analytics/events/events.dart';
-import 'package:Prism/core/firestore/firestore_collections.dart';
-import 'package:Prism/core/firestore/firestore_document.dart';
-import 'package:Prism/core/firestore/firestore_error.dart';
-import 'package:Prism/core/firestore/firestore_query_specs.dart';
-import 'package:Prism/core/firestore/firestore_runtime.dart';
+import 'package:Prism/core/remote_store/remote_collections.dart';
+import 'package:Prism/core/remote_store/remote_store_document.dart';
+import 'package:Prism/core/remote_store/remote_store_error.dart';
+import 'package:Prism/core/remote_store/remote_store_query_specs.dart';
+import 'package:Prism/core/remote_store/remote_store_runtime.dart';
 import 'package:Prism/core/platform/pigeon/prism_media_api.g.dart';
 import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
@@ -107,20 +107,20 @@ class _WallReviewState extends State<_WallReview> {
     return SingleChildScrollView(
       child: Column(
         children: [
-          StreamBuilder<List<FirestoreDocument>>(
-            stream: firestoreClient.watchQuery<FirestoreDocument>(
-              FirestoreQuerySpec(
-                collection: FirebaseCollections.rejectedWalls,
+          StreamBuilder<List<RemoteStoreDocument>>(
+            stream: remoteStoreClient.watchQuery<RemoteStoreDocument>(
+              RemoteStoreQuerySpec(
+                collection: RemoteCollections.rejectedWalls,
                 sourceTag: 'review.rejectedWalls',
-                filters: <FirestoreFilter>[
-                  FirestoreFilter(field: "email", op: FirestoreFilterOp.isEqualTo, value: app_state.prismUser.email),
+                filters: <RemoteStoreFilter>[
+                  RemoteStoreFilter(field: "email", op: RemoteStoreFilterOp.isEqualTo, value: app_state.prismUser.email),
                 ],
-                orderBy: const <FirestoreOrderBy>[FirestoreOrderBy(field: 'createdAt', descending: true)],
+                orderBy: const <RemoteStoreOrderBy>[RemoteStoreOrderBy(field: 'createdAt', descending: true)],
                 isStream: true,
               ),
-              (data, docId) => FirestoreDocument(docId, data),
+              (data, docId) => RemoteStoreDocument(docId, data),
             ),
-            builder: (BuildContext context, AsyncSnapshot<List<FirestoreDocument>> snapshot) {
+            builder: (BuildContext context, AsyncSnapshot<List<RemoteStoreDocument>> snapshot) {
               if (!snapshot.hasData) {
                 return Container();
               } else {
@@ -133,21 +133,21 @@ class _WallReviewState extends State<_WallReview> {
               }
             },
           ),
-          StreamBuilder<List<FirestoreDocument>>(
-            stream: firestoreClient.watchQuery<FirestoreDocument>(
-              FirestoreQuerySpec(
-                collection: FirebaseCollections.walls,
+          StreamBuilder<List<RemoteStoreDocument>>(
+            stream: remoteStoreClient.watchQuery<RemoteStoreDocument>(
+              RemoteStoreQuerySpec(
+                collection: RemoteCollections.walls,
                 sourceTag: 'review.pendingWalls',
-                filters: <FirestoreFilter>[
-                  FirestoreFilter(field: "email", op: FirestoreFilterOp.isEqualTo, value: app_state.prismUser.email),
-                  const FirestoreFilter(field: "review", op: FirestoreFilterOp.isEqualTo, value: false),
+                filters: <RemoteStoreFilter>[
+                  RemoteStoreFilter(field: "email", op: RemoteStoreFilterOp.isEqualTo, value: app_state.prismUser.email),
+                  const RemoteStoreFilter(field: "review", op: RemoteStoreFilterOp.isEqualTo, value: false),
                 ],
-                orderBy: const <FirestoreOrderBy>[FirestoreOrderBy(field: 'createdAt', descending: true)],
+                orderBy: const <RemoteStoreOrderBy>[RemoteStoreOrderBy(field: 'createdAt', descending: true)],
                 isStream: true,
               ),
-              (data, docId) => FirestoreDocument(docId, data),
+              (data, docId) => RemoteStoreDocument(docId, data),
             ),
-            builder: (BuildContext context, AsyncSnapshot<List<FirestoreDocument>> snapshot) {
+            builder: (BuildContext context, AsyncSnapshot<List<RemoteStoreDocument>> snapshot) {
               if (!snapshot.hasData) {
                 return Center(child: Loader());
               } else {
@@ -164,7 +164,7 @@ class _WallReviewState extends State<_WallReview> {
 }
 
 class _WallTile extends StatelessWidget {
-  final FirestoreDocument wallpaper;
+  final RemoteStoreDocument wallpaper;
   _WallTile(this.wallpaper);
   final DateFormat formatter = DateFormat('d MMMM y, h:m a');
   static final PrismMediaHostApi _prismMediaApi = PrismMediaHostApi();
@@ -355,7 +355,7 @@ class _WallTile extends StatelessWidget {
                                             onPressed: () async {
                                               Navigator.pop(context);
                                               await _reviewDeleteDoc(
-                                                collection: FirebaseCollections.walls,
+                                                collection: RemoteCollections.walls,
                                                 id: wallpaper.id,
                                                 sourceTag: 'review.wall.delete',
                                                 successToast: "Wallpaper successfully deleted from server!",
@@ -404,7 +404,7 @@ class _WallTile extends StatelessWidget {
 }
 
 class _RejectedWallTile extends StatelessWidget {
-  final FirestoreDocument wallpaper;
+  final RemoteStoreDocument wallpaper;
   _RejectedWallTile(this.wallpaper);
   final DateFormat formatter = DateFormat('d MMMM y, h:m a');
   static final PrismMediaHostApi _prismMediaApi = PrismMediaHostApi();
@@ -595,7 +595,7 @@ class _RejectedWallTile extends StatelessWidget {
                                             onPressed: () async {
                                               Navigator.pop(context);
                                               await _reviewDeleteDoc(
-                                                collection: FirebaseCollections.rejectedWalls,
+                                                collection: RemoteCollections.rejectedWalls,
                                                 id: wallpaper.id,
                                                 sourceTag: 'review.rejectedWall.delete',
                                                 successToast: "Wallpaper successfully deleted from server!",
@@ -669,20 +669,20 @@ class _SetupReviewState extends State<_SetupReview> {
     return SingleChildScrollView(
       child: Column(
         children: [
-          StreamBuilder<List<FirestoreDocument>>(
-            stream: firestoreClient.watchQuery<FirestoreDocument>(
-              FirestoreQuerySpec(
-                collection: FirebaseCollections.rejectedSetups,
+          StreamBuilder<List<RemoteStoreDocument>>(
+            stream: remoteStoreClient.watchQuery<RemoteStoreDocument>(
+              RemoteStoreQuerySpec(
+                collection: RemoteCollections.rejectedSetups,
                 sourceTag: 'review.rejectedSetups',
-                filters: <FirestoreFilter>[
-                  FirestoreFilter(field: "email", op: FirestoreFilterOp.isEqualTo, value: app_state.prismUser.email),
+                filters: <RemoteStoreFilter>[
+                  RemoteStoreFilter(field: "email", op: RemoteStoreFilterOp.isEqualTo, value: app_state.prismUser.email),
                 ],
-                orderBy: const <FirestoreOrderBy>[FirestoreOrderBy(field: 'created_at', descending: true)],
+                orderBy: const <RemoteStoreOrderBy>[RemoteStoreOrderBy(field: 'created_at', descending: true)],
                 isStream: true,
               ),
-              (data, docId) => FirestoreDocument(docId, data),
+              (data, docId) => RemoteStoreDocument(docId, data),
             ),
-            builder: (BuildContext context, AsyncSnapshot<List<FirestoreDocument>> snapshot) {
+            builder: (BuildContext context, AsyncSnapshot<List<RemoteStoreDocument>> snapshot) {
               if (!snapshot.hasData) {
                 return Container();
               } else {
@@ -695,21 +695,21 @@ class _SetupReviewState extends State<_SetupReview> {
               }
             },
           ),
-          StreamBuilder<List<FirestoreDocument>>(
-            stream: firestoreClient.watchQuery<FirestoreDocument>(
-              FirestoreQuerySpec(
-                collection: FirebaseCollections.setups,
+          StreamBuilder<List<RemoteStoreDocument>>(
+            stream: remoteStoreClient.watchQuery<RemoteStoreDocument>(
+              RemoteStoreQuerySpec(
+                collection: RemoteCollections.setups,
                 sourceTag: 'review.pendingSetups',
-                filters: <FirestoreFilter>[
-                  FirestoreFilter(field: "email", op: FirestoreFilterOp.isEqualTo, value: app_state.prismUser.email),
-                  const FirestoreFilter(field: "review", op: FirestoreFilterOp.isEqualTo, value: false),
+                filters: <RemoteStoreFilter>[
+                  RemoteStoreFilter(field: "email", op: RemoteStoreFilterOp.isEqualTo, value: app_state.prismUser.email),
+                  const RemoteStoreFilter(field: "review", op: RemoteStoreFilterOp.isEqualTo, value: false),
                 ],
-                orderBy: const <FirestoreOrderBy>[FirestoreOrderBy(field: 'created_at', descending: true)],
+                orderBy: const <RemoteStoreOrderBy>[RemoteStoreOrderBy(field: 'created_at', descending: true)],
                 isStream: true,
               ),
-              (data, docId) => FirestoreDocument(docId, data),
+              (data, docId) => RemoteStoreDocument(docId, data),
             ),
-            builder: (BuildContext context, AsyncSnapshot<List<FirestoreDocument>> snapshot) {
+            builder: (BuildContext context, AsyncSnapshot<List<RemoteStoreDocument>> snapshot) {
               if (!snapshot.hasData) {
                 return Center(child: Loader());
               } else {
@@ -729,7 +729,7 @@ class _SetupReviewState extends State<_SetupReview> {
 }
 
 class SetupTile extends StatelessWidget {
-  final FirestoreDocument wallpaper;
+  final RemoteStoreDocument wallpaper;
   final bool draft;
   SetupTile(this.wallpaper, this.draft);
   final DateFormat formatter = DateFormat('d MMMM y, h:m a');
@@ -1091,14 +1091,14 @@ class SetupTile extends StatelessWidget {
                                         Navigator.pop(context);
                                         if (draft) {
                                           await _reviewDeleteDoc(
-                                            collection: FirebaseCollections.draftSetups,
+                                            collection: RemoteCollections.draftSetups,
                                             id: wallpaper.id,
                                             sourceTag: 'review.draftSetup.delete',
                                             successToast: "Draft successfully deleted from server!",
                                           );
                                         } else {
                                           await _reviewDeleteDoc(
-                                            collection: FirebaseCollections.setups,
+                                            collection: RemoteCollections.setups,
                                             id: wallpaper.id,
                                             sourceTag: 'review.setup.delete',
                                             successToast: "Setup successfully deleted from server!",
@@ -1145,7 +1145,7 @@ class SetupTile extends StatelessWidget {
 }
 
 class _RejectedSetupTile extends StatelessWidget {
-  final FirestoreDocument wallpaper;
+  final RemoteStoreDocument wallpaper;
   _RejectedSetupTile(this.wallpaper);
   final DateFormat formatter = DateFormat('d MMMM y, h:m a');
   static final PrismMediaHostApi _prismMediaApi = PrismMediaHostApi();
@@ -1474,7 +1474,7 @@ class _RejectedSetupTile extends StatelessWidget {
                                             onPressed: () async {
                                               Navigator.pop(context);
                                               await _reviewDeleteDoc(
-                                                collection: FirebaseCollections.rejectedSetups,
+                                                collection: RemoteCollections.rejectedSetups,
                                                 id: wallpaper.id,
                                                 sourceTag: 'review.rejectedSetup.delete',
                                                 successToast: "Setup successfully deleted from server!",
@@ -1555,9 +1555,9 @@ Future<void> _reviewDeleteDoc({
   required String successToast,
 }) async {
   try {
-    await firestoreClient.deleteDoc(collection, id, sourceTag: sourceTag);
+    await remoteStoreClient.deleteDoc(collection, id, sourceTag: sourceTag);
     toasts.codeSend(successToast);
-  } on FirestoreError catch (e, st) {
+  } on RemoteStoreError catch (e, st) {
     logger.e('review delete failed ($sourceTag)', error: e, stackTrace: st);
     toasts.codeSend(
       e.code == 'permission-denied'

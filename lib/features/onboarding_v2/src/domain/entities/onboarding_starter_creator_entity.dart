@@ -20,7 +20,7 @@ class OnboardingStarterCreatorEntity {
   final int followerCount;
 
   /// Parses only the curation fields from Remote Config (`email` and `rank`).
-  /// Profile data is fetched live from Firestore; other fields default to empty.
+  /// Profile data is fetched live from RemoteStore; other fields default to empty.
   factory OnboardingStarterCreatorEntity.fromCurationMap(Map<String, dynamic> map) {
     return OnboardingStarterCreatorEntity(
       userId: '',

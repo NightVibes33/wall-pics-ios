@@ -343,7 +343,7 @@ class _ShareSetupViewScreenState extends State<ShareSetupViewScreen> with Single
                                                   ),
                                                   GestureDetector(
                                                     onTap: () {
-                                                      final String? docId = setup.firestoreDocumentId;
+                                                      final String? docId = setup.remoteStoreDocumentId;
                                                       if (docId == null || docId.isEmpty) {
                                                         toasts.error('Report unavailable for this setup.');
                                                         return;
@@ -351,7 +351,7 @@ class _ShareSetupViewScreenState extends State<ShareSetupViewScreen> with Single
                                                       showContentReportSheet(
                                                         context,
                                                         contentType: 'setup',
-                                                        targetFirestoreDocId: docId,
+                                                        targetRemoteStoreDocId: docId,
                                                         subtitle: setup.name?.toString(),
                                                       );
                                                     },

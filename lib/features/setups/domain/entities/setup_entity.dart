@@ -29,7 +29,7 @@ abstract class SetupEntity with _$SetupEntity {
     String? resolution,
     String? size,
 
-    /// Firestore document id in [setups] for UGC reporting.
-    String? firestoreDocumentId,
+    /// RemoteStore document id in [setups] for UGC reporting.
+    String? remoteStoreDocumentId,
   }) = _SetupEntity;
 }

@@ -4,8 +4,8 @@ enum ReviewBatchStatus { initial, loading, loaded, batchComplete, error }
 
 class ReviewBatchState {
   final ReviewBatchStatus status;
-  final List<FirestoreDocument> walls;
-  final List<FirestoreDocument> skippedStack;
+  final List<RemoteStoreDocument> walls;
+  final List<RemoteStoreDocument> skippedStack;
   final List<UndoableAction> undoStack;
   final int currentIndex;
   final int totalPending;
@@ -24,12 +24,12 @@ class ReviewBatchState {
   bool get canUndo => undoStack.isNotEmpty;
   bool get hasMoreWalls => currentIndex < walls.length;
   int get remainingInBatch => walls.length - currentIndex;
-  FirestoreDocument? get currentWall => hasMoreWalls ? walls[currentIndex] : null;
+  RemoteStoreDocument? get currentWall => hasMoreWalls ? walls[currentIndex] : null;
 
   ReviewBatchState copyWith({
     ReviewBatchStatus? status,
-    List<FirestoreDocument>? walls,
-    List<FirestoreDocument>? skippedStack,
+    List<RemoteStoreDocument>? walls,
+    List<RemoteStoreDocument>? skippedStack,
     List<UndoableAction>? undoStack,
     int? currentIndex,
     int? totalPending,

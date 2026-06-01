@@ -4,8 +4,8 @@ import 'dart:typed_data';
 
 import 'package:Prism/auth/google_auth.dart';
 import 'package:Prism/core/coins/coins_service.dart';
-import 'package:Prism/core/firestore/firestore_query_specs.dart';
-import 'package:Prism/core/firestore/firestore_runtime.dart';
+import 'package:Prism/core/remote_store/remote_store_query_specs.dart';
+import 'package:Prism/core/remote_store/remote_store_runtime.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:Prism/env/env.dart';
 import 'package:Prism/global/svgAssets.dart';
@@ -348,16 +348,16 @@ class _EditProfilePanelState extends State<EditProfilePanel> {
   }
 
   Future<void> _updateCurrentUser(Map<String, dynamic> data, String sourceTag) {
-    return firestoreClient.updateDoc(USER_NEW_COLLECTION, app_state.prismUser.id, data, sourceTag: sourceTag);
+    return remoteStoreClient.updateDoc(USER_NEW_COLLECTION, app_state.prismUser.id, data, sourceTag: sourceTag);
   }
 
   Future<bool> _isUsernameAvailable(String username) async {
-    final users = await firestoreClient.query<Map<String, dynamic>>(
-      FirestoreQuerySpec(
+    final users = await remoteStoreClient.query<Map<String, dynamic>>(
+      RemoteStoreQuerySpec(
         collection: USER_NEW_COLLECTION,
         sourceTag: 'profile.edit.usernameAvailability',
-        filters: <FirestoreFilter>[
-          FirestoreFilter(field: "username", op: FirestoreFilterOp.isEqualTo, value: username),
+        filters: <RemoteStoreFilter>[
+          RemoteStoreFilter(field: "username", op: RemoteStoreFilterOp.isEqualTo, value: username),
         ],
         limit: 1,
       ),

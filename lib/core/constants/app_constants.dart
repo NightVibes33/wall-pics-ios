@@ -3,7 +3,7 @@ import 'package:Prism/auth/transactionModel.dart';
 import 'package:Prism/auth/userModel.dart';
 
 const String defaultProfilePhotoUrl =
-    'https://firebasestorage.googleapis.com/v0/b/prism-wallpapers.appspot.com/o/Replacement%20Thumbnails%2Fpost%20bg.png?alt=media&token=d708b5e3-a7ee-421b-beae-3b10946678c4';
+    'https://raw.githubusercontent.com/Hash-Studios/Prism/master/assets/icon/ios.png';
 
 const String currentAppVersion = '3.0.8';
 const String currentAppVersionCode = '332';
@@ -72,7 +72,7 @@ const List<String> defaultVerifiedUsers = <String>['akshaymaurya3006@gmail.com',
 const Set<String> adminEmails = <String>{'akshaymaurya3006@gmail.com', 'maurya.abhay30@gmail.com'};
 
 const String defaultTopImageLink =
-    'https://firebasestorage.googleapis.com/v0/b/prism-wallpapers.appspot.com/o/Replacement%20Thumbnails%2Fpost%20bg.png?alt=media&token=d708b5e3-a7ee-421b-beae-3b10946678c4';
+    'https://raw.githubusercontent.com/Hash-Studios/Prism/master/assets/icon/ios.png';
 
 PrismUsersV2 createGuestPrismUser() {
   final now = DateTime.now().toUtc().toIso8601String();

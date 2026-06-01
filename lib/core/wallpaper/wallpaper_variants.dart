@@ -11,7 +11,7 @@ final class PrismWallpaper {
     this.isStreakExclusive = false,
     this.requiredStreakDays,
     this.streakShopCoinCost,
-    this.firestoreDocumentId,
+    this.remoteStoreDocumentId,
   });
 
   final WallpaperCore core;
@@ -23,8 +23,8 @@ final class PrismWallpaper {
   final int? requiredStreakDays;
   final int? streakShopCoinCost;
 
-  /// Firestore document id in [walls] when loaded from Prism; used for UGC reporting.
-  final String? firestoreDocumentId;
+  /// RemoteStore document id in [walls] when loaded from Prism; used for UGC reporting.
+  final String? remoteStoreDocumentId;
 
   String get id => core.id;
   WallpaperSource get source => core.source;

@@ -1,5 +1,4 @@
 import 'package:Prism/core/wallpaper/wallpaper_source.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// Returns the first non-null value for the given keys in [map].
 Object? firstPresent(JsonMap map, List<String> keys) {
@@ -14,7 +13,6 @@ Object? firstPresent(JsonMap map, List<String> keys) {
 
 DateTime? parseDateTime(Object? v) {
   if (v == null) return null;
-  if (v is Timestamp) return v.toDate();
   if (v is DateTime) return v;
   if (v is String) {
     final DateTime? parsed = DateTime.tryParse(v);

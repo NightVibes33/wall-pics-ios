@@ -1,4 +1,4 @@
-.PHONY: setup setup-dev ensure-fvm get doppler-check doppler-login secrets-print update-flutter format fmt format-check analyze analytics-gen analytics-guard analytics-check firestore-guard no-dynamic-guard no-shape-parse-guard env-guard system-ui-guard secrets-guard version-sync version-guard file-gen pigeon-gen run build build-aab size-android sentry-size-upload attach ios-setup build-ios build-ipa ci test find-unused find-unused-html find-unused-ci gradle-reset
+.PHONY: setup setup-dev ensure-fvm get doppler-check doppler-login secrets-print update-flutter format fmt format-check analyze analytics-gen analytics-guard analytics-check remote-store-guard no-dynamic-guard no-shape-parse-guard env-guard system-ui-guard secrets-guard version-sync version-guard file-gen pigeon-gen run build build-aab size-android sentry-size-upload attach ios-setup build-ios build-ipa ci test find-unused find-unused-html find-unused-ci gradle-reset
 
 DART_FORMAT_LINE_LENGTH ?= 120
 DART_FORMAT_PATHS ?= lib test
@@ -8,7 +8,6 @@ BUILD_ARGS ?=
 IOS_BUILD_ARGS ?=
 APP_SIZE_TARGET_PLATFORM ?= android-arm64
 RIVE_SKIP_SETUP ?= false
-FIREBASE_RUN_ARG ?= $(shell [ -f android/app/google-services.json ] && echo "" || echo "--dart-define=SKIP_FIREBASE_INIT=true")
 DOPPLER_PROJECT ?= prism
 DOPPLER_CONFIG ?= dev
 DOPPLER_REQUIRED ?= true
@@ -113,8 +112,8 @@ analytics-check: ensure-fvm analytics-guard
 	@$(DART) format --line-length $(DART_FORMAT_LINE_LENGTH) lib/core/analytics/events/generated/analytics_events.g.dart
 	@git diff --exit-code -- lib/core/analytics/events/generated/analytics_events.g.dart
 
-firestore-guard:
-	@./tool/firestore_guard.sh
+remote-store-guard:
+	@./tool/remote_store_guard.sh
 
 no-dynamic-guard:
 	@./tool/no_dynamic_guard.sh
@@ -155,9 +154,9 @@ run: ensure-fvm doppler-check
 	export GRADLE_USER_HOME="$(GRADLE_USER_HOME_DIR_POSIX)"; \
 	mkdir -p "$(GRADLE_USER_HOME_DIR_POSIX)"; \
 	if [ -n "$(DEVICE)" ]; then \
-		$(RIVE_SETUP_ENV) $(FLUTTER) run -d "$(DEVICE)" $(FIREBASE_RUN_ARG) $(ENV_DART_DEFINES) $(SENTRY_DART_DEFINES) $(RUN_ARGS); \
+		$(RIVE_SETUP_ENV) $(FLUTTER) run -d "$(DEVICE)" $(ENV_DART_DEFINES) $(SENTRY_DART_DEFINES) $(RUN_ARGS); \
 	else \
-		$(RIVE_SETUP_ENV) $(FLUTTER) run $(FIREBASE_RUN_ARG) $(ENV_DART_DEFINES) $(SENTRY_DART_DEFINES) $(RUN_ARGS); \
+		$(RIVE_SETUP_ENV) $(FLUTTER) run $(ENV_DART_DEFINES) $(SENTRY_DART_DEFINES) $(RUN_ARGS); \
 	fi
 
 build: ensure-fvm doppler-check
@@ -169,7 +168,7 @@ build: ensure-fvm doppler-check
 	export GRADLE_OPTS="$$GRADLE_OPTS $(GRADLE_COMMON_OPTS)"; \
 	export GRADLE_USER_HOME="$(GRADLE_USER_HOME_DIR_POSIX)"; \
 	mkdir -p "$(GRADLE_USER_HOME_DIR_POSIX)"; \
-	$(RIVE_SETUP_ENV) build apk --obfuscate --split-debug-info=build/app/outputs/symbols $(FIREBASE_RUN_ARG) $(ENV_DART_DEFINES) $(SENTRY_DART_DEFINES) $(BUILD_ARGS)
+	$(RIVE_SETUP_ENV) $(FLUTTER) build apk --obfuscate --split-debug-info=build/app/outputs/symbols $(ENV_DART_DEFINES) $(SENTRY_DART_DEFINES) $(BUILD_ARGS)
 
 build-aab: ensure-fvm doppler-check
 	@if [ -n "$(ANDROID_JAVA_HOME)" ]; then \
@@ -180,7 +179,7 @@ build-aab: ensure-fvm doppler-check
 	export GRADLE_OPTS="$$GRADLE_OPTS $(GRADLE_COMMON_OPTS)"; \
 	export GRADLE_USER_HOME="$(GRADLE_USER_HOME_DIR_POSIX)"; \
 	mkdir -p "$(GRADLE_USER_HOME_DIR_POSIX)"; \
-	$(RIVE_SETUP_ENV) $(FLUTTER) build appbundle --release --obfuscate --split-debug-info=build/app/outputs/symbols $(FIREBASE_RUN_ARG) $(ENV_DART_DEFINES) $(SENTRY_DART_DEFINES) $(BUILD_ARGS)
+	$(RIVE_SETUP_ENV) $(FLUTTER) build appbundle --release --obfuscate --split-debug-info=build/app/outputs/symbols $(ENV_DART_DEFINES) $(SENTRY_DART_DEFINES) $(BUILD_ARGS)
 	@if [ "$(SENTRY_UPLOAD)" = "true" ]; then \
 		DOPPLER_PROJECT=$(DOPPLER_PROJECT) SENTRY_DOPPLER_CONFIG=$(SENTRY_DOPPLER_CONFIG) DART_CMD="$(DART)" ./tool/sentry_upload.sh; \
 	fi
@@ -193,8 +192,7 @@ gradle-reset:
 
 size-android: ensure-fvm
 	@mkdir -p build/size/local
-	@printf "import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;\n\nclass DefaultFirebaseOptions {\n  static FirebaseOptions get currentPlatform => throw UnsupportedError('Size analysis stub');\n}\n" > lib/firebase_options.dart
-	@$(FLUTTER) build apk --release --target-platform=$(APP_SIZE_TARGET_PLATFORM) --obfuscate --split-debug-info=build/size/local/symbols --dart-define=SKIP_FIREBASE_INIT=true --analyze-size > build/size/local/build.log 2>&1
+	@$(FLUTTER) build apk --release --target-platform=$(APP_SIZE_TARGET_PLATFORM) --obfuscate --split-debug-info=build/size/local/symbols --analyze-size > build/size/local/build.log 2>&1
 	@cp build/app/outputs/flutter-apk/app-release.apk build/size/local/app-release.apk
 	@echo "APK + size analysis log written to build/size/local"
 

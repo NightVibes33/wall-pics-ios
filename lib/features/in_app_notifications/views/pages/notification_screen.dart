@@ -16,7 +16,6 @@ import 'package:Prism/theme/jam_icons_icons.dart';
 import 'package:Prism/theme/toasts.dart' as toasts;
 import 'package:auto_route/auto_route.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -882,13 +881,11 @@ class _NotificationSettingsSheetState extends State<NotificationSettingsSheet> {
           );
           if (value) {
             await subscribeToTopicSafely(
-              FirebaseMessaging.instance,
               app_state.prismUser.email.split('@')[0],
               sourceTag: 'notification.settings.followers.enable',
             );
           } else {
             await unsubscribeFromTopicSafely(
-              FirebaseMessaging.instance,
               app_state.prismUser.email.split('@')[0],
               sourceTag: 'notification.settings.followers.disable',
             );
@@ -898,7 +895,6 @@ class _NotificationSettingsSheetState extends State<NotificationSettingsSheet> {
               const NotificationPreferenceChangedEvent(preference: NotificationPreferenceValue.posts, value: false),
             );
             await unsubscribeFromTopicSafely(
-              FirebaseMessaging.instance,
               'posts',
               sourceTag: 'notification.settings.posts.disable_from_followers',
             );
@@ -934,13 +930,11 @@ class _NotificationSettingsSheetState extends State<NotificationSettingsSheet> {
                 );
                 if (value) {
                   await subscribeToTopicSafely(
-                    FirebaseMessaging.instance,
                     'posts',
                     sourceTag: 'notification.settings.posts.enable',
                   );
                 } else {
                   await unsubscribeFromTopicSafely(
-                    FirebaseMessaging.instance,
                     'posts',
                     sourceTag: 'notification.settings.posts.disable',
                   );
@@ -993,13 +987,11 @@ class _NotificationSettingsSheetState extends State<NotificationSettingsSheet> {
         );
         if (value) {
           await subscribeToTopicSafely(
-            FirebaseMessaging.instance,
             'recommendations',
             sourceTag: 'notification.settings.recommendations.enable',
           );
         } else {
           await unsubscribeFromTopicSafely(
-            FirebaseMessaging.instance,
             'recommendations',
             sourceTag: 'notification.settings.recommendations.disable',
           );

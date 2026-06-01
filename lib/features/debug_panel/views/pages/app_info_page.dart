@@ -6,7 +6,6 @@ import 'package:Prism/core/persistence/persistence_runtime.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:Prism/env/env.dart';
 import 'package:device_info_plus/device_info_plus.dart';
-import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -24,7 +23,6 @@ class _AppInfoPageState extends State<AppInfoPage> with AutomaticKeepAliveClient
 
   Map<String, String> _deviceInfo = {};
   Map<String, String> _packageInfo = {};
-  Map<String, String> _remoteConfig = {};
   bool _loading = true;
 
   @override
@@ -76,16 +74,6 @@ class _AppInfoPageState extends State<AppInfoPage> with AutomaticKeepAliveClient
         'Build Signature': pkgInfo.buildSignature.isEmpty ? 'N/A' : pkgInfo.buildSignature,
       };
 
-      // Remote Config snapshot
-      try {
-        final rc = getIt<FirebaseRemoteConfig>();
-        _remoteConfig = {};
-        for (final key in rc.getAll().keys) {
-          _remoteConfig[key] = rc.getString(key);
-        }
-      } catch (_) {
-        _remoteConfig = {'error': 'Remote Config unavailable'};
-      }
     } catch (e) {
       _deviceInfo = {'error': e.toString()};
     } finally {
@@ -151,7 +139,6 @@ class _AppInfoPageState extends State<AppInfoPage> with AutomaticKeepAliveClient
     section('User', _userInfo);
     section('Device', _deviceInfo);
     section('Screen', _screenInfo);
-    if (_remoteConfig.isNotEmpty) section('Remote Config', _remoteConfig);
 
     return buf.toString();
   }
@@ -186,7 +173,6 @@ class _AppInfoPageState extends State<AppInfoPage> with AutomaticKeepAliveClient
         _InfoSection(title: 'User', data: _userInfo),
         _InfoSection(title: 'Device', data: _deviceInfo),
         _InfoSection(title: 'Screen', data: _screenInfo),
-        if (_remoteConfig.isNotEmpty) _InfoSection(title: 'Remote Config', data: _remoteConfig),
         const SizedBox(height: 20),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),

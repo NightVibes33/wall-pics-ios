@@ -1,15 +1,16 @@
 import 'dart:convert';
 
-import 'package:Prism/core/firestore/firestore_collections.dart';
-import 'package:Prism/core/firestore/firestore_error.dart';
-import 'package:Prism/core/firestore/firestore_query_specs.dart';
-import 'package:Prism/core/firestore/firestore_runtime.dart';
+import 'package:Prism/core/remote_store/remote_collections.dart';
+import 'package:Prism/core/remote_store/remote_store_error.dart';
+import 'package:Prism/core/remote_store/remote_store_query_specs.dart';
+import 'package:Prism/core/remote_store/remote_store_runtime.dart';
 import 'package:Prism/features/ai_wallpaper/domain/entities/ai_charge_mode.dart';
 import 'package:Prism/features/ai_wallpaper/domain/entities/ai_generation_record.dart';
 import 'package:Prism/features/ai_wallpaper/domain/entities/ai_quality_tier.dart';
 import 'package:Prism/features/ai_wallpaper/domain/entities/ai_style_preset.dart';
 import 'package:Prism/features/ai_wallpaper/domain/repositories/ai_generation_repository.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:Prism/core/state/app_state.dart' as app_state;
+import 'package:Prism/env/env.dart';
 import 'package:http/http.dart' as http;
 
 class AiGenerationApiException implements Exception {
@@ -24,14 +25,11 @@ class AiGenerationApiException implements Exception {
 }
 
 class AiGenerationRepositoryImpl implements AiGenerationRepository {
-  AiGenerationRepositoryImpl({http.Client? client, FirebaseAuth? auth})
-    : _client = client ?? http.Client(),
-      _auth = auth ?? FirebaseAuth.instance;
+  AiGenerationRepositoryImpl({http.Client? client}) : _client = client ?? http.Client();
 
   static const String _apiBase = 'https://prismwalls.com/api/ai';
 
   final http.Client _client;
-  final FirebaseAuth _auth;
 
   @override
   Future<AiGenerationRecord> generate({
@@ -43,8 +41,8 @@ class AiGenerationRepositoryImpl implements AiGenerationRepository {
     required int coinsSpent,
     int? seed,
   }) async {
-    final user = _auth.currentUser;
-    if (user == null) {
+    final userId = app_state.prismUser.id.trim();
+    if (!app_state.prismUser.loggedIn || userId.isEmpty) {
       throw AiGenerationApiException(
         message: 'Please sign in to generate wallpapers.',
         code: 'unauthorized',
@@ -62,7 +60,7 @@ class AiGenerationRepositoryImpl implements AiGenerationRepository {
     final data = await _post('/generations', payload);
     final record = _recordFromApiResponse(
       data: data,
-      userId: user.uid,
+      userId: userId,
       prompt: prompt,
       stylePreset: stylePreset,
       qualityTier: qualityTier,
@@ -85,8 +83,8 @@ class AiGenerationRepositoryImpl implements AiGenerationRepository {
     String variationPrompt = '',
     double strength = 0.45,
   }) async {
-    final user = _auth.currentUser;
-    if (user == null) {
+    final userId = app_state.prismUser.id.trim();
+    if (!app_state.prismUser.loggedIn || userId.isEmpty) {
       throw AiGenerationApiException(
         message: 'Please sign in to generate wallpapers.',
         code: 'unauthorized',
@@ -99,7 +97,7 @@ class AiGenerationRepositoryImpl implements AiGenerationRepository {
     final data = await _post('/generations/$generationId/variations', payload);
     final record = _recordFromApiResponse(
       data: data,
-      userId: user.uid,
+      userId: userId,
       prompt: variationPrompt.isEmpty ? (original?.prompt ?? '') : variationPrompt,
       stylePreset: original?.stylePreset ?? AiStylePreset.abstract,
       qualityTier: original?.qualityTier ?? AiQualityTier.balanced,
@@ -123,8 +121,8 @@ class AiGenerationRepositoryImpl implements AiGenerationRepository {
 
   @override
   Future<void> saveHistoryRecord(AiGenerationRecord record) async {
-    await firestoreClient.setDoc(
-      FirebaseCollections.aiGenerations,
+    await remoteStoreClient.setDoc(
+      RemoteCollections.aiGenerations,
       record.id,
       record.toJson(),
       merge: true,
@@ -135,27 +133,27 @@ class AiGenerationRepositoryImpl implements AiGenerationRepository {
   @override
   Future<List<AiGenerationRecord>> fetchHistory({required String userId, int limit = 50}) async {
     try {
-      final rows = await firestoreClient.query<AiGenerationRecord>(
-        FirestoreQuerySpec(
-          collection: FirebaseCollections.aiGenerations,
+      final rows = await remoteStoreClient.query<AiGenerationRecord>(
+        RemoteStoreQuerySpec(
+          collection: RemoteCollections.aiGenerations,
           sourceTag: 'ai.history.fetch',
-          filters: <FirestoreFilter>[FirestoreFilter(field: 'userId', op: FirestoreFilterOp.isEqualTo, value: userId)],
-          orderBy: <FirestoreOrderBy>[const FirestoreOrderBy(field: 'createdAt', descending: true)],
+          filters: <RemoteStoreFilter>[RemoteStoreFilter(field: 'userId', op: RemoteStoreFilterOp.isEqualTo, value: userId)],
+          orderBy: <RemoteStoreOrderBy>[const RemoteStoreOrderBy(field: 'createdAt', descending: true)],
           limit: limit,
           dedupeWindowMs: 2000,
         ),
         (data, docId) => AiGenerationRecord.fromJson(data, fallbackId: docId),
       );
       return rows;
-    } on FirestoreError catch (error) {
+    } on RemoteStoreError catch (error) {
       if (error.code != 'failed-precondition') {
         rethrow;
       }
-      final fallbackRows = await firestoreClient.query<AiGenerationRecord>(
-        FirestoreQuerySpec(
-          collection: FirebaseCollections.aiGenerations,
+      final fallbackRows = await remoteStoreClient.query<AiGenerationRecord>(
+        RemoteStoreQuerySpec(
+          collection: RemoteCollections.aiGenerations,
           sourceTag: 'ai.history.fetch.missing_index_fallback',
-          filters: <FirestoreFilter>[FirestoreFilter(field: 'userId', op: FirestoreFilterOp.isEqualTo, value: userId)],
+          filters: <RemoteStoreFilter>[RemoteStoreFilter(field: 'userId', op: RemoteStoreFilterOp.isEqualTo, value: userId)],
           dedupeWindowMs: 2000,
         ),
         (data, docId) => AiGenerationRecord.fromJson(data, fallbackId: docId),
@@ -169,8 +167,8 @@ class AiGenerationRepositoryImpl implements AiGenerationRepository {
   }
 
   Future<AiGenerationRecord?> _fetchById(String generationId) async {
-    return firestoreClient.getById<AiGenerationRecord>(
-      FirebaseCollections.aiGenerations,
+    return remoteStoreClient.getById<AiGenerationRecord>(
+      RemoteCollections.aiGenerations,
       generationId,
       (data, docId) => AiGenerationRecord.fromJson(data, fallbackId: docId),
       sourceTag: 'ai.history.fetch_by_id',
@@ -178,18 +176,15 @@ class AiGenerationRepositoryImpl implements AiGenerationRepository {
   }
 
   Future<Map<String, dynamic>> _post(String path, Map<String, dynamic> body) async {
-    final token = await _auth.currentUser?.getIdToken();
-    if (token == null || token.trim().isEmpty) {
-      throw AiGenerationApiException(message: 'Please sign in to continue.', code: 'unauthorized', statusCode: 401);
-    }
-
     final response = await _client
         .post(
           Uri.parse('$_apiBase$path'),
           headers: <String, String>{
-            'Authorization': 'Bearer $token',
             'Content-Type': 'application/json',
             'Accept': 'application/json',
+            'X-Prism-User-Id': app_state.prismUser.id.trim(),
+            if (Env.normalize(Env.aiClientToken).isNotEmpty)
+              'X-Prism-Client-Token': Env.normalize(Env.aiClientToken),
           },
           body: jsonEncode(body),
         )

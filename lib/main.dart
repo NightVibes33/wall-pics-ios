@@ -8,7 +8,6 @@ import 'package:Prism/core/analytics/app_analytics.dart';
 import 'package:Prism/core/analytics/events/events.dart';
 import 'package:Prism/core/analytics/providers/analytics_provider.dart';
 import 'package:Prism/core/analytics/providers/composite_analytics_provider.dart';
-import 'package:Prism/core/analytics/providers/firebase_analytics_provider.dart';
 import 'package:Prism/core/analytics/providers/mixpanel_analytics_provider.dart';
 import 'package:Prism/core/analytics/providers/noop_analytics_provider.dart';
 import 'package:Prism/core/coins/coins_service.dart';
@@ -28,7 +27,6 @@ import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/router/deep_link_navigation.dart';
 import 'package:Prism/core/router/deep_link_parser.dart';
 import 'package:Prism/core/router/notification_route_mapper.dart';
-import 'package:Prism/core/startup/firebase_init.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:Prism/core/utils/edge_to_edge_overlay_style.dart';
 import 'package:Prism/core/utils/status.dart';
@@ -53,13 +51,10 @@ import 'package:Prism/features/theme_light/theme_light.dart';
 import 'package:Prism/features/theme_mode/theme_mode.dart';
 import 'package:Prism/features/user_search/user_search.dart';
 import 'package:Prism/features/wall_of_the_day/biz/bloc/wotd_bloc.j.dart';
-import 'package:Prism/firebase_options.dart';
 import 'package:Prism/logger/logger.dart';
 import 'package:Prism/notifications/localNotification.dart';
 import 'package:Prism/theme/toasts.dart' as toasts;
 import 'package:auto_route/auto_route.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide Badge;
 import 'package:flutter/services.dart';
@@ -84,19 +79,6 @@ const double _sentryReplaySessionSampleRate = 0.1;
 const double _sentryReplayOnErrorSampleRate = 1.0;
 // final GlobalKey<NavigatorState> _sentryFeedbackNavigatorKey = GlobalKey<NavigatorState>();
 // bool _sentryFeedbackSheetOpen = false;
-
-/// Top-level FCM background message handler.
-/// Must be a top-level function annotated with @pragma('vm:entry-point').
-/// Avoid any UI work here — only lightweight processing.
-@pragma('vm:entry-point')
-Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // Firebase.initializeApp() is already called before main() is reached, but
-  // in the background isolate we may need to re-initialise.  The guard inside
-  // Firebase.initializeApp makes this safe to call multiple times.
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  final String route = message.data['route']?.toString() ?? '';
-  logger.d('Background push received: $route', tag: 'Push');
-}
 
 int _to8BitChannel(double value) {
   final channel = (value * 255).round();
@@ -179,55 +161,15 @@ Future<void> main() async {
         } catch (_) {}
       };
 
-      const skipFirebaseInit = bool.fromEnvironment('SKIP_FIREBASE_INIT');
       const sideloadBuild = Env.sideloadBuild;
       final SentryConfig sentryConfig = _resolveSentryConfig();
-
-      // Kick off Firebase in background — does NOT block runApp.
-      // StartupRepositoryImpl.bootstrap() will await FirebaseInit.readyFuture
-      // before touching FirebaseRemoteConfig.
-      if (!skipFirebaseInit) {
-        FirebaseInit.setFuture(
-          _initFirebase().then((_) => true).catchError((Object e, StackTrace s) {
-            logger.w(
-              'Firebase initialization failed; continuing without Firebase-backed startup features.',
-              error: e,
-              stackTrace: s,
-            );
-            return false;
-          }),
-        );
-        // Register FCM as soon as Firebase is ready (no-op if init failed).
-        unawaited(
-          FirebaseInit.readyFuture.then((initialized) {
-            if (initialized) {
-              FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-            }
-            unawaited(
-              MonitoringRuntime.reporter.addBreadcrumb(
-                message: 'Startup stage reached',
-                category: 'app.startup.stage',
-                data: <String, Object?>{'stage': 'firebase_init_completed', 'firebase_initialized': initialized},
-              ),
-            );
-          }),
-        );
-      } else {
-        FirebaseInit.setFuture(Future<bool>.value(false));
-        logger.w('Skipping Firebase initialization for this run (SKIP_FIREBASE_INIT=true).');
-      }
 
       // Only truly-blocking tasks remain on the critical path.
       await Future.wait(<Future<Object?>>[PersistenceBootstrap.initialize(), _initializeMonitoring(sentryConfig)]);
 
-      // Defer MobileAds and Analytics to after first frame. Resolves firebaseInitialized
-      // lazily once Firebase background init completes.
+      // Defer MobileAds and Analytics to after first frame.
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        unawaited(
-          FirebaseInit.readyFuture.then(
-            (firebaseInitialized) => _deferredStartup(firebaseInitialized: firebaseInitialized),
-          ),
-        );
+        unawaited(_deferredStartup());
       });
 
       await MonitoringRuntime.reporter.addBreadcrumb(
@@ -270,12 +212,6 @@ Future<void> main() async {
         SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]),
       ]);
       applyEdgeToEdgeOverlayStyle(statusBarIconBrightness: currentMode == 'Light' ? Brightness.dark : Brightness.light);
-
-      // Await Firebase init before building the widget tree.
-      // DI lazy singletons (Firestore, Auth, RemoteConfig) call .instance which
-      // requires Firebase to be ready. Firebase was kicked off at the top of
-      // main() so in practice it completes during or before Persistence init.
-      await FirebaseInit.readyFuture;
 
       if (!sideloadBuild) {
         await PurchasesService.instance.configureEarly();
@@ -327,17 +263,13 @@ Future<void> main() async {
   );
 }
 
-Future<void> _initFirebase() async {
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-}
-
-Future<void> _deferredStartup({required bool firebaseInitialized}) async {
+Future<void> _deferredStartup() async {
   if (!Env.sideloadBuild) {
     await MobileAds.instance.initialize();
   } else {
     logger.w('Skipping MobileAds initialization for sideload build.');
   }
-  await _configureAnalyticsRuntime(firebaseInitialized: firebaseInitialized);
+  await _configureAnalyticsRuntime();
 }
 
 SentryConfig _resolveSentryConfig() {
@@ -439,7 +371,7 @@ Future<void> _initializeMonitoring(SentryConfig config) async {
 //   }
 // }
 
-Future<void> _configureAnalyticsRuntime({required bool firebaseInitialized}) async {
+Future<void> _configureAnalyticsRuntime() async {
   final bool mixpanelEnabled = _isMixpanelEnabled();
   logger.i(
     'Analytics startup configuration resolved.',
@@ -458,10 +390,6 @@ Future<void> _configureAnalyticsRuntime({required bool firebaseInitialized}) asy
   final AnalyticsProvider? mixpanelProvider = await _buildMixpanelProvider(enabled: mixpanelEnabled);
   if (mixpanelProvider != null) {
     providers.add(mixpanelProvider);
-  }
-
-  if (firebaseInitialized) {
-    providers.add(FirebaseAnalyticsProvider());
   }
 
   if (providers.isEmpty) {
@@ -629,7 +557,7 @@ class _MyAppState extends State<_MyApp> with WidgetsBindingObserver {
     );
   }
 
-  /// Minimum time between coin syncs triggered by app resume to reduce Firestore reads/writes.
+  /// Minimum time between coin syncs triggered by app resume to reduce RemoteStore reads/writes.
   static const Duration _coinSyncResumeThrottle = Duration(minutes: 10);
   DateTime? _lastCoinSyncResume;
 
@@ -980,28 +908,7 @@ class _MyAppState extends State<_MyApp> with WidgetsBindingObserver {
   }
 
   Future<void> _listenForPushMessages() async {
-    // Wait for Firebase to be ready before touching any Firebase APIs.
-    final bool firebaseReady = await FirebaseInit.readyFuture;
-    if (!firebaseReady) return;
-
-    // Foreground: show a heads-up local notification + sync the inbox.
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      unawaited(localNotification.showPushNotification(message));
-      unawaited(syncInAppNotificationsFromRemote().then((_) => _reloadInAppNotificationsFromCache()));
-    });
-
-    // Background / terminated → foreground: user tapped the notification.
-    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      unawaited(_handlePushTap(message.data));
-    });
-
-    // Launched from terminated state by tapping a notification.
-    FirebaseMessaging.instance.getInitialMessage().then((RemoteMessage? message) {
-      if (message == null) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        unawaited(_handlePushTap(message.data));
-      });
-    });
+    // Remote push messaging is disabled in this build.
   }
 
   @override

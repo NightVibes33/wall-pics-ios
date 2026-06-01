@@ -33,6 +33,9 @@ class Env {
   static const String sentryDist = String.fromEnvironment('SENTRY_DIST');
   static const String sentryEnabled = String.fromEnvironment('SENTRY_ENABLED', defaultValue: 'auto');
 
+  // AI
+  static const String aiClientToken = String.fromEnvironment('AI_CLIENT_TOKEN');
+
   // Mixpanel
   static const String mixpanelToken = String.fromEnvironment('MIXPANEL_TOKEN');
   static const String mixpanelEnabled = String.fromEnvironment('MIXPANEL_ENABLED', defaultValue: 'auto');

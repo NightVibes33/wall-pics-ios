@@ -2,9 +2,9 @@ import 'dart:math';
 
 import 'package:Prism/core/constants/app_constants.dart';
 import 'package:Prism/core/error/failure.dart';
-import 'package:Prism/core/firestore/firestore_client.dart';
-import 'package:Prism/core/firestore/firestore_collections.dart';
-import 'package:Prism/core/firestore/firestore_query_specs.dart';
+import 'package:Prism/core/remote_store/remote_store_client.dart';
+import 'package:Prism/core/remote_store/remote_collections.dart';
+import 'package:Prism/core/remote_store/remote_store_query_specs.dart';
 import 'package:Prism/core/persistence/data_sources/feed_cache_local_data_source.dart';
 import 'package:Prism/core/persistence/data_sources/settings_local_data_source.dart';
 import 'package:Prism/core/personalization/personalized_interests_catalog.dart';
@@ -25,13 +25,12 @@ import 'package:Prism/features/prism_feed/data/mappers/prism_wall_doc_mapper.dar
 import 'package:Prism/features/user_blocks/domain/repositories/user_block_repository.dart';
 import 'package:Prism/features/wallhaven_feed/domain/repositories/wallhaven_wallpaper_repository.dart';
 import 'package:Prism/logger/logger.dart';
-import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:injectable/injectable.dart';
 
 @LazySingleton(as: PersonalizedFeedRepository)
 class PersonalizedFeedRepositoryImpl implements PersonalizedFeedRepository {
   PersonalizedFeedRepositoryImpl(
-    this._firestoreClient,
+    this._remoteStoreClient,
     this._feedCacheLocal,
     this._settingsLocal,
     this._wallhavenRepository,
@@ -39,7 +38,7 @@ class PersonalizedFeedRepositoryImpl implements PersonalizedFeedRepository {
     this._userBlockRepository,
   );
 
-  final FirestoreClient _firestoreClient;
+  final RemoteStoreClient _remoteStoreClient;
   final FeedCacheLocalDataSource _feedCacheLocal;
   final SettingsLocalDataSource _settingsLocal;
   final WallhavenWallpaperRepository _wallhavenRepository;
@@ -51,7 +50,7 @@ class PersonalizedFeedRepositoryImpl implements PersonalizedFeedRepository {
   static const int _cacheTtlHours = 2;
   static const int _seenWindow = 300;
 
-  /// Reused on `page > 1` to avoid Remote Config + Firestore user doc on every scroll page.
+  /// Reused on `page > 1` to avoid Remote Config + RemoteStore user doc on every scroll page.
   String? _feedBootstrapScope;
   Map<String, dynamic>? _cachedUserDoc;
   List<PersonalizedInterest>? _cachedCatalog;
@@ -111,7 +110,6 @@ class PersonalizedFeedRepositoryImpl implements PersonalizedFeedRepository {
       } else {
         userDoc = isGuest ? const <String, dynamic>{} : await _resolveUserDoc(userId: userId);
         catalog = await PersonalizedInterestsCatalog.load(
-          remoteConfig: FirebaseRemoteConfig.instance,
           settingsLocal: _settingsLocal,
         );
         interests = _resolveInterests(userDoc, catalog);
@@ -208,8 +206,8 @@ class PersonalizedFeedRepositoryImpl implements PersonalizedFeedRepository {
   }
 
   Future<Map<String, dynamic>> _resolveUserDoc({required String userId}) async {
-    final doc = await _firestoreClient.getById<Map<String, dynamic>>(
-      FirebaseCollections.usersV2,
+    final doc = await _remoteStoreClient.getById<Map<String, dynamic>>(
+      RemoteCollections.usersV2,
       userId,
       (data, _) => data,
       sourceTag: 'personalized.user_doc_by_id',
@@ -223,13 +221,13 @@ class PersonalizedFeedRepositoryImpl implements PersonalizedFeedRepository {
       return <String, dynamic>{};
     }
 
-    final users = await _firestoreClient.query<Map<String, dynamic>>(
-      FirestoreQuerySpec(
-        collection: FirebaseCollections.usersV2,
+    final users = await _remoteStoreClient.query<Map<String, dynamic>>(
+      RemoteStoreQuerySpec(
+        collection: RemoteCollections.usersV2,
         sourceTag: 'personalized.user_doc_by_email',
-        filters: <FirestoreFilter>[FirestoreFilter(field: 'email', op: FirestoreFilterOp.isEqualTo, value: email)],
+        filters: <RemoteStoreFilter>[RemoteStoreFilter(field: 'email', op: RemoteStoreFilterOp.isEqualTo, value: email)],
         limit: 1,
-        cachePolicy: FirestoreCachePolicy.memoryFirst,
+        cachePolicy: RemoteStoreCachePolicy.memoryFirst,
       ),
       (data, _) => data,
     );
@@ -277,17 +275,17 @@ class PersonalizedFeedRepositoryImpl implements PersonalizedFeedRepository {
         .map((entry) {
           final chunkIndex = entry.key;
           final chunk = entry.value;
-          return _firestoreClient.query<_CreatorWallRow>(
-            FirestoreQuerySpec(
-              collection: FirebaseCollections.walls,
+          return _remoteStoreClient.query<_CreatorWallRow>(
+            RemoteStoreQuerySpec(
+              collection: RemoteCollections.walls,
               sourceTag: 'personalized.creator_chunk_${chunkIndex + 1}',
-              filters: <FirestoreFilter>[
-                const FirestoreFilter(field: 'review', op: FirestoreFilterOp.isEqualTo, value: true),
-                FirestoreFilter(field: 'email', op: FirestoreFilterOp.whereIn, value: chunk),
+              filters: <RemoteStoreFilter>[
+                const RemoteStoreFilter(field: 'review', op: RemoteStoreFilterOp.isEqualTo, value: true),
+                RemoteStoreFilter(field: 'email', op: RemoteStoreFilterOp.whereIn, value: chunk),
               ],
-              orderBy: const <FirestoreOrderBy>[FirestoreOrderBy(field: 'createdAt', descending: true)],
+              orderBy: const <RemoteStoreOrderBy>[RemoteStoreOrderBy(field: 'createdAt', descending: true)],
               limit: perChunkLimit,
-              cachePolicy: FirestoreCachePolicy.memoryFirst,
+              cachePolicy: RemoteStoreCachePolicy.memoryFirst,
             ),
             (data, docId) => _CreatorWallRow(
               docId: docId,
@@ -353,7 +351,7 @@ class PersonalizedFeedRepositoryImpl implements PersonalizedFeedRepository {
   /// walls and rely on the ranking service's interest-hit scoring on the
   /// `collections` and `tags` fields to surface relevant content.
   ///
-  /// Requires a composite Firestore index on the `walls` collection:
+  /// Requires a composite RemoteStore index on the `walls` collection:
   ///   Fields: review (ASC), createdAt (DESC)
   Future<List<FeedItemEntity>> _fetchDiscoveryItems({
     required List<String> interests,
@@ -362,14 +360,14 @@ class PersonalizedFeedRepositoryImpl implements PersonalizedFeedRepository {
   }) async {
     // Fetch recent reviewed walls — no category filter so we get a broad pool.
     // The ranking service scores them by interest-hit on collections/tags.
-    final rows = await _firestoreClient.query<_CreatorWallRow>(
-      const FirestoreQuerySpec(
-        collection: FirebaseCollections.walls,
+    final rows = await _remoteStoreClient.query<_CreatorWallRow>(
+      const RemoteStoreQuerySpec(
+        collection: RemoteCollections.walls,
         sourceTag: 'personalized.discovery',
-        filters: <FirestoreFilter>[FirestoreFilter(field: 'review', op: FirestoreFilterOp.isEqualTo, value: true)],
-        orderBy: <FirestoreOrderBy>[FirestoreOrderBy(field: 'createdAt', descending: true)],
+        filters: <RemoteStoreFilter>[RemoteStoreFilter(field: 'review', op: RemoteStoreFilterOp.isEqualTo, value: true)],
+        orderBy: <RemoteStoreOrderBy>[RemoteStoreOrderBy(field: 'createdAt', descending: true)],
         limit: 40,
-        cachePolicy: FirestoreCachePolicy.memoryFirst,
+        cachePolicy: RemoteStoreCachePolicy.memoryFirst,
       ),
       (data, docId) => _CreatorWallRow(
         docId: docId,
@@ -649,19 +647,19 @@ Map<String, Object?> _encodePrism(PrismWallpaper wall) {
     'review': wall.review,
     'tags': wall.tags,
     'aiMetadata': wall.aiMetadata,
-    if (wall.firestoreDocumentId != null) 'firestoreDocumentId': wall.firestoreDocumentId,
+    if (wall.remoteStoreDocumentId != null) 'remoteStoreDocumentId': wall.remoteStoreDocumentId,
   };
 }
 
 PrismWallpaper _decodePrism(Map<String, dynamic> map) {
-  final String? fsId = map['firestoreDocumentId']?.toString();
+  final String? fsId = map['remoteStoreDocumentId']?.toString();
   return PrismWallpaper(
     core: _decodeWallpaperCore(toJsonMap(map['core'])),
     collections: _toStringList(map['collections']),
     review: map['review'] == true,
     tags: _toStringList(map['tags']),
     aiMetadata: toJsonMap(map['aiMetadata']),
-    firestoreDocumentId: (fsId != null && fsId.isNotEmpty) ? fsId : null,
+    remoteStoreDocumentId: (fsId != null && fsId.isNotEmpty) ? fsId : null,
   );
 }
 

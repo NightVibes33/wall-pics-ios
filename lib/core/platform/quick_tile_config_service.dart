@@ -85,7 +85,10 @@ class QuickTileConfigService {
     List<String> urls = const <String>[];
     if (urlsRaw != null) {
       try {
-        urls = (jsonDecode(urlsRaw) as List<dynamic>).cast<String>();
+        final decoded = jsonDecode(urlsRaw);
+        if (decoded is List) {
+          urls = decoded.whereType<String>().toList(growable: false);
+        }
       } catch (_) {}
     }
     return QuickTileFavsConfig(target: _targetFromString(targetRaw), wallUrls: urls);

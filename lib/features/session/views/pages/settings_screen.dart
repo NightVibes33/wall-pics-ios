@@ -709,10 +709,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         ListTile(
           leading: const Icon(JamIcons.file),
-          title: Text('Firestore Telemetry', style: _titleStyle),
+          title: Text('Remote Store Telemetry', style: _titleStyle),
           subtitle: const Text('Database usage and telemetry stats', style: TextStyle(fontSize: 12)),
           trailing: const Icon(Icons.chevron_right_rounded),
-          onTap: () => context.router.push(const FirestoreTelemetryRoute()),
+          onTap: () => context.router.push(const RemoteStoreTelemetryRoute()),
         ),
       ],
     );

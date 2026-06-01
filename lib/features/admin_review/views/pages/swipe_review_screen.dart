@@ -1,4 +1,4 @@
-import 'package:Prism/core/firestore/firestore_document.dart';
+import 'package:Prism/core/remote_store/remote_store_document.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:Prism/features/admin_review/biz/bloc/review_batch_bloc.dart';
 import 'package:Prism/features/admin_review/views/widgets/swipe_action_overlay.dart';
@@ -32,7 +32,7 @@ class _SwipeReviewScreenState extends State<SwipeReviewScreen> with SingleTicker
   static const double _swipeThreshold = 100;
   static const double _velocityThreshold = 500;
 
-  static String? _uploadedAgo(FirestoreDocument doc) {
+  static String? _uploadedAgo(RemoteStoreDocument doc) {
     final DateTime? at = doc.createdAt;
     if (at == null) return null;
     return timeago.format(at.toLocal());
@@ -414,7 +414,7 @@ class _SwipeReviewScreenState extends State<SwipeReviewScreen> with SingleTicker
     );
   }
 
-  void _showFullImage(FirestoreDocument wall) {
+  void _showFullImage(RemoteStoreDocument wall) {
     final url = wall.wallpaperUrl.isNotEmpty ? wall.wallpaperUrl : wall.wallpaperThumb;
     if (url.isEmpty) return;
 
