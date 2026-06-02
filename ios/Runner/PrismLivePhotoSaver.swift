@@ -43,14 +43,14 @@ final class PrismLivePhotoSaver: NSObject {
         let workDir = try self.makeWorkDirectory()
         let rawVideo = try self.fetchFile(urlString: videoUrl, fallbackExtension: "mp4", directory: workDir)
         let rawStill: URL
-        do {
-          rawStill = try self.makeStillFrame(from: rawVideo, directory: workDir)
-        } catch {
-          if let stillUrl = stillUrl?.trimmingCharacters(in: .whitespacesAndNewlines), !stillUrl.isEmpty {
+        if let stillUrl = stillUrl?.trimmingCharacters(in: .whitespacesAndNewlines), !stillUrl.isEmpty {
+          do {
             rawStill = try self.fetchFile(urlString: stillUrl, fallbackExtension: "jpg", directory: workDir)
-          } else {
-            throw error
+          } catch {
+            rawStill = try self.makeStillFrame(from: rawVideo, directory: workDir)
           }
+        } else {
+          rawStill = try self.makeStillFrame(from: rawVideo, directory: workDir)
         }
         let pairedPhoto = workDir.appendingPathComponent("live-photo.jpg")
         let pairedVideo = workDir.appendingPathComponent("live-video.mov")
@@ -169,6 +169,7 @@ final class PrismLivePhotoSaver: NSObject {
 
     let reader = try AVAssetReader(asset: asset)
     let writer = try AVAssetWriter(outputURL: output, fileType: .mov)
+    writer.shouldOptimizeForNetworkUse = false
     writer.metadata = asset.metadata + [contentIdentifierMetadataItem(assetId: assetId)]
 
     var trackPairs: [(AVAssetWriterInput, AVAssetReaderOutput)] = []
@@ -197,6 +198,7 @@ final class PrismLivePhotoSaver: NSObject {
 
     let metadataInput = try stillImageTimeMetadataInput()
     let metadataAdaptor = AVAssetWriterInputMetadataAdaptor(assetWriterInput: metadataInput)
+    metadataInput.expectsMediaDataInRealTime = false
     guard writer.canAdd(metadataInput) else { throw LivePhotoError.metadataWriteFailed }
     writer.add(metadataInput)
 
@@ -207,7 +209,7 @@ final class PrismLivePhotoSaver: NSObject {
     }
     writer.startSession(atSourceTime: .zero)
 
-    try appendStillImageTimeMetadata(adaptor: metadataAdaptor, input: metadataInput)
+    try appendStillImageTimeMetadata(adaptor: metadataAdaptor, input: metadataInput, duration: asset.duration)
 
     let copyQueue = DispatchQueue(label: "com.nightvibes.prism.live-photo.copy")
     let group = DispatchGroup()
@@ -278,7 +280,8 @@ final class PrismLivePhotoSaver: NSObject {
 
   private func appendStillImageTimeMetadata(
     adaptor: AVAssetWriterInputMetadataAdaptor,
-    input: AVAssetWriterInput
+    input: AVAssetWriterInput,
+    duration sourceDuration: CMTime
   ) throws {
     let stillTime = AVMutableMetadataItem()
     stillTime.keySpace = .quickTimeMetadata
@@ -286,9 +289,12 @@ final class PrismLivePhotoSaver: NSObject {
     stillTime.value = NSNumber(value: Int8(0))
     stillTime.dataType = kCMMetadataBaseDataType_SInt8 as String
 
+    let duration = sourceDuration.isValid && sourceDuration.seconds > 0
+      ? sourceDuration
+      : CMTime(value: 1, timescale: 100)
     let group = AVTimedMetadataGroup(
       items: [stillTime],
-      timeRange: CMTimeRange(start: .zero, duration: CMTime(value: 1, timescale: 100))
+      timeRange: CMTimeRange(start: .zero, duration: duration)
     )
     guard adaptor.append(group) else { throw LivePhotoError.metadataWriteFailed }
     input.markAsFinished()

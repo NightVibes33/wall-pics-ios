@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/widgets/common/autoplay_video_preview.dart';
+import 'package:Prism/core/widgets/common/parallax_archive_image.dart';
 import 'package:Prism/core/wallpaper/wallpaper_source.dart';
 import 'package:Prism/data/categories/category_definition.dart';
 import 'package:Prism/features/category_feed/domain/entities/category_entity.dart';
@@ -141,6 +142,16 @@ class _HomeTabPageState extends State<HomeTabPage> {
   }
 
   Future<_HomeDashboardData> _loadDashboard() async {
+    final query = _submittedQuery.trim();
+    final activeTab = _tabs[_activeTabIndex];
+    if (query.isEmpty && activeTab.query == null) {
+      final bootstrap = await PrismCatalogDataSource.instance.fetchHomeBootstrap();
+      final bootstrapped = _dashboardFromBootstrap(bootstrap, activeTab);
+      if (bootstrapped != null) {
+        return bootstrapped;
+      }
+    }
+
     final futures = <Future<_HomeSection>>[];
     final keys = <String>{};
 
@@ -165,7 +176,6 @@ class _HomeTabPageState extends State<HomeTabPage> {
       futures.add(_loadSearchSection(title: title, query: query));
     }
 
-    final query = _submittedQuery.trim();
     if (query.isNotEmpty) {
       addSearch(title: 'For You', query: query);
     } else {
@@ -192,6 +202,51 @@ class _HomeTabPageState extends State<HomeTabPage> {
         .where((section) => section.items.isNotEmpty)
         .toList(growable: false);
     return _HomeDashboardData(sections: sections);
+  }
+
+  _HomeDashboardData? _dashboardFromBootstrap(PrismCatalogHomeBootstrap? bootstrap, _HomeTabSpec activeTab) {
+    if (bootstrap == null || bootstrap.sections.isEmpty) {
+      return null;
+    }
+
+    final sections = <_HomeSection>[];
+    for (final section in bootstrap.sections) {
+      final items = _uniqueItems(section.items).take(18).toList(growable: false);
+      if (items.isEmpty) {
+        continue;
+      }
+      sections.add(
+        _HomeSection(
+          title: section.title,
+          contentType: section.contentType,
+          slug: section.slug,
+          kind: _kindForBootstrap(section.kind, section.contentType),
+          items: items,
+        ),
+      );
+    }
+    if (sections.isEmpty) {
+      return null;
+    }
+
+    final activeContentType = activeTab.contentType ?? PrismCatalogDataSource.regularContentType;
+    final activeSlug = activeTab.slug ?? 'for-you';
+    sections.sort((a, b) {
+      final aActive = a.contentType == activeContentType && a.slug == activeSlug ? 0 : 1;
+      final bActive = b.contentType == activeContentType && b.slug == activeSlug ? 0 : 1;
+      if (aActive != bActive) return aActive.compareTo(bActive);
+      return 0;
+    });
+    return _HomeDashboardData(sections: sections);
+  }
+
+  _SectionKind _kindForBootstrap(String kind, String contentType) {
+    return switch (kind.trim()) {
+      'live' => _SectionKind.live,
+      'matching' => _SectionKind.matching,
+      'profile' => _SectionKind.profile,
+      _ => _kindFor(contentType),
+    };
   }
 
   Future<_HomeSection> _loadCatalogSection({
@@ -256,11 +311,9 @@ class _HomeTabPageState extends State<HomeTabPage> {
   _SectionKind _kindFor(String? contentType) {
     return switch (contentType) {
       PrismCatalogDataSource.liveContentType => _SectionKind.live,
-      PrismCatalogDataSource.liveDiyTemplateContentType => _SectionKind.live,
       PrismCatalogDataSource.matchingContentType => _SectionKind.matching,
       PrismCatalogDataSource.doubleContentType => _SectionKind.matching,
       PrismCatalogDataSource.profilePictureContentType => _SectionKind.profile,
-      PrismCatalogDataSource.chargingAnimationContentType => _SectionKind.charging,
       _ => _SectionKind.wallpaper,
     };
   }
@@ -285,11 +338,16 @@ class _HomeTabPageState extends State<HomeTabPage> {
         .expand((item) {
           final paired = WallpaperTile.pairedPreviewUrlsForItem(item);
           if (paired.isNotEmpty) return paired;
-          final poster = WallpaperTile.posterUrlForItem(item);
-          return <String>[(poster.isNotEmpty ? poster : item.thumbnailUrl).trim()];
+          if (WallpaperTile.animatedPreviewUrlForItem(item).isNotEmpty) {
+            return const <String>[];
+          }
+          if (WallpaperTile.parallaxArchiveUrlForItem(item).isNotEmpty) {
+            return const <String>[];
+          }
+          return <String>[item.thumbnailUrl.trim()];
         })
         .where((url) => url.isNotEmpty)
-        .take(54)
+        .take(90)
         .where(_precachedUrls.add)
         .toList(growable: false);
     if (urls.isEmpty) {
@@ -767,15 +825,17 @@ class _HomeWallpaperCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final paired = WallpaperTile.pairedImageUrlsForItem(item);
     final animatedPreviewUrl = WallpaperTile.animatedPreviewUrlForItem(item);
+    final parallaxArchiveUrl = WallpaperTile.parallaxArchiveUrlForItem(item);
     final image = paired.length >= 2
         ? _pairedImage(context, paired)
         : animatedPreviewUrl.isNotEmpty
             ? AutoplayVideoPreview(
                 videoUrl: animatedPreviewUrl,
-                posterUrl: WallpaperTile.posterUrlForItem(item),
                 fit: BoxFit.cover,
               )
-            : _image(context, item.thumbnailUrl);
+            : parallaxArchiveUrl.isNotEmpty
+                ? _image(context, parallaxArchiveUrl)
+                : _image(context, item.thumbnailUrl);
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -796,13 +856,18 @@ class _HomeWallpaperCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              if (section.kind == _SectionKind.live || section.kind == _SectionKind.charging)
+              if (section.kind == _SectionKind.live)
                 Positioned(left: 8, top: 8, child: _MediaBadge(kind: section.kind)),
             ],
           ),
         ),
       ),
     );
+  }
+
+  bool _isArchiveUrl(String url) {
+    final path = Uri.tryParse(url)?.path.toLowerCase() ?? url.toLowerCase();
+    return path.endsWith('.zip');
   }
 
   Widget _pairedImage(BuildContext context, List<String> urls) {
@@ -832,6 +897,12 @@ class _HomeWallpaperCard extends StatelessWidget {
     if (url.isEmpty) {
       return const ColoredBox(color: Color(0xFF111114));
     }
+    if (_isArchiveUrl(url)) {
+      return ParallaxArchiveImage(
+        archiveUrl: url,
+        fit: BoxFit.cover,
+      );
+    }
     final size = MediaQuery.sizeOf(context);
     final pixelRatio = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 3.0);
     final cacheWidth = ((size.width / 3) * pixelRatio).ceil();
@@ -860,12 +931,10 @@ class _MediaBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final icon = switch (kind) {
-      _SectionKind.charging => Icons.bolt,
       _SectionKind.matching => JamIcons.pictures_f,
       _ => JamIcons.play_circle_f,
     };
     final label = switch (kind) {
-      _SectionKind.charging => 'Charge',
       _SectionKind.matching => 'Set',
       _ => 'Live',
     };
@@ -1039,8 +1108,9 @@ class _MatchingCatalogScreenState extends State<_MatchingCatalogScreen> {
   Future<void> _loadTabs() async {
     try {
       final categories = await PrismCatalogDataSource.instance.loadCategories();
+      const pinnedSlugs = <String>{'friends-3801', '3-friends', '4-friends', '5-friends'};
       final seen = <String>{'for-you'};
-      final tabs = <_MatchingCatalogTab>[
+      final allTabs = <_MatchingCatalogTab>[
         const _MatchingCatalogTab(label: 'For You', slug: 'for-you'),
       ];
       for (final category in categories) {
@@ -1051,12 +1121,19 @@ class _MatchingCatalogScreenState extends State<_MatchingCatalogScreen> {
           continue;
         }
         if (seen.add(slug)) {
-          tabs.add(_MatchingCatalogTab(label: name, slug: slug));
-        }
-        if (tabs.length >= 8) {
-          break;
+          allTabs.add(_MatchingCatalogTab(label: name, slug: slug));
         }
       }
+      final pinnedTabs = allTabs.where((tab) => pinnedSlugs.contains(tab.slug)).toList(growable: false);
+      final regularTabs = allTabs
+          .where((tab) => tab.slug != 'for-you' && !pinnedSlugs.contains(tab.slug))
+          .take(8)
+          .toList(growable: false);
+      final tabs = <_MatchingCatalogTab>[
+        const _MatchingCatalogTab(label: 'For You', slug: 'for-you'),
+        ...pinnedTabs,
+        ...regularTabs,
+      ];
       if (!mounted) return;
       final requestedIndex = tabs.indexWhere((tab) => tab.slug == widget.slug);
       final nextIndex = requestedIndex >= 0 ? requestedIndex : 0;
@@ -1631,4 +1708,4 @@ class _HomeShortcut {
   final Color accent;
 }
 
-enum _SectionKind { wallpaper, live, matching, profile, charging }
+enum _SectionKind { wallpaper, live, matching, profile }

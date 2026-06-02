@@ -19,8 +19,11 @@ class PersistenceKeys {
   static const String cacheIconsAppsUpdatedAtUtc = 'cache.icons.apps.updated_at_utc';
 
   static const String cacheFeedPrefix = 'cache.feed.';
+  static const String cachePrismCatalogPrefix = 'cache.prism.catalog.';
 
   static String cacheFeed(String source, String scope) => '$cacheFeedPrefix$source.$scope';
+
+  static String cachePrismCatalog(String fileName) => '$cachePrismCatalogPrefix$fileName';
 
   static const String favoritesWallPrefix = 'favorites.walls.';
   static const String favoritesSetupPrefix = 'favorites.setups.';

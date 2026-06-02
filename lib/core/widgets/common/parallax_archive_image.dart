@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -19,6 +20,8 @@ class ParallaxArchiveFrame {
 
 class ParallaxArchiveCache {
   ParallaxArchiveCache._();
+
+  static const int _minimumRenderLongSide = 3840;
 
   static final Map<String, Future<ParallaxArchiveFrame?>> _inFlight = <String, Future<ParallaxArchiveFrame?>>{};
 
@@ -80,8 +83,11 @@ class ParallaxArchiveCache {
       }
 
       final resolution = config['resolution'] is Map ? Map<String, Object?>.from(config['resolution'] as Map) : const <String, Object?>{};
-      final width = _int(resolution['width'], fallback: decoded.first.width);
-      final height = _int(resolution['height'], fallback: decoded.first.height);
+      final sourceWidth = _int(resolution['width'], fallback: decoded.first.width);
+      final sourceHeight = _int(resolution['height'], fallback: decoded.first.height);
+      final targetSize = _highResolutionSize(width: sourceWidth, height: sourceHeight);
+      final width = targetSize.width;
+      final height = targetSize.height;
       final recorder = ui.PictureRecorder();
       final canvas = Canvas(recorder);
       canvas.drawRect(Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()), Paint()..color = _backgroundColor(config['backgroundColor']));
@@ -157,6 +163,21 @@ class ParallaxArchiveCache {
     if (value is int) return value;
     if (value is num) return value.round();
     return int.tryParse(value?.toString() ?? '') ?? fallback;
+  }
+
+  static ({int width, int height}) _highResolutionSize({required int width, required int height}) {
+    if (width <= 0 || height <= 0) {
+      return (width: 2160, height: 3840);
+    }
+    final longSide = math.max(width, height);
+    if (longSide >= _minimumRenderLongSide) {
+      return (width: width, height: height);
+    }
+    final scale = _minimumRenderLongSide / longSide;
+    return (
+      width: math.max(1, (width * scale).round()),
+      height: math.max(1, (height * scale).round()),
+    );
   }
 
   static Color _backgroundColor(Object? raw) {

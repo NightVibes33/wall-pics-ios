@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:Prism/core/persistence/persistence_keys.dart';
+import 'package:Prism/core/persistence/store_adapters/lazy_file_cache.dart';
 import 'package:Prism/core/wallpaper/wallpaper_core.dart';
 import 'package:Prism/core/wallpaper/wallpaper_source.dart';
 import 'package:Prism/core/wallpaper/wallpaper_variants.dart';
@@ -10,6 +12,7 @@ import 'package:Prism/features/category_feed/domain/entities/category_entity.dar
 import 'package:Prism/features/category_feed/domain/entities/category_feed_page.dart';
 import 'package:Prism/features/category_feed/domain/entities/feed_item_entity.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:http/http.dart' as http;
 
 class PrismCatalogDataSource {
@@ -22,6 +25,9 @@ class PrismCatalogDataSource {
   static const Duration _metadataTimeout = Duration(seconds: 20);
   static const Duration _pageTimeout = Duration(seconds: 15);
   static const Duration _searchIndexTimeout = Duration(seconds: 35);
+  static const Duration _bootstrapTimeout = Duration(seconds: 8);
+  static const String _homeBootstrapFile = 'prism_bootstrap_home.json';
+  static const int _bootstrapPrefetchLimit = 90;
   static const String regularContentType = 'regular_wallpaper';
   static const String liveContentType = 'live_wallpaper';
   static const String matchingContentType = 'matching_wallpaper';
@@ -93,6 +99,7 @@ class PrismCatalogDataSource {
     '4': parallaxContentType,
   };
 
+  final LazyFileCache _catalogCache = LazyFileCache('prism_catalog_cache');
   final Map<String, Future<_PrismCatalogPage>> _pageFutures = <String, Future<_PrismCatalogPage>>{};
   final Map<String, Future<List<_PrismItem>>> _compactCatalogFutures = <String, Future<List<_PrismItem>>>{};
   final Map<String, int> _offsets = <String, int>{};
@@ -145,6 +152,45 @@ class PrismCatalogDataSource {
       scope: _scope(slug: 'for-you', contentType: regularContentType),
       refresh: refresh,
     );
+  }
+
+  Future<PrismCatalogHomeBootstrap?> fetchHomeBootstrap({bool refresh = false}) async {
+    try {
+      final raw = await _loadCatalogJson(
+        _homeBootstrapFile,
+        timeout: _bootstrapTimeout,
+        allowGeneratedFallback: false,
+        preferCache: !refresh,
+      );
+      final payload = jsonDecode(raw) as Map<String, dynamic>;
+      return PrismCatalogHomeBootstrap.fromJson(payload);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> warmHomeBootstrapCache({bool prefetchMedia = true}) async {
+    final bootstrap = await fetchHomeBootstrap(refresh: true);
+    if (bootstrap == null || !prefetchMedia) {
+      return;
+    }
+    final urls = bootstrap.prefetchUrls
+        .where((url) => url.trim().isNotEmpty)
+        .take(_bootstrapPrefetchLimit)
+        .toList(growable: false);
+    const batchSize = 6;
+    for (var index = 0; index < urls.length; index += batchSize) {
+      final batch = urls.skip(index).take(batchSize);
+      await Future.wait<void>(
+        batch.map((url) async {
+          try {
+            await DefaultCacheManager().downloadFile(url).timeout(const Duration(seconds: 20));
+          } catch (_) {
+            // Prefetch failures should not block startup or catalog rendering.
+          }
+        }),
+      );
+    }
   }
 
   Future<CategoryFeedPage> _fetchNewestPageFeed({
@@ -823,7 +869,14 @@ class PrismCatalogDataSource {
     String fileName, {
     Duration timeout = _metadataTimeout,
     bool allowGeneratedFallback = true,
+    bool preferCache = false,
   }) async {
+    final cacheKey = PersistenceKeys.cachePrismCatalog(fileName);
+    final cached = await _readCachedCatalogJson(cacheKey);
+    if (preferCache && cached != null && _looksLikeJson(cached)) {
+      return cached;
+    }
+
     Object? remoteError;
     final remoteBase = _remoteCatalogBaseUrl;
     if (remoteBase.isNotEmpty) {
@@ -831,6 +884,7 @@ class PrismCatalogDataSource {
       try {
         final response = await http.get(Uri.parse('$base/$fileName')).timeout(timeout);
         if (response.statusCode >= 200 && response.statusCode < 300 && _looksLikeJson(response.body)) {
+          unawaited(_writeCachedCatalogJson(cacheKey, response.body));
           return response.body;
         }
         remoteError = StateError('Catalog request failed for $fileName with HTTP ${response.statusCode}');
@@ -840,8 +894,13 @@ class PrismCatalogDataSource {
     }
 
     try {
-      return await rootBundle.loadString('assets/catalog/$fileName');
+      final bundled = await rootBundle.loadString('assets/catalog/$fileName');
+      unawaited(_writeCachedCatalogJson(cacheKey, bundled));
+      return bundled;
     } catch (bundleError) {
+      if (cached != null && _looksLikeJson(cached)) {
+        return cached;
+      }
       if (!allowGeneratedFallback) {
         throw StateError('Missing required catalog asset $fileName: ${remoteError ?? bundleError}');
       }
@@ -872,6 +931,26 @@ class PrismCatalogDataSource {
         return jsonEncode(<String, Object?>{'sections': <Object?>[]});
       }
       throw StateError('Missing catalog asset $fileName: ${remoteError ?? bundleError}');
+    }
+  }
+
+  Future<String?> _readCachedCatalogJson(String cacheKey) async {
+    try {
+      final raw = await _catalogCache.get(cacheKey);
+      return raw is String ? raw : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _writeCachedCatalogJson(String cacheKey, String body) async {
+    if (!_looksLikeJson(body)) {
+      return;
+    }
+    try {
+      await _catalogCache.set(cacheKey, body);
+    } catch (_) {
+      // Disk cache is an optimization; the remote/bundled response remains valid.
     }
   }
 
@@ -906,6 +985,70 @@ class PrismCatalogDataSource {
       return type;
     }
     return _numericCategoryTypes[type] ?? regularContentType;
+  }
+}
+
+class PrismCatalogHomeBootstrap {
+  const PrismCatalogHomeBootstrap({
+    required this.generatedAt,
+    required this.sections,
+    required this.prefetchUrls,
+  });
+
+  final DateTime? generatedAt;
+  final List<PrismCatalogHomeBootstrapSection> sections;
+  final List<String> prefetchUrls;
+
+  factory PrismCatalogHomeBootstrap.fromJson(Map<String, dynamic> json) {
+    final rawSections = json['sections'];
+    return PrismCatalogHomeBootstrap(
+      generatedAt: DateTime.tryParse(_string(json['generated_at']))?.toUtc(),
+      sections: rawSections is List
+          ? rawSections
+              .whereType<Map>()
+              .map((section) => PrismCatalogHomeBootstrapSection.fromJson(_asMap(section)))
+              .where((section) => section.items.isNotEmpty)
+              .toList(growable: false)
+          : const <PrismCatalogHomeBootstrapSection>[],
+      prefetchUrls: _strings(json['prefetch_urls']),
+    );
+  }
+}
+
+class PrismCatalogHomeBootstrapSection {
+  const PrismCatalogHomeBootstrapSection({
+    required this.title,
+    required this.contentType,
+    required this.slug,
+    required this.kind,
+    required this.items,
+  });
+
+  final String title;
+  final String contentType;
+  final String slug;
+  final String kind;
+  final List<FeedItemEntity> items;
+
+  factory PrismCatalogHomeBootstrapSection.fromJson(Map<String, dynamic> json) {
+    final contentType = _string(json['content_type']).isNotEmpty
+        ? _string(json['content_type'])
+        : PrismCatalogDataSource.regularContentType;
+    final rawItems = json['wallpapers'];
+    final items = rawItems is List
+        ? rawItems.whereType<Map>().map((row) {
+            final item = _PrismItem.fromJson(_asMap(row), contentType);
+            return PrismFeedItem(id: item.id, wallpaper: item.toWallpaper());
+          }).where((item) => item.id.trim().isNotEmpty).toList(growable: false)
+        : const <FeedItemEntity>[];
+
+    return PrismCatalogHomeBootstrapSection(
+      title: _string(json['title']).isNotEmpty ? _string(json['title']) : 'For You',
+      contentType: contentType,
+      slug: _string(json['slug']).isNotEmpty ? _string(json['slug']) : 'for-you',
+      kind: _string(json['kind']),
+      items: items,
+    );
   }
 }
 
@@ -1014,6 +1157,7 @@ class _PrismItem {
     required this.parallaxFileUrl,
     required this.mediaAssetUrls,
     required this.pairedWallpapers,
+    required this.matchingSides,
     required this.pairedPreviewUrls,
     required this.pairedDownloadUrls,
     required this.authorName,
@@ -1043,6 +1187,7 @@ class _PrismItem {
   final String parallaxFileUrl;
   final List<String> mediaAssetUrls;
   final List<Map<String, dynamic>> pairedWallpapers;
+  final List<Map<String, dynamic>> matchingSides;
   final List<String> pairedPreviewUrls;
   final List<String> pairedDownloadUrls;
   final String? authorName;
@@ -1069,8 +1214,16 @@ class _PrismItem {
     final parallaxFile = url(json['parallax_file']);
     final previewImage = url(json['preview_image']);
     final catalogDownload = url(json['download_url']);
+    final appTileUrl = url(json['app_tile_url']);
+    final appDisplayUrl = url(json['app_display_url']);
+    final appDownloadUrl = url(json['app_download_url']);
     final pairedWallpapers = _maps(json['paired_wallpapers']);
-    final pairedDownloadUrls = pairedWallpapers
+    final appMatchingSides = _maps(json['app_matching_sides']);
+    final explicitPairedDownloadUrls = <String>[
+      ..._strings(json['paired_download_urls']).map((value) => url(value)),
+      ...appMatchingSides.map((side) => url(side['download_url'])),
+    ].where((value) => value.isNotEmpty).toList(growable: false);
+    final derivedPairedDownloadUrls = pairedWallpapers
         .map((wallpaper) => _firstString(<Object?>[
               url(wallpaper['download_url']),
               url(wallpaper['wallpaper']),
@@ -1080,26 +1233,32 @@ class _PrismItem {
             ]))
         .where((value) => value.isNotEmpty)
         .toList(growable: false);
-    final explicitPairedPreviewUrls = _strings(json['paired_preview_urls'])
-        .map((value) => url(value))
-        .where((value) => value.isNotEmpty)
-        .toList(growable: false);
+    final pairedDownloadUrls = _uniqueStrings(<String>[
+      ...explicitPairedDownloadUrls,
+      ...derivedPairedDownloadUrls,
+    ]);
+    final explicitPairedPreviewUrls = <String>[
+      ...appMatchingSides.map((side) => url(side['preview_url'])),
+      ..._strings(json['paired_preview_urls']).map((value) => url(value)),
+    ].where((value) => value.isNotEmpty).toList(growable: false);
     final derivedPairedPreviewUrls = pairedWallpapers
         .map((wallpaper) => _firstString(<Object?>[
+              url(wallpaper['wallpaper']),
+              url(wallpaper['image']),
+              url(wallpaper['download_url']),
+              url(wallpaper['full_url']),
+              url(wallpaper['url']),
               url(wallpaper['thumbnail']),
               url(wallpaper['static_thumbnail']),
               url(wallpaper['preview_image']),
-              url(wallpaper['download_url']),
-              url(wallpaper['wallpaper']),
-              url(wallpaper['image']),
-              url(wallpaper['full_url']),
-              url(wallpaper['url']),
             ]))
         .where((value) => value.isNotEmpty)
         .toList(growable: false);
-    final pairedPreviewUrls = explicitPairedPreviewUrls.isNotEmpty
-        ? explicitPairedPreviewUrls
-        : derivedPairedPreviewUrls;
+    final pairedPreviewUrls = _uniqueStrings(<String>[
+      ...pairedDownloadUrls,
+      ...explicitPairedPreviewUrls,
+      ...derivedPairedPreviewUrls,
+    ]);
     final pairedDisplayUrls = pairedPreviewUrls.isNotEmpty ? pairedPreviewUrls : pairedDownloadUrls;
     final mediaAssetUrls = _strings(json['media_assets'])
         .map((value) => url(value))
@@ -1125,31 +1284,51 @@ class _PrismItem {
       return path.endsWith('.zip');
     }
 
+    bool isImageUrl(String value) {
+      if (value.trim().isEmpty || isVideoUrl(value) || isArchiveUrl(value)) {
+        return false;
+      }
+      final path = Uri.tryParse(value)?.path.toLowerCase() ?? value.toLowerCase();
+      return path.endsWith('.jpg') ||
+          path.endsWith('.jpeg') ||
+          path.endsWith('.png') ||
+          path.endsWith('.webp') ||
+          path.endsWith('.gif');
+    }
+
     final isLiveContent = contentType == PrismCatalogDataSource.liveContentType;
     final isParallaxContent = contentType == PrismCatalogDataSource.parallaxContentType;
+    final isProfilePictureContent = contentType == PrismCatalogDataSource.profilePictureContentType;
     final isMatchingContent = contentType == PrismCatalogDataSource.matchingContentType ||
         contentType == PrismCatalogDataSource.doubleContentType;
     final parallaxArchive = isParallaxContent
         ? _firstString(<Object?>[
+            isArchiveUrl(appDownloadUrl) ? appDownloadUrl : '',
+            isArchiveUrl(appDisplayUrl) ? appDisplayUrl : '',
             isArchiveUrl(catalogDownload) ? catalogDownload : '',
             isArchiveUrl(parallaxFile) ? parallaxFile : '',
           ])
         : '';
-    final imageDownload = catalogDownload.isNotEmpty && !isVideoUrl(catalogDownload) && !isArchiveUrl(catalogDownload)
-        ? catalogDownload
-        : '';
+    final imageDownload = _firstString(<Object?>[
+      isImageUrl(appDownloadUrl) ? appDownloadUrl : '',
+      isImageUrl(appDisplayUrl) ? appDisplayUrl : '',
+      isImageUrl(catalogDownload) ? catalogDownload : '',
+    ]);
     final fullImage = _firstString(<Object?>[
       imageDownload,
-      wallpaper,
-      image,
-      sticker,
-      previewImage,
-      hqThumbnail,
-      staticThumbnail,
-      thumbnail,
-      firstFrameThumbnail,
+      isImageUrl(wallpaper) ? wallpaper : '',
+      isImageUrl(image) ? image : '',
+      isImageUrl(sticker) ? sticker : '',
+      isImageUrl(appTileUrl) ? appTileUrl : '',
+      isImageUrl(hqThumbnail) ? hqThumbnail : '',
+      isImageUrl(staticThumbnail) ? staticThumbnail : '',
+      isImageUrl(firstFrameThumbnail) ? firstFrameThumbnail : '',
+      isImageUrl(thumbnail) ? thumbnail : '',
+      isImageUrl(previewImage) ? previewImage : '',
     ]);
     final fullMedia = _firstString(<Object?>[
+      appDownloadUrl,
+      appDisplayUrl,
       catalogDownload,
       video,
       wallpaper,
@@ -1157,87 +1336,65 @@ class _PrismItem {
       sticker,
       parallaxFile,
     ]);
-    final thumb = isMatchingContent
-        ? _firstString(<Object?>[
-            ...pairedDisplayUrls,
-            thumbnail,
-            staticThumbnail,
-            hqThumbnail,
-            previewImage,
-            fullImage,
-            firstFrameThumbnail,
-          ])
-        : isLiveContent
-            ? _firstString(<Object?>[
-                staticThumbnail,
-                firstFrameThumbnail,
-                hqThumbnail,
-                thumbnail,
-                previewImage,
-                fullImage,
-              ])
-            : _firstString(<Object?>[
-                thumbnail,
-                hqThumbnail,
-                staticThumbnail,
-                previewImage,
-                firstFrameThumbnail,
-                fullImage,
-              ]);
+    final livePoster = _firstString(<Object?>[
+      isImageUrl(firstFrameThumbnail) ? firstFrameThumbnail : '',
+      isImageUrl(staticThumbnail) ? staticThumbnail : '',
+      isImageUrl(hqThumbnail) ? hqThumbnail : '',
+      isImageUrl(thumbnail) ? thumbnail : '',
+      isImageUrl(previewImage) ? previewImage : '',
+    ]);
+    final tileImage = _firstString(<Object?>[
+      isMatchingContent ? _firstString(<Object?>[...pairedDisplayUrls]) : '',
+      isProfilePictureContent && isImageUrl(appTileUrl) ? appTileUrl : '',
+      !isLiveContent && !isParallaxContent && isImageUrl(appTileUrl) ? appTileUrl : '',
+      fullImage,
+      livePoster,
+    ]);
+    final thumb = isLiveContent
+        ? _firstString(<Object?>[livePoster, tileImage])
+        : isParallaxContent
+            ? _firstString(<Object?>[fullImage, previewImage, thumbnail])
+            : tileImage;
     final staticThumb = isLiveContent
-        ? _firstString(<Object?>[
-            staticThumbnail,
-            firstFrameThumbnail,
-            hqThumbnail,
-            thumbnail,
-            previewImage,
-            fullImage,
-          ])
+        ? _firstString(<Object?>[livePoster, thumb])
         : _firstString(<Object?>[
-            staticThumbnail,
-            hqThumbnail,
-            thumbnail,
-            previewImage,
+            isImageUrl(staticThumbnail) ? staticThumbnail : '',
+            isImageUrl(hqThumbnail) ? hqThumbnail : '',
             thumb,
-            firstFrameThumbnail,
             fullImage,
           ]);
     final preview = isMatchingContent
-        ? _firstString(<Object?>[
-            ...pairedDisplayUrls,
-            previewImage,
-            staticThumbnail,
-            hqThumbnail,
-            thumbnail,
-            firstFrameThumbnail,
-            fullImage,
-          ])
-        : _firstString(<Object?>[
-            fullImage,
-            previewImage,
-            staticThumbnail,
-            hqThumbnail,
-            thumbnail,
-            firstFrameThumbnail,
-          ]);
+        ? _firstString(<Object?>[...pairedDisplayUrls, fullImage, thumb])
+        : isLiveContent
+            ? _firstString(<Object?>[appDisplayUrl, video, fullMedia, livePoster])
+            : isParallaxContent
+                ? _firstString(<Object?>[parallaxArchive, fullImage, thumb])
+                : _firstString(<Object?>[fullImage, thumb, previewImage]);
     final displayOnlyContent = contentType == PrismCatalogDataSource.diyTemplateContentType ||
         contentType == PrismCatalogDataSource.liveDiyTemplateContentType ||
         contentType == PrismCatalogDataSource.parallaxContentType;
     final download = displayOnlyContent
-        ? _firstString(<Object?>[fullImage, preview, thumb, template, fullMedia])
+        ? _firstString(<Object?>[parallaxArchive, appDownloadUrl, fullImage, preview, thumb, template, fullMedia])
         : isMatchingContent
-            ? _firstString(<Object?>[catalogDownload, ...pairedDownloadUrls, wallpaper, image, ...pairedDisplayUrls])
+            ? _firstString(<Object?>[appDownloadUrl, catalogDownload, ...pairedDownloadUrls, wallpaper, image, ...pairedDisplayUrls])
             : isLiveContent
-                ? _firstString(<Object?>[catalogDownload, video, wallpaper])
-                : fullMedia;
+                ? _firstString(<Object?>[appDownloadUrl, catalogDownload, video, wallpaper])
+                : _firstString(<Object?>[appDownloadUrl, fullMedia]);
+    final rawWidth = _int(json['width']);
+    final rawHeight = _int(json['height']);
+    final normalizedSize = _normalizedCatalogSize(
+      contentType: contentType,
+      width: rawWidth,
+      height: rawHeight,
+    );
     return _PrismItem(
       id: _string(json['id']),
       name: _string(json['name']),
       slug: _string(json['slug']),
       description: _string(json['description']),
       contentType: contentType,
-      width: _int(json['width']),
-      height: _int(json['height']),
+      width: normalizedSize.width,
+      height: normalizedSize.height,
       downloadUrl: download,
       previewUrl: preview,
       thumbnailUrl: thumb,
@@ -1249,6 +1406,7 @@ class _PrismItem {
       parallaxFileUrl: parallaxArchive,
       mediaAssetUrls: mediaAssetUrls,
       pairedWallpapers: pairedWallpapers,
+      matchingSides: appMatchingSides,
       pairedPreviewUrls: pairedDisplayUrls,
       pairedDownloadUrls: pairedDownloadUrls,
       authorName: _firstString(<Object?>[author['name'], json['author']]).trim().isEmpty
@@ -1272,12 +1430,12 @@ class _PrismItem {
         ? _firstString(<Object?>[staticThumbnailUrl, firstFrameThumbnailUrl, thumbnailUrl, previewUrl])
         : (contentType == PrismCatalogDataSource.matchingContentType ||
                 contentType == PrismCatalogDataSource.doubleContentType)
-            ? _firstString(<Object?>[...pairedDownloadUrls, ...pairedPreviewUrls, thumbnailUrl, previewUrl, full])
+            ? _firstString(<Object?>[...pairedPreviewUrls, ...pairedDownloadUrls, thumbnailUrl, previewUrl, full])
             : contentType == PrismCatalogDataSource.profilePictureContentType
-                ? _firstString(<Object?>[full, previewUrl, thumbnailUrl, staticThumbnailUrl])
+                ? _firstString(<Object?>[thumbnailUrl, previewUrl, full, staticThumbnailUrl])
                 : displayOnlyContent
                     ? _firstString(<Object?>[thumbnailUrl, staticThumbnailUrl, previewUrl, full])
-                    : _firstString(<Object?>[full, thumbnailUrl, staticThumbnailUrl, previewUrl]);
+                    : _firstString(<Object?>[thumbnailUrl, staticThumbnailUrl, previewUrl, full]);
     return PrismWallpaper(
       core: WallpaperCore(
         id: id,
@@ -1310,6 +1468,7 @@ class _PrismItem {
         'catalogParallaxFileUrl': parallaxFileUrl,
         'catalogMediaAssetUrls': mediaAssetUrls,
         'catalogPairedWallpapers': pairedWallpapers,
+        'catalogMatchingSides': matchingSides,
         'catalogPairedPreviewUrls': pairedPreviewUrls,
         'catalogPairedDownloadUrls': pairedDownloadUrls,
         'catalogIsPremium': false,
@@ -1317,6 +1476,19 @@ class _PrismItem {
       remoteStoreDocumentId: 'prism-$id',
     );
   }
+}
+
+
+({int? width, int? height}) _normalizedCatalogSize({required String contentType, required int? width, required int? height}) {
+  if (contentType != PrismCatalogDataSource.parallaxContentType || width == null || height == null) {
+    return (width: width, height: height);
+  }
+  final longSide = width > height ? width : height;
+  if (longSide >= 3840 || longSide <= 0) {
+    return (width: width, height: height);
+  }
+  final scale = 3840 / longSide;
+  return (width: (width * scale).round(), height: (height * scale).round());
 }
 
 List<_PrismItem> _dedupeItems(Iterable<_PrismItem> items) {
@@ -1519,6 +1691,14 @@ List<Map<String, dynamic>> _maps(Object? value) {
 List<String> _strings(Object? value) {
   if (value is! List) return const <String>[];
   return value.map(_string).where((text) => text.trim().isNotEmpty).toList(growable: false);
+}
+
+List<String> _uniqueStrings(Iterable<String> values) {
+  final seen = <String>{};
+  return <String>[
+    for (final value in values)
+      if (value.trim().isNotEmpty && seen.add(value.trim())) value.trim(),
+  ];
 }
 
 String _string(Object? value) => value?.toString() ?? '';

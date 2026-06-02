@@ -8,6 +8,7 @@ import 'package:Prism/features/category_feed/biz/bloc/category_feed_bloc.j.dart'
 import 'package:Prism/features/category_feed/views/category_feed_bloc_adapter.dart';
 import 'package:Prism/features/category_feed/views/widgets/collections_view_grid.dart';
 import 'package:Prism/features/category_feed/views/widgets/wallpaper_grid.dart';
+import 'package:Prism/global/categoryMenu.dart';
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -39,6 +40,25 @@ class _CollectionViewScreenState extends State<CollectionViewScreen> {
     return payload;
   }
 
+
+  CategoryMenu _categoryChoiceFromPayload(String payload) {
+    if (payload.contains('|')) {
+      final parts = payload.split('|');
+      final contentType = parts.isNotEmpty ? parts[0].trim() : '';
+      final slug = parts.length > 1 ? parts[1].trim() : '';
+      final name = parts.length > 2 && parts[2].trim().isNotEmpty ? parts[2].trim() : _decodedCategoryName;
+      return CategoryMenu(
+        name: name,
+        provider: 'Prism',
+        image: '',
+        image2: '',
+        catalogSlug: slug,
+        catalogContentType: contentType,
+      );
+    }
+    return CategoryMenu(name: _decodedCategoryName, provider: 'Prism', image: '', image2: '');
+  }
+
   @override
   void initState() {
     super.initState();
@@ -60,7 +80,7 @@ class _CollectionViewScreenState extends State<CollectionViewScreen> {
             }
             return (choice.name ?? '').trim().toLowerCase() == _decodedCategoryName.toLowerCase();
           },
-          orElse: () => choices.first,
+          orElse: () => _categoryChoiceFromPayload(payload),
         );
         unawaited(context.categoryChangeWallpaperFuture(selected, 'r'));
       });

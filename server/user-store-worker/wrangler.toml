@@ -14,7 +14,14 @@ CORS_ORIGIN = "*"
 # wrangler secret put SESSION_SECRET
 # wrangler secret put GOOGLE_CLIENT_ID
 # wrangler secret put APPLE_BUNDLE_ID
-# Optional private catalog repo settings:
+# Optional edge catalog storage. Prefer this over GitHub as the hot path.
+# CATALOG_EDGE_BASE_URL can point at a public static/R2 custom domain.
+# CATALOG_EDGE_PATH defaults to public/catalog when omitted for R2.
+# [[r2_buckets]]
+# binding = "CATALOG_BUCKET"
+# bucket_name = "prism-catalog"
+#
+# Optional private catalog repo settings, used as fallback:
 # wrangler secret put CATALOG_GITHUB_TOKEN
 # wrangler secret put CATALOG_GITHUB_OWNER
 # wrangler secret put CATALOG_GITHUB_REPO

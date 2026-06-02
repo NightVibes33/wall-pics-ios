@@ -4,6 +4,7 @@ import 'package:Prism/analytics/analytics_service.dart';
 import 'package:Prism/core/analytics/events/events.dart';
 import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/widgets/common/autoplay_video_preview.dart';
+import 'package:Prism/core/widgets/common/parallax_archive_image.dart';
 import 'package:Prism/core/wallpaper/wallpaper_core.dart';
 import 'package:Prism/core/wallpaper/wallpaper_source.dart';
 import 'package:Prism/core/wallpaper/wallpaper_variants.dart';
@@ -62,7 +63,12 @@ class WallpaperTile extends StatelessWidget {
     return item.when(
       prism: (_, wallpaper) {
         if (!isMatchingSetItem(item)) return const <String>[];
-        return _stringList(wallpaper.aiMetadata?['catalogPairedDownloadUrls']);
+        final direct = _stringList(wallpaper.aiMetadata?['catalogPairedDownloadUrls']);
+        if (direct.isNotEmpty) return direct;
+        return _mapList(wallpaper.aiMetadata?['catalogMatchingSides'])
+            .map((side) => side['download_url']?.toString().trim() ?? '')
+            .where((url) => url.isNotEmpty)
+            .toList(growable: false);
       },
       wallhaven: (_, _) => const <String>[],
       pexels: (_, _) => const <String>[],
@@ -103,6 +109,22 @@ class WallpaperTile extends StatelessWidget {
     return item.when(
       prism: (id, wallpaper) {
         if (!isMatchingSetItem(item)) return const <FeedItemEntity>[];
+        final sideRows = _mapList(wallpaper.aiMetadata?['catalogMatchingSides']);
+        if (sideRows.length >= 2) {
+          return <FeedItemEntity>[
+            for (var index = 0; index < sideRows.length; index++)
+              if ((sideRows[index]['download_url']?.toString().trim() ?? '').isNotEmpty)
+                _matchingSideItem(
+                  parentId: id,
+                  wallpaper: wallpaper,
+                  fullUrl: sideRows[index]['download_url']?.toString().trim() ?? '',
+                  previewUrl: (sideRows[index]['preview_url']?.toString().trim() ?? '').isNotEmpty
+                      ? sideRows[index]['preview_url'].toString().trim()
+                      : sideRows[index]['download_url'].toString().trim(),
+                  index: index,
+                ),
+          ];
+        }
         final fullUrls = _stringList(wallpaper.aiMetadata?['catalogPairedDownloadUrls']);
         if (fullUrls.length < 2) return const <FeedItemEntity>[];
         final previewUrls = pairedPreviewUrlsForItem(item);
@@ -191,32 +213,20 @@ class WallpaperTile extends StatelessWidget {
     );
   }
 
-  static String posterUrlForItem(FeedItemEntity item) {
-    return item.when(
-      prism: (_, wallpaper) {
-        final candidates = <String>[
-          _metadataString(wallpaper.aiMetadata, 'catalogStaticThumbnailUrl'),
-          _metadataString(wallpaper.aiMetadata, 'catalogFirstFrameThumbnailUrl'),
-          _metadataString(wallpaper.aiMetadata, 'catalogPreviewUrl'),
-          wallpaper.thumbnailUrl.trim(),
-          wallpaper.fullUrl.trim(),
-        ];
-        for (final candidate in candidates) {
-          if (candidate.isNotEmpty && !_isVideoUrl(candidate)) return candidate;
-        }
-        return '';
-      },
-      wallhaven: (_, wallpaper) => wallpaper.thumbnailUrl.trim(),
-      pexels: (_, wallpaper) => wallpaper.thumbnailUrl.trim(),
-    );
-  }
-
   static List<String> _stringList(Object? raw) {
     if (raw is! List) return const <String>[];
     final seen = <String>{};
     return raw
         .map((value) => value.toString().trim())
         .where((value) => value.isNotEmpty && seen.add(value))
+        .toList(growable: false);
+  }
+
+  static List<Map<String, Object?>> _mapList(Object? raw) {
+    if (raw is! List) return const <Map<String, Object?>>[];
+    return raw
+        .whereType<Map>()
+        .map((value) => value.map<String, Object?>((key, val) => MapEntry(key.toString(), val)))
         .toList(growable: false);
   }
 
@@ -230,6 +240,24 @@ class WallpaperTile extends StatelessWidget {
     return path.endsWith('.mp4') || path.endsWith('.mov');
   }
 
+  static bool _isArchiveUrl(String url) {
+    final path = Uri.tryParse(url)?.path.toLowerCase() ?? url.toLowerCase();
+    return path.endsWith('.zip');
+  }
+
+  static String parallaxArchiveUrlForItem(FeedItemEntity item) {
+    return item.when(
+      prism: (_, wallpaper) {
+        final metadataUrl = _metadataString(wallpaper.aiMetadata, 'catalogParallaxFileUrl');
+        if (_isArchiveUrl(metadataUrl)) return metadataUrl;
+        final fullUrl = wallpaper.fullUrl.trim();
+        return _isArchiveUrl(fullUrl) ? fullUrl : '';
+      },
+      wallhaven: (_, _) => '',
+      pexels: (_, _) => '',
+    );
+  }
+
   static double aspectRatioForItem(FeedItemEntity item) {
     return isProfilePictureItem(item) ? 1.0 : 0.5;
   }
@@ -240,6 +268,12 @@ class WallpaperTile extends StatelessWidget {
     required int cacheWidth,
     required int cacheHeight,
   }) {
+    if (_isArchiveUrl(url)) {
+      return ParallaxArchiveImage(
+        archiveUrl: url,
+        fit: BoxFit.cover,
+      );
+    }
     return CachedNetworkImage(
       imageUrl: url,
       fit: BoxFit.cover,
@@ -296,15 +330,17 @@ class WallpaperTile extends StatelessWidget {
     final cacheHeight = (height * pixelRatio).ceil();
     final pairedImageUrls = pairedPreviewUrlsForItem(item);
     final animatedPreviewUrl = animatedPreviewUrlForItem(item);
+    final parallaxArchiveUrl = parallaxArchiveUrlForItem(item);
     final image = pairedImageUrls.length >= 2
         ? _matchingSetTile(context, pairedImageUrls, cacheWidth: cacheWidth, cacheHeight: cacheHeight)
         : animatedPreviewUrl.isNotEmpty
             ? AutoplayVideoPreview(
                 videoUrl: animatedPreviewUrl,
-                posterUrl: posterUrlForItem(item),
                 fit: BoxFit.cover,
               )
-            : _cachedTileImage(context, item.thumbnailUrl, cacheWidth: cacheWidth, cacheHeight: cacheHeight);
+            : parallaxArchiveUrl.isNotEmpty
+                ? _cachedTileImage(context, parallaxArchiveUrl, cacheWidth: cacheWidth, cacheHeight: cacheHeight)
+                : _cachedTileImage(context, item.thumbnailUrl, cacheWidth: cacheWidth, cacheHeight: cacheHeight);
     return Material(
       color: Colors.transparent,
       child: InkWell(

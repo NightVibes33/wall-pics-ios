@@ -36,6 +36,7 @@ import 'package:Prism/features/favourite_setups/favourite_setups.dart';
 import 'package:Prism/features/favourite_walls/favourite_walls.dart';
 import 'package:Prism/features/in_app_notifications/biz/bloc/in_app_notifications_bloc.j.dart';
 import 'package:Prism/features/palette/domain/bloc/wallpaper_detail_bloc.dart';
+import 'package:Prism/features/prism_catalog/data/prism_catalog_data_source.dart';
 import 'package:Prism/features/palette/palette.dart';
 import 'package:Prism/features/profile_setups/profile_setups.dart';
 import 'package:Prism/features/session/domain/entities/session_entity.dart';
@@ -159,6 +160,12 @@ Future<void> main() async {
 
       // Only truly-blocking tasks remain on the critical path.
       await Future.wait(<Future<Object?>>[PersistenceBootstrap.initialize(), _initializeMonitoring(sentryConfig)]);
+
+      unawaited(
+        PrismCatalogDataSource.instance.warmHomeBootstrapCache().catchError((Object e, StackTrace s) {
+          logger.w('Unable to warm Prism catalog bootstrap.', tag: 'PrismCatalog', error: e, stackTrace: s);
+        }),
+      );
 
       // Defer analytics wiring to after first frame.
       WidgetsBinding.instance.addPostFrameCallback((_) {

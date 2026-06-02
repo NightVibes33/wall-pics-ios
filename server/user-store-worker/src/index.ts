@@ -9,6 +9,9 @@ interface Env {
   CATALOG_GITHUB_REF?: string;
   CATALOG_GITHUB_PATH?: string;
   CATALOG_CACHE_TTL_SECONDS?: string;
+  CATALOG_EDGE_BASE_URL?: string;
+  CATALOG_EDGE_PATH?: string;
+  CATALOG_BUCKET?: R2Bucket;
   GOOGLE_CLIENT_ID?: string;
   APPLE_BUNDLE_ID?: string;
   CORS_ORIGIN?: string;
@@ -83,8 +86,8 @@ async function catalogResponse(fileName: string, request: Request, env: Env): Pr
     return withCors(cached, env);
   }
 
-  const response = await fetch(catalogRawUrl(safeFileName, env), { headers: catalogGithubHeaders(env) });
-  if (response.status === 404) {
+  const response = await catalogStorageResponse(safeFileName, env);
+  if (!response) {
     return jsonResponse({ error: 'Catalog file not found' }, env, 404);
   }
   if (!response.ok) {
@@ -97,11 +100,40 @@ async function catalogResponse(fileName: string, request: Request, env: Env): Pr
     headers: {
       ...corsHeaders(env),
       'Content-Type': 'application/json; charset=utf-8',
-      'Cache-Control': `public, max-age=${ttl}`,
+      'Cache-Control': `public, max-age=${ttl}, stale-while-revalidate=${ttl * 4}`,
     },
   });
   await caches.default.put(cacheKey, catalog.clone());
   return catalog;
+}
+
+async function catalogStorageResponse(fileName: string, env: Env): Promise<Response | null> {
+  const bucket = env.CATALOG_BUCKET;
+  if (bucket) {
+    const object = await bucket.get(catalogObjectKey(fileName, env));
+    if (object) {
+      return new Response(object.body, {
+        headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      });
+    }
+  }
+
+  const edgeBaseUrl = stringValue(env.CATALOG_EDGE_BASE_URL);
+  if (edgeBaseUrl) {
+    const edgeResponse = await fetch(catalogEdgeUrl(fileName, env));
+    if (edgeResponse.status === 404) {
+      return null;
+    }
+    if (edgeResponse.ok) {
+      return edgeResponse;
+    }
+  }
+
+  const githubResponse = await fetch(catalogRawUrl(fileName, env), { headers: catalogGithubHeaders(env) });
+  if (githubResponse.status === 404) {
+    return null;
+  }
+  return githubResponse;
 }
 
 function withCors(response: Response, env: Env): Response {
@@ -119,6 +151,20 @@ function catalogRawUrl(fileName: string, env: Env): string {
   const prefix = normalizePathPrefix(stringValue(env.CATALOG_GITHUB_PATH) || 'public/catalog');
   const path = `${prefix}/${fileName}`;
   return `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${path.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(ref)}`;
+}
+
+function catalogObjectKey(fileName: string, env: Env): string {
+  const prefix = normalizePathPrefix(
+    stringValue(env.CATALOG_EDGE_PATH) || stringValue(env.CATALOG_GITHUB_PATH) || 'public/catalog',
+  );
+  return prefix ? `${prefix}/${fileName}` : fileName;
+}
+
+function catalogEdgeUrl(fileName: string, env: Env): string {
+  const base = stringValue(env.CATALOG_EDGE_BASE_URL).replace(/\/+$/, '');
+  const prefix = normalizePathPrefix(stringValue(env.CATALOG_EDGE_PATH));
+  const path = prefix ? `${prefix}/${fileName}` : fileName;
+  return `${base}/${path.split('/').map(encodeURIComponent).join('/')}`;
 }
 
 function catalogGithubHeaders(env: Env): HeadersInit {

@@ -3,9 +3,7 @@ import 'dart:math' as math;
 import 'package:Prism/analytics/analytics_service.dart';
 import 'package:Prism/core/analytics/events/events.dart';
 import 'package:Prism/core/analytics/trackers/content_load_tracker.dart';
-import 'package:Prism/core/di/injection.dart';
 import 'package:Prism/core/platform/wallpaper_capability.dart';
-import 'package:Prism/core/persistence/data_sources/settings_local_data_source.dart';
 import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:Prism/core/utils/edge_to_edge_overlay_style.dart';
@@ -20,7 +18,6 @@ import 'package:Prism/core/widgets/menuButton/setWallpaperButton.dart';
 import 'package:Prism/core/widgets/content_report/content_report_sheet.dart';
 import 'package:Prism/core/widgets/menuButton/shareButton.dart';
 import 'package:Prism/features/ads/views/widgets/download_button.dart';
-import 'package:Prism/features/charging_animations/data/charging_animation_selection_store.dart';
 import 'package:Prism/features/favourite_walls/domain/entities/favourite_wall_entity.dart';
 import 'package:Prism/features/palette/domain/bloc/wallpaper_detail_bloc.dart';
 import 'package:Prism/features/palette/domain/bloc/wallpaper_detail_event.dart';
@@ -214,9 +211,24 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
       _galleryIndex = wrappedIndex;
       _wallpaperReadyForCapture = false;
     });
+    WallpaperDetailGalleryStore.setFromEntities(items: _galleryItems, index: wrappedIndex);
+    _precacheGalleryNeighbors(context, wrappedIndex);
     _contentLoadTracker.start();
     context.read<WallpaperDetailBloc>().add(LoadFromEntity(entity: nextEntity, analyticsSurface: widget.analyticsSurface));
     HapticFeedback.selectionClick();
+  }
+
+  void _precacheGalleryNeighbors(BuildContext context, int index) {
+    if (_galleryItems.length < 2) return;
+    for (final offset in const <int>[-1, 0, 1]) {
+      final nextIndex = (index + offset) % _galleryItems.length;
+      final wrappedIndex = nextIndex < 0 ? nextIndex + _galleryItems.length : nextIndex;
+      final entity = _galleryItems[wrappedIndex];
+      for (final url in <String>[entity.thumbnailUrl.trim(), entity.fullUrl.trim()]) {
+        if (url.isEmpty || _isVideoUrl(url) || _isArchiveUrl(url)) continue;
+        unawaited(precacheImage(CachedNetworkImageProvider(url), context).catchError((Object _) {}));
+      }
+    }
   }
 
   void _resetActiveDrag() {
@@ -286,6 +298,11 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
           });
     _contentLoadTracker.start();
     _hydrateGalleryContext();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _precacheGalleryNeighbors(context, _galleryIndex);
+      }
+    });
 
     final bloc = context.read<WallpaperDetailBloc>();
     if (widget.entity != null) {
@@ -360,10 +377,6 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     return _isPrismContentType(entity, PrismCatalogDataSource.liveContentType);
   }
 
-  bool _isPrismChargingAnimation(WallpaperDetailEntity entity) {
-    return _isPrismContentType(entity, PrismCatalogDataSource.chargingAnimationContentType);
-  }
-
   bool _isPrismDiyTemplate(WallpaperDetailEntity entity) {
     return _isPrismContentType(entity, PrismCatalogDataSource.diyTemplateContentType) ||
         _isPrismContentType(entity, PrismCatalogDataSource.liveDiyTemplateContentType);
@@ -408,25 +421,6 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     return path.endsWith('.zip');
   }
 
-  Future<void> _selectChargingAnimation(WallpaperDetailEntity entity) async {
-    final videoUrl = entity.fullUrl.trim();
-    if (videoUrl.isEmpty) {
-      toasts.error('Charging animation is missing its video.');
-      return;
-    }
-    final previewUrl = _catalogDisplayImageUrl(entity);
-    final name = _prismMetadataValue(entity, 'catalogName').isNotEmpty
-        ? _prismMetadataValue(entity, 'catalogName')
-        : 'Charging animation';
-    await ChargingAnimationSelectionStore(getIt<SettingsLocalDataSource>()).save(
-      ChargingAnimationSelection(id: entity.id, name: name, videoUrl: videoUrl, previewUrl: previewUrl),
-    );
-    toasts.codeSend('Charging animation selected.');
-    if (mounted) {
-      unawaited(context.router.push(const ChargingAnimationPlayerRoute()));
-    }
-  }
-
   String _catalogDisplayImageUrl(WallpaperDetailEntity entity) {
     final pairedImageUrls = _catalogPairedImageUrlsForEntity(entity);
     if (pairedImageUrls.isNotEmpty) return pairedImageUrls.first;
@@ -449,24 +443,6 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     final full = entity.fullUrl.trim();
     if (_isArchiveUrl(full)) return full;
     return '';
-  }
-
-  String? _catalogLiveStillUrl(WallpaperDetailEntity entity) {
-    return entity.when(
-      prism: (wallpaper) {
-        final candidates = <String>[
-          wallpaper.aiMetadata?['catalogFirstFrameThumbnailUrl']?.toString().trim() ?? '',
-          wallpaper.aiMetadata?['catalogStaticThumbnailUrl']?.toString().trim() ?? '',
-          wallpaper.thumbnailUrl.trim(),
-        ];
-        for (final candidate in candidates) {
-          if (candidate.isNotEmpty && !_isVideoUrl(candidate)) return candidate;
-        }
-        return null;
-      },
-      wallhaven: (_) => null,
-      pexels: (_) => null,
-    );
   }
 
   List<String> _catalogPairedImageUrlsForEntity(WallpaperDetailEntity entity) {
@@ -618,7 +594,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
 
   double _panelMinHeight(BuildContext context) {
     final bottomInset = MediaQuery.paddingOf(context).bottom;
-    return math.max(84.0, bottomInset + 64.0);
+    return math.max(128.0, bottomInset + 112.0);
   }
 
   double _panelMaxHeight(BuildContext context) {
@@ -626,7 +602,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
   }
 
   double _panelBottomMargin(BuildContext context) {
-    return math.max(_panelSideInset, MediaQuery.paddingOf(context).bottom + 8.0);
+    return math.max(_panelSideInset, MediaQuery.paddingOf(context).bottom + 36.0);
   }
 
   Widget _buildInfoPanel(BuildContext context, WallpaperDetailLoaded state) {
@@ -1038,32 +1014,13 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
   Widget _buildActionButtons(BuildContext context, WallpaperDetailLoaded state) {
     final entity = state.entity;
     final isLivePhoto = _isPrismLivePhoto(entity);
-    final isChargingAnimation = _isPrismChargingAnimation(entity);
-    if (isChargingAnimation) {
-      final actions = <Widget>[
-        _SheetActionTapScale(
-          child: _ChargingAnimationSelectButton(onTap: () => unawaited(_selectChargingAnimation(entity))),
-        ),
-        _SheetActionTapScale(child: FavouriteWallpaperButton(wall: _toFavouriteWall(entity), trash: false)),
-        _SheetActionTapScale(
-          child: ShareButton(id: entity.id, source: entity.source, url: entity.fullUrl, thumbUrl: entity.thumbnailUrl),
-        ),
-      ];
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: _sheetHPad),
-          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: actions),
-        ),
-      );
-    }
-
     final matchingDownloadUrls = _matchingDownloadUrlsForEntity(entity);
     if (matchingDownloadUrls.length >= 2) {
       return _buildMatchingActionButtons(context, state, matchingDownloadUrls);
     }
 
     final isParallax = _isPrismParallax(entity);
-    final liveStillUrl = isLivePhoto ? _catalogLiveStillUrl(entity) : null;
+    final String? liveStillUrl = null;
     final parallaxCompositePath = isParallax ? _parallaxCompositePathFor(entity) : null;
     final downloadUrl = parallaxCompositePath ?? (isParallax ? _catalogDisplayImageUrl(entity) : entity.fullUrl);
     final setWallpaperUrl =
@@ -1191,10 +1148,10 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
                 },
                 onPanEnd: (details) {
                   final velocityX = details.velocity.pixelsPerSecond.dx;
-                  final horizontal = (_activeDragDx.abs() > 42 && _activeDragDx.abs() > _activeDragDy.abs() * 0.9) ||
-                      velocityX.abs() > 360;
+                  final horizontal = (_activeDragDx.abs() > 30 && _activeDragDx.abs() > _activeDragDy.abs() * 0.75) ||
+                      velocityX.abs() > 280;
                   if (horizontal) {
-                    final direction = velocityX.abs() > 360 ? (velocityX < 0 ? 1 : -1) : (_activeDragDx < 0 ? 1 : -1);
+                    final direction = velocityX.abs() > 280 ? (velocityX < 0 ? 1 : -1) : (_activeDragDx < 0 ? 1 : -1);
                     _showGalleryOffset(context, direction);
                   }
                   _resetActiveDrag();
@@ -1311,7 +1268,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     bool progressOutsideScreenshot = false,
     VoidCallback? onWallpaperDisplayReady,
   }) {
-    final bool previewOnly = _isPrismChargingAnimation(entity) || _isPrismDiyTemplate(entity);
+    final bool previewOnly = _isPrismDiyTemplate(entity);
     final String thumb = entity.thumbnailUrl.trim();
     final String entityFull = entity.fullUrl.trim();
     final String full = previewOnly && !_isVideoUrl(entityFull) ? _catalogDisplayImageUrl(entity) : entityFull;
@@ -1331,7 +1288,6 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     } else if (pairedImageUrls.length < 2 && full.isNotEmpty && _isVideoUrl(full)) {
       imageLayer = AutoplayVideoPreview(
         videoUrl: full,
-        posterUrl: _catalogLiveStillUrl(entity),
         fit: BoxFit.contain,
         onReady: onWallpaperDisplayReady,
       );
@@ -1539,35 +1495,6 @@ class _MatchingSideDownloadButton extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ChargingAnimationSelectButton extends StatelessWidget {
-  const _ChargingAnimationSelectButton({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: 'Use charging animation',
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 53,
-          height: 53,
-          decoration: BoxDecoration(
-            color: Theme.of(context).primaryColor,
-            boxShadow: [
-              BoxShadow(color: Colors.black.withValues(alpha: .25), blurRadius: 4, offset: const Offset(0, 4)),
-            ],
-            borderRadius: BorderRadius.circular(500),
-          ),
-          child: Icon(JamIcons.battery_charging_f, color: Theme.of(context).colorScheme.secondary, size: 24),
-        ),
       ),
     );
   }
