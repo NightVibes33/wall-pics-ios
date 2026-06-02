@@ -11,6 +11,7 @@ import 'package:Prism/features/navigation/views/widgets/offline_banner.dart';
 import 'package:Prism/features/palette/domain/entities/wallpaper_detail_entity.dart';
 import 'package:Prism/features/palette/domain/entities/wallpaper_detail_gallery_store.dart';
 import 'package:Prism/features/prism_catalog/data/prism_catalog_data_source.dart';
+import 'package:Prism/features/user_search/views/pages/search_screen.dart';
 import 'package:Prism/theme/jam_icons_icons.dart';
 import 'package:auto_route/auto_route.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -123,12 +124,14 @@ class _HomeTabPageState extends State<HomeTabPage> {
   }
 
   void _submitSearch(String query) {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) {
+      return;
+    }
     FocusManager.instance.primaryFocus?.unfocus();
-    setState(() {
-      _submittedQuery = query.trim();
-      _activeTabIndex = 0;
-      _dashboardFuture = _loadDashboard();
-    });
+    _searchController.text = trimmed;
+    _searchController.selection = TextSelection.collapsed(offset: trimmed.length);
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SearchScreen(initialQuery: trimmed)));
   }
 
   void _clearSearch() {

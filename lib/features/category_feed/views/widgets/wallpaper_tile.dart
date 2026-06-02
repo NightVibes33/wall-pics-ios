@@ -321,7 +321,12 @@ class WallpaperTile extends StatelessWidget {
           context.router.push(WallpaperDetailRoute(entity: WallpaperDetailEntityX.fromFeedItem(item)));
         },
         child: isProfilePictureItem(item)
-            ? Padding(padding: const EdgeInsets.all(6), child: ClipOval(child: image))
+            ? Center(
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: Padding(padding: const EdgeInsets.all(6), child: ClipOval(child: image)),
+                ),
+              )
             : image,
       ),
     );

@@ -10,7 +10,9 @@ import 'package:flutter/material.dart';
 
 @RoutePage()
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key});
+  const SearchScreen({super.key, this.initialQuery = ''});
+
+  final String initialQuery;
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -27,6 +29,13 @@ class _SearchScreenState extends State<SearchScreen> {
   void initState() {
     super.initState();
     _suggestionsFuture = _loadSuggestions();
+    final initialQuery = widget.initialQuery.trim();
+    if (initialQuery.isNotEmpty) {
+      _submittedQuery = initialQuery;
+      _searchController.text = initialQuery;
+      _searchController.selection = TextSelection.collapsed(offset: initialQuery.length);
+      _trackSearchSubmitted(query: initialQuery, fromSuggestion: false, sourceContext: 'home_search_submit');
+    }
   }
 
   @override
@@ -106,6 +115,13 @@ class _SearchScreenState extends State<SearchScreen> {
         elevation: 0,
         surfaceTintColor: Theme.of(context).primaryColor,
         automaticallyImplyLeading: false,
+        leading: Navigator.of(context).canPop()
+            ? IconButton(
+                tooltip: 'Back',
+                icon: Icon(Icons.arrow_back_ios_new, color: Theme.of(context).colorScheme.secondary),
+                onPressed: () => Navigator.of(context).pop(),
+              )
+            : null,
         titleSpacing: 0,
         title: Padding(
           padding: const EdgeInsets.only(left: 8, right: 8, top: 6),
