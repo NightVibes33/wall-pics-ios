@@ -1153,6 +1153,31 @@ List<_PrismItem> _dedupeItems(Iterable<_PrismItem> items) {
   return deduped;
 }
 
+String _resolveCatalogUrl(Object? value, {required String sourceBase}) {
+  final raw = _string(value).trim();
+  if (raw.isEmpty) {
+    return '';
+  }
+  if (raw.startsWith('http://') || raw.startsWith('https://')) {
+    return raw;
+  }
+
+  final base = sourceBase.startsWith('http://') || sourceBase.startsWith('https://')
+      ? sourceBase
+      : 'https://backend.wallpics.app';
+  final baseUri = Uri.tryParse(base);
+  if (baseUri == null || !baseUri.hasScheme) {
+    return raw;
+  }
+  if (raw.startsWith('//')) {
+    return '${baseUri.scheme}:$raw';
+  }
+  if (raw.startsWith('/')) {
+    return baseUri.replace(path: raw, query: null, fragment: null).toString();
+  }
+  return baseUri.resolve(raw).toString();
+}
+
 String _normalizeForSearch(String value) {
   return value
       .toLowerCase()

@@ -1254,6 +1254,35 @@ class _SheetActionTapScale extends StatefulWidget {
   State<_SheetActionTapScale> createState() => _SheetActionTapScaleState();
 }
 
+class _ChargingAnimationSelectButton extends StatelessWidget {
+  const _ChargingAnimationSelectButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Use charging animation',
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 53,
+          height: 53,
+          decoration: BoxDecoration(
+            color: Theme.of(context).primaryColor,
+            boxShadow: [
+              BoxShadow(color: Colors.black.withValues(alpha: .25), blurRadius: 4, offset: const Offset(0, 4)),
+            ],
+            borderRadius: BorderRadius.circular(500),
+          ),
+          child: Icon(JamIcons.battery_charging_f, color: Theme.of(context).colorScheme.secondary, size: 24),
+        ),
+      ),
+    );
+  }
+}
+
 class _SheetActionTapScaleState extends State<_SheetActionTapScale> with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _scale;

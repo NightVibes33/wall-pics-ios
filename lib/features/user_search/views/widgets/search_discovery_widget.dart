@@ -1,4 +1,5 @@
 import 'package:Prism/core/analytics/events/analytics_enums.dart';
+import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/utils/status.dart';
 import 'package:Prism/core/wallpaper/wallpaper_variants.dart';
 import 'package:Prism/data/categories/categories.dart';
@@ -6,6 +7,7 @@ import 'package:Prism/features/palette/domain/entities/wallpaper_detail_entity.d
 import 'package:Prism/features/theme_mode/views/theme_mode_bloc_utils.dart';
 import 'package:Prism/features/user_search/biz/bloc/search_discovery_bloc.j.dart';
 import 'package:Prism/theme/jam_icons_icons.dart';
+import 'package:auto_route/auto_route.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
