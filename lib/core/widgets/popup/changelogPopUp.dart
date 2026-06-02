@@ -37,18 +37,17 @@ const List<_ChangelogVersion> _fallbackChangelog = [
   _ChangelogVersion(
     version: 'v2.6.9',
     changes: [
-      _ChangeItem(icon: JamIcons.magic, text: 'AI-powered wallpaper generation pipeline.', type: ChangeType.feature),
-      _ChangeItem(icon: JamIcons.coin, text: 'Coins economy — earn and spend coins in-app.', type: ChangeType.feature),
-      _ChangeItem(icon: JamIcons.crown, text: 'Subscriptions and new paywall experience.', type: ChangeType.feature),
-      _ChangeItem(icon: JamIcons.user_plus, text: 'All-new onboarding experience.', type: ChangeType.feature),
+      _ChangeItem(icon: JamIcons.pictures, text: 'Expanded Prism wallpaper catalog.', type: ChangeType.feature),
+      _ChangeItem(icon: JamIcons.download, text: 'Improved original-quality wallpaper saving.', type: ChangeType.feature),
+      _ChangeItem(icon: JamIcons.user_plus, text: 'Simplified login-first onboarding.', type: ChangeType.feature),
       _ChangeItem(
         icon: JamIcons.link,
         text: 'Deep links — open walls and profiles from URLs.',
         type: ChangeType.feature,
       ),
       _ChangeItem(icon: JamIcons.user, text: 'Profile completeness indicator.', type: ChangeType.improvement),
-      _ChangeItem(icon: JamIcons.filter, text: 'Added 20+ new wallpaper filters.', type: ChangeType.improvement),
-      _ChangeItem(icon: JamIcons.save, text: 'Save setups as drafts before uploading.', type: ChangeType.feature),
+      _ChangeItem(icon: JamIcons.search, text: 'Improved catalog search relevance.', type: ChangeType.improvement),
+      _ChangeItem(icon: JamIcons.save, text: 'Cleaner saved-wallpaper handling.', type: ChangeType.feature),
       _ChangeItem(icon: JamIcons.download, text: 'Fixed wallpaper download bugs.', type: ChangeType.fix),
       _ChangeItem(icon: JamIcons.eye, text: 'New splash screen animation.', type: ChangeType.improvement),
     ],

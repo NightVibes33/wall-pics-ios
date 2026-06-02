@@ -297,7 +297,7 @@ class ProfileDrawer extends StatelessWidget {
         '----x-x-x----<br>Device info -<br><br>Android version: Android $release<br>SDK Number: SDK $sdkInt<br>Device Manufacturer: $manufacturer<br>Device Model: $model<br>----x-x-x----<br><br>Enter the bug/issue below -<br><br>';
     final MailOptions mailOptions = MailOptions(
       body: deviceBody,
-      subject: '[BUG REPORT::WALL PICS] - $encryptedZipKey',
+      subject: '[BUG REPORT::PRISM] - $encryptedZipKey',
       recipients: ['nightvibes33@users.noreply.github.com'],
       isHTML: true,
       attachments: [encryptedZipPath],
@@ -307,7 +307,7 @@ class ProfileDrawer extends StatelessWidget {
     if (response != MailerResponse.android) {
       final MailOptions fallback = MailOptions(
         body: deviceBody,
-        subject: '[BUG REPORT::WALL PICS]',
+        subject: '[BUG REPORT::PRISM]',
         recipients: ['nightvibes33@users.noreply.github.com'],
         isHTML: true,
         attachments: [zipPath],

@@ -94,7 +94,7 @@ void googleSignInPopUp(BuildContext context, VoidCallback func) {
               children: [
                 const SizedBox(width: 20),
                 Icon(
-                  JamIcons.upload,
+                  JamIcons.search,
                   size: 22,
                   color: Theme.of(context).colorScheme.error == Colors.black
                       ? Colors.white
@@ -104,7 +104,7 @@ void googleSignInPopUp(BuildContext context, VoidCallback func) {
                 SizedBox(
                   width: MediaQuery.of(context).size.width * 0.6,
                   child: Text(
-                    "The ability to upload wallpapers.",
+                    "The ability to browse the complete catalog.",
                     style: Theme.of(
                       context,
                     ).textTheme.titleLarge!.copyWith(color: Theme.of(context).colorScheme.secondary),
@@ -117,7 +117,7 @@ void googleSignInPopUp(BuildContext context, VoidCallback func) {
               children: [
                 const SizedBox(width: 20),
                 Icon(
-                  JamIcons.instant_picture,
+                  JamIcons.heart,
                   size: 22,
                   color: Theme.of(context).colorScheme.error == Colors.black
                       ? Colors.white
@@ -127,7 +127,7 @@ void googleSignInPopUp(BuildContext context, VoidCallback func) {
                 SizedBox(
                   width: MediaQuery.of(context).size.width * 0.6,
                   child: Text(
-                    "The ability to upload setups.",
+                    "Save favorites across your Prism account.",
                     style: Theme.of(
                       context,
                     ).textTheme.titleLarge!.copyWith(color: Theme.of(context).colorScheme.secondary),
@@ -140,7 +140,7 @@ void googleSignInPopUp(BuildContext context, VoidCallback func) {
               children: [
                 const SizedBox(width: 20),
                 Icon(
-                  JamIcons.coin,
+                  JamIcons.download,
                   size: 22,
                   color: Theme.of(context).colorScheme.error == Colors.black
                       ? Colors.white
@@ -150,7 +150,7 @@ void googleSignInPopUp(BuildContext context, VoidCallback func) {
                 SizedBox(
                   width: MediaQuery.of(context).size.width * 0.6,
                   child: Text(
-                    "The ability to view premium content.",
+                    "Download and manage wallpapers from the full catalog.",
                     style: Theme.of(
                       context,
                     ).textTheme.titleLarge!.copyWith(color: Theme.of(context).colorScheme.secondary),

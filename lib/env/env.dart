@@ -22,6 +22,7 @@ class Env {
   // Production backend. The app calls this public API; GitHub tokens live only on the server.
   static const String userStoreApiBaseUrl = String.fromEnvironment('USER_STORE_API_BASE_URL');
   static const String prismCatalogBaseUrl = String.fromEnvironment('PRISM_CATALOG_BASE_URL');
+  static const String prismMediaBaseUrl = String.fromEnvironment('PRISM_MEDIA_BASE_URL');
 
   // RevenueCat
   static const String rcApiKey = String.fromEnvironment('RC_API_KEY');

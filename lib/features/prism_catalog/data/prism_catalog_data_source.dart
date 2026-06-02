@@ -32,7 +32,6 @@ class PrismCatalogDataSource {
   static const String diyTemplateContentType = 'diy_template';
   static const String liveDiyTemplateContentType = 'live_diy_template';
   static const String stickerContentType = 'sticker';
-  static const String aiFilterContentType = 'ai_filter';
   static const Map<String, String> _catalogFilesByContentType = <String, String>{
     regularContentType: 'prism_regular.json',
     liveContentType: 'prism_live.json',
@@ -44,7 +43,6 @@ class PrismCatalogDataSource {
     diyTemplateContentType: 'prism_diy_templates.json',
     liveDiyTemplateContentType: 'prism_live_diy_templates.json',
     stickerContentType: 'prism_stickers.json',
-    aiFilterContentType: 'prism_ai_filters.json',
   };
   static const Map<String, String> _catalogPagePrefixesByContentType = <String, String>{
     regularContentType: 'prism_regular',
@@ -57,7 +55,6 @@ class PrismCatalogDataSource {
     diyTemplateContentType: 'prism_diy_templates',
     liveDiyTemplateContentType: 'prism_live_diy_templates',
     stickerContentType: 'prism_stickers',
-    aiFilterContentType: 'prism_ai_filters',
   };
   static const Map<String, String> _contentTypeLabels = <String, String>{
     regularContentType: 'For You',
@@ -70,7 +67,6 @@ class PrismCatalogDataSource {
     diyTemplateContentType: 'DIY Templates',
     liveDiyTemplateContentType: 'Live DIY Templates',
     stickerContentType: 'Stickers',
-    aiFilterContentType: 'Filters',
   };
   static const Map<String, String> _sourceSectionContentTypes = <String, String>{
     'regular': regularContentType,
@@ -83,7 +79,6 @@ class PrismCatalogDataSource {
     'diy_templates': diyTemplateContentType,
     'live_diy_templates': liveDiyTemplateContentType,
     'stickers': stickerContentType,
-    'ai_filters': aiFilterContentType,
   };
   static const Map<String, String> _numericCategoryTypes = <String, String>{
     '0': regularContentType,
@@ -280,6 +275,9 @@ class PrismCatalogDataSource {
       var ordinal = rankedRefs.length;
       final searchIndex = await _loadSearchIndex();
       for (final entry in searchIndex) {
+        if (!_catalogPagePrefixesByContentType.containsKey(entry.contentType)) {
+          continue;
+        }
         final score = _scoreSearchEntry(entry, normalizedQuery);
         if (score <= 0) {
           continue;
@@ -646,6 +644,9 @@ class PrismCatalogDataSource {
     final locationsByContentType = await _loadItemLocations();
     final byPage = <String, Map<int, List<_RankedItemReference>>>{};
     for (final ref in refs) {
+      if (!_catalogPagePrefixesByContentType.containsKey(ref.contentType)) {
+        continue;
+      }
       final page = ref.page ?? locationsByContentType[ref.contentType]?[ref.id];
       if (page == null) {
         continue;
@@ -986,7 +987,7 @@ class _PrismItem {
     final categories = _maps(json['categories']);
     final tagRows = _maps(json['tags']);
     final author = _asMap(json['author_data']);
-    final sourceBase = _firstString(<Object?>[json['source'], json['media_source'], 'https://backend.wallpics.app']);
+    final sourceBase = _firstString(<Object?>[json['source'], json['media_source'], Env.normalize(Env.prismMediaBaseUrl)]);
     String url(Object? value) => _resolveCatalogUrl(value, sourceBase: sourceBase);
 
     final wallpaper = url(json['wallpaper']);
@@ -1162,10 +1163,10 @@ String _resolveCatalogUrl(Object? value, {required String sourceBase}) {
     return raw;
   }
 
-  final base = sourceBase.startsWith('http://') || sourceBase.startsWith('https://')
-      ? sourceBase
-      : 'https://backend.wallpics.app';
-  final baseUri = Uri.tryParse(base);
+  if (!sourceBase.startsWith('http://') && !sourceBase.startsWith('https://')) {
+    return raw;
+  }
+  final baseUri = Uri.tryParse(sourceBase);
   if (baseUri == null || !baseUri.hasScheme) {
     return raw;
   }
@@ -1225,8 +1226,6 @@ int _scoreSearchFields({
     ...normalizedCategorySlugs,
     ...normalizedTags,
   ].where((value) => value.isNotEmpty).toList(growable: false);
-  final haystack = fields.join(' ');
-
   if (normalizedName == normalizedQuery || normalizedSlug == normalizedQuery) {
     return 10000;
   }
@@ -1252,10 +1251,6 @@ int _scoreSearchFields({
     return 4000;
   }
 
-  final matchingTokens = tokens.where((token) => haystack.contains(token)).length;
-  if (matchingTokens == tokens.length) {
-    return 2500 + matchingTokens;
-  }
   return 0;
 }
 

@@ -39,14 +39,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   late bool _notifWotd;
   late bool _notifPromo;
-  late String _downloadQuality;
 
   @override
   void initState() {
     super.initState();
     _notifWotd = _settingsLocal.get<bool>(PersistenceKeys.notifWotd, defaultValue: true);
     _notifPromo = _settingsLocal.get<bool>(PersistenceKeys.notifPromo, defaultValue: true);
-    _downloadQuality = _settingsLocal.get<String>(PersistenceKeys.downloadQuality, defaultValue: 'original');
+    final savedDownloadQuality = _settingsLocal.get<String>(PersistenceKeys.downloadQuality, defaultValue: 'original');
+    if (savedDownloadQuality != 'original') {
+      _settingsLocal.set(PersistenceKeys.downloadQuality, 'original');
+    }
   }
 
   void _trackSettingsAction(AnalyticsActionValue action) {
@@ -139,76 +141,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ListTile(
           leading: const Icon(Icons.high_quality_outlined),
           title: Text('Download Quality', style: _titleStyle),
-          subtitle: Text(_downloadQuality == 'original' ? 'Original resolution' : 'Compressed', style: _subtitleStyle),
-          trailing: const Icon(Icons.chevron_right_rounded),
-          onTap: _showDownloadQualitySheet,
+          subtitle: Text('Original resolution', style: _subtitleStyle),
         ),
       ],
-    );
-  }
-
-  void _showDownloadQualitySheet() {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Theme.of(context).primaryColor,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setSheetState) {
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    height: 4,
-                    width: 36,
-                    margin: const EdgeInsets.only(bottom: 12),
-                    decoration: BoxDecoration(color: Theme.of(ctx).hintColor, borderRadius: BorderRadius.circular(2)),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    child: Text('Download Quality', style: Theme.of(ctx).textTheme.titleMedium),
-                  ),
-                  RadioListTile<String>(
-                    value: 'original',
-                    // ignore: deprecated_member_use
-                    groupValue: _downloadQuality,
-                    // ignore: deprecated_member_use
-                    activeColor: _accentColor,
-                    title: Text('Original', style: _titleStyle),
-                    subtitle: const Text('Full resolution, larger file size', style: TextStyle(fontSize: 12)),
-                    // ignore: deprecated_member_use
-                    onChanged: (v) {
-                      setSheetState(() {});
-                      setState(() => _downloadQuality = v ?? _downloadQuality);
-                      _settingsLocal.set(PersistenceKeys.downloadQuality, v ?? _downloadQuality);
-                      Navigator.pop(ctx);
-                    },
-                  ),
-                  RadioListTile<String>(
-                    value: 'compressed',
-                    // ignore: deprecated_member_use
-                    groupValue: _downloadQuality,
-                    // ignore: deprecated_member_use
-                    activeColor: _accentColor,
-                    title: Text('Compressed', style: _titleStyle),
-                    subtitle: const Text('Smaller file size, slightly reduced quality', style: TextStyle(fontSize: 12)),
-                    // ignore: deprecated_member_use
-                    onChanged: (v) {
-                      setSheetState(() {});
-                      setState(() => _downloadQuality = v ?? _downloadQuality);
-                      _settingsLocal.set(PersistenceKeys.downloadQuality, v ?? _downloadQuality);
-                      Navigator.pop(ctx);
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                ],
-              ),
-            );
-          },
-        );
-      },
     );
   }
 
@@ -237,21 +172,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             setState(() => _notifPromo = value);
             _settingsLocal.set(PersistenceKeys.notifPromo, value);
           },
-        ),
-      ],
-    );
-  }
-
-  Widget _androidWidgetsSection() {
-    return _sectionCard(
-      title: 'ANDROID WIDGETS',
-      children: [
-        ListTile(
-          leading: const Icon(Icons.grid_view_rounded),
-          title: Text('Quick Tile Settings', style: _titleStyle),
-          subtitle: const Text('Configure Android Quick Settings tiles', style: TextStyle(fontSize: 12)),
-          trailing: const Icon(Icons.chevron_right_rounded),
-          onTap: () => context.router.push(const QuickTileSettingsRoute()),
         ),
       ],
     );
@@ -637,7 +557,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         '----x-x-x----<br>Device info -<br><br>Android version: Android $release<br>SDK Number: SDK $sdkInt<br>Device Manufacturer: $manufacturer<br>Device Model: $model<br>----x-x-x----<br><br>Enter the bug/issue below -<br><br>';
     final MailOptions mailOptions = MailOptions(
       body: deviceBody,
-      subject: '[BUG REPORT::WALL PICS] - $encryptedZipKey',
+      subject: '[BUG REPORT::PRISM] - $encryptedZipKey',
       recipients: ['nightvibes33@users.noreply.github.com'],
       isHTML: true,
       attachments: [encryptedZipPath],
@@ -647,7 +567,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (response != MailerResponse.android) {
       final MailOptions fallback = MailOptions(
         body: deviceBody,
-        subject: '[BUG REPORT::WALL PICS]',
+        subject: '[BUG REPORT::PRISM]',
         recipients: ['nightvibes33@users.noreply.github.com'],
         isHTML: true,
         attachments: [zipPath],
@@ -674,7 +594,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _appearanceSection(),
           _downloadsSection(),
           _notificationsSection(),
-          _androidWidgetsSection(),
           _storageSection(),
           _accountSection(),
           _adminSection(),

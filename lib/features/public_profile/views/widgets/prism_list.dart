@@ -246,7 +246,7 @@ class PrismList extends StatelessWidget {
               final MailOptions mailOptions = MailOptions(
                 body:
                     '----x-x-x----<br>Device info -<br><br>Android version: Android $release<br>SDK Number: SDK $sdkInt<br>Device Manufacturer: $manufacturer<br>Device Model: $model<br>----x-x-x----<br><br>Enter the bug/issue below -<br><br>',
-                subject: '[BUG REPORT::WALL PICS] - $encryptedZipKey',
+                subject: '[BUG REPORT::PRISM] - $encryptedZipKey',
                 recipients: ['nightvibes33@users.noreply.github.com'],
                 isHTML: true,
                 attachments: [encryptedZipPath],
@@ -257,7 +257,7 @@ class PrismList extends StatelessWidget {
                 final MailOptions mailOptions = MailOptions(
                   body:
                       '----x-x-x----<br>Device info -<br><br>Android version: Android $release<br>SDK Number: SDK $sdkInt<br>Device Manufacturer: $manufacturer<br>Device Model: $model<br>----x-x-x----<br><br>Enter the bug/issue below -<br><br>',
-                  subject: '[BUG REPORT::WALL PICS]',
+                  subject: '[BUG REPORT::PRISM]',
                   recipients: ['nightvibes33@users.noreply.github.com'],
                   isHTML: true,
                   attachments: [zipPath],

@@ -16,6 +16,10 @@ if ! grep -q '^PRISM_CATALOG_BASE_URL=' .env && [ -n "${CATALOG_BASE_URL:-}" ]; 
   printf '%s\n' "PRISM_CATALOG_BASE_URL=$CATALOG_BASE_URL" >> .env
 fi
 
+if ! grep -q '^PRISM_MEDIA_BASE_URL=' .env && [ -n "${MEDIA_BASE_URL:-}" ]; then
+  printf '%s\n' "PRISM_MEDIA_BASE_URL=$MEDIA_BASE_URL" >> .env
+fi
+
 if ! grep -q '^PRISM_CATALOG_BASE_URL=' .env; then
   API_BASE="$(awk -F= '$1 == "USER_STORE_API_BASE_URL" { sub(/^[^=]*=/, ""); print }' .env | tail -n 1)"
   if [ -n "$API_BASE" ]; then
@@ -26,7 +30,7 @@ fi
 
 CATALOG_BASE="$(awk -F= '$1 == "PRISM_CATALOG_BASE_URL" { sub(/^[^=]*=/, ""); print }' .env | tail -n 1)"
 if [ -z "$CATALOG_BASE" ]; then
-  echo "Missing PRISM_CATALOG_BASE_URL, WALL_PICS_CATALOG_BASE_URL, or USER_STORE_API_BASE_URL"
+  echo "Missing PRISM_CATALOG_BASE_URL or USER_STORE_API_BASE_URL"
   exit 1
 fi
 CATALOG_BASE="${CATALOG_BASE%/}"
