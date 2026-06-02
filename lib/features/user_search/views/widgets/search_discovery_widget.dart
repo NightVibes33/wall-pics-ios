@@ -1,5 +1,4 @@
 import 'package:Prism/core/analytics/events/analytics_enums.dart';
-import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/utils/status.dart';
 import 'package:Prism/core/wallpaper/wallpaper_variants.dart';
 import 'package:Prism/data/categories/categories.dart';
@@ -7,7 +6,6 @@ import 'package:Prism/features/palette/domain/entities/wallpaper_detail_entity.d
 import 'package:Prism/features/theme_mode/views/theme_mode_bloc_utils.dart';
 import 'package:Prism/features/user_search/biz/bloc/search_discovery_bloc.j.dart';
 import 'package:Prism/theme/jam_icons_icons.dart';
-import 'package:auto_route/auto_route.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -29,8 +27,6 @@ class SearchDiscoveryWidget extends StatelessWidget {
           const SizedBox(height: 12),
           _TagsRow(tags: tags, selectedTag: selectedTag, onTagPressed: onTagPressed),
           const SizedBox(height: 8),
-          const _FindCreatorsRow(),
-          const SizedBox(height: 12),
           _TrendingSection(),
           const SizedBox(height: 16),
           const _CategorySection(),
@@ -77,53 +73,6 @@ class _TagsRow extends StatelessWidget {
             onPressed: () => onTagPressed(tag),
           );
         },
-      ),
-    );
-  }
-}
-
-// ─── Find Creators Row ───────────────────────────────────────────────────────
-
-class _FindCreatorsRow extends StatelessWidget {
-  const _FindCreatorsRow();
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () => context.router.push(const UserSearchRoute()),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        child: Row(
-          children: [
-            Icon(JamIcons.user_circle, size: 18, color: Theme.of(context).colorScheme.secondary),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Find Creators',
-                    style: TextStyle(
-                      fontFamily: 'Satoshi',
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.secondary,
-                    ),
-                  ),
-                  Text(
-                    'Search Prism users by name',
-                    style: TextStyle(
-                      fontFamily: 'Satoshi',
-                      fontSize: 11,
-                      color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.5),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(Icons.chevron_right, size: 18, color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.5)),
-          ],
-        ),
       ),
     );
   }

@@ -10,6 +10,7 @@ import 'package:Prism/features/category_feed/biz/bloc/category_feed_bloc.j.dart'
 import 'package:Prism/features/category_feed/domain/entities/feed_item_entity.dart';
 import 'package:Prism/features/category_feed/views/category_feed_bloc_adapter.dart';
 import 'package:Prism/features/category_feed/views/widgets/wallpaper_tile.dart';
+import 'package:Prism/features/prism_catalog/data/prism_catalog_data_source.dart';
 import 'package:Prism/features/theme_mode/views/theme_mode_bloc_utils.dart';
 import 'package:Prism/logger/logger.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -24,8 +25,7 @@ class WallpaperGrid extends StatefulWidget {
 }
 
 class _WallpaperGridState extends State<WallpaperGrid> {
-  static const int _initialPrecacheCount = 24;
-  static const int _lookAheadPrecacheCount = 72;
+  static const int _lookAheadPrecacheCount = 36;
   static const Duration _thumbnailPrecacheTimeout = Duration(seconds: 3);
 
   final GlobalKey<RefreshIndicatorState> refreshHomeKey = GlobalKey<RefreshIndicatorState>();
@@ -35,8 +35,6 @@ class _WallpaperGridState extends State<WallpaperGrid> {
 
   bool seeMoreLoader = false;
   int _lastLoggedSubWallsCount = -1;
-  String? _readyInitialBatchKey;
-  String? _loadingInitialBatchKey;
   String? _lastLookAheadBatchKey;
 
   @override
@@ -75,35 +73,7 @@ class _WallpaperGridState extends State<WallpaperGrid> {
     if (items.isEmpty) {
       return;
     }
-    _ensureInitialBatchCached(context, items);
     _scheduleLookAheadPrecache(context, items);
-  }
-
-  bool _initialBatchReady(List<PrismFeedItem> items) {
-    final key = _batchKey(items, _initialPrecacheCount);
-    return key.isEmpty || _readyInitialBatchKey == key;
-  }
-
-  void _ensureInitialBatchCached(BuildContext context, List<PrismFeedItem> items) {
-    final key = _batchKey(items, _initialPrecacheCount);
-    if (key.isEmpty || _readyInitialBatchKey == key || _loadingInitialBatchKey == key) {
-      return;
-    }
-    _loadingInitialBatchKey = key;
-    final urls = _thumbnailUrls(items.take(_initialPrecacheCount));
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) {
-        return;
-      }
-      await _precacheThumbnailUrls(context, urls, timeout: _thumbnailPrecacheTimeout);
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _readyInitialBatchKey = key;
-        _loadingInitialBatchKey = null;
-      });
-    });
   }
 
   void _scheduleLookAheadPrecache(BuildContext context, List<PrismFeedItem> items) {
@@ -147,6 +117,12 @@ class _WallpaperGridState extends State<WallpaperGrid> {
         .toList(growable: false);
   }
 
+  double _gridAspectRatio(CategoryFeedState state) {
+    return state.selectedCategory?.catalogContentType == PrismCatalogDataSource.profilePictureContentType
+        ? 1.0
+        : 0.5;
+  }
+
   @override
   Widget build(BuildContext context) {
     final CategoryFeedState state = context.watch<CategoryFeedBloc>().state;
@@ -159,10 +135,9 @@ class _WallpaperGridState extends State<WallpaperGrid> {
     if (subWalls.isNotEmpty) {
       _prepareThumbnails(context, subWalls);
     }
-    final initialBatchReady = subWalls.isNotEmpty && _initialBatchReady(subWalls);
-    final showSkeletonTiles = subWalls.isEmpty || !initialBatchReady;
+    final showSkeletonTiles = subWalls.isEmpty;
 
-    if (subWalls.isNotEmpty && initialBatchReady) {
+    if (subWalls.isNotEmpty) {
       _contentLoadTracker.success(
         itemCount: subWalls.length,
         onSuccess: ({required int loadTimeMs, int? itemCount}) async {
@@ -228,7 +203,7 @@ class _WallpaperGridState extends State<WallpaperGrid> {
             shrinkWrap: true,
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: MediaQuery.of(context).orientation == Orientation.portrait ? 3 : 5,
-              childAspectRatio: 0.5,
+              childAspectRatio: _gridAspectRatio(state),
               mainAxisSpacing: 0,
               crossAxisSpacing: 0,
             ),

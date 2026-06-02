@@ -3,8 +3,8 @@ import 'package:Prism/analytics/analytics_service.dart';
 import 'package:Prism/core/analytics/events/events.dart';
 import 'package:Prism/core/analytics/trackers/content_load_tracker.dart';
 import 'package:Prism/core/di/injection.dart';
-import 'package:Prism/core/persistence/data_sources/settings_local_data_source.dart';
 import 'package:Prism/core/platform/wallpaper_capability.dart';
+import 'package:Prism/core/persistence/data_sources/settings_local_data_source.dart';
 import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:Prism/core/utils/edge_to_edge_overlay_style.dart';
@@ -17,12 +17,14 @@ import 'package:Prism/core/widgets/menuButton/setWallpaperButton.dart';
 import 'package:Prism/core/widgets/content_report/content_report_sheet.dart';
 import 'package:Prism/core/widgets/menuButton/shareButton.dart';
 import 'package:Prism/features/ads/views/widgets/download_button.dart';
+import 'package:Prism/features/charging_animations/data/charging_animation_selection_store.dart';
 import 'package:Prism/features/favourite_walls/domain/entities/favourite_wall_entity.dart';
 import 'package:Prism/features/palette/domain/bloc/wallpaper_detail_bloc.dart';
 import 'package:Prism/features/palette/domain/bloc/wallpaper_detail_event.dart';
 import 'package:Prism/features/palette/domain/bloc/wallpaper_detail_state.dart';
 import 'package:Prism/features/palette/domain/entities/wallpaper_detail_entity.dart';
 import 'package:Prism/features/palette/palette.dart';
+import 'package:Prism/features/prism_catalog/data/prism_catalog_data_source.dart';
 import 'package:Prism/logger/logger.dart';
 import 'package:Prism/theme/jam_icons_icons.dart';
 import 'package:Prism/theme/toasts.dart' as toasts;
@@ -61,7 +63,6 @@ class WallpaperDetailScreen extends StatefulWidget {
 }
 
 class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with SingleTickerProviderStateMixin {
-  final SettingsLocalDataSource _settingsLocal = getIt<SettingsLocalDataSource>();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final ContentLoadTracker _contentLoadTracker = ContentLoadTracker();
 
@@ -130,8 +131,6 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     if (current is! WallpaperDetailLoaded) return;
 
     final capture = current.colorChanged
-        ? screenshotController.capture(pixelRatio: 3, delay: const Duration(milliseconds: 10))
-        : _settingsLocal.get<bool>('optimisedWallpapers', defaultValue: true) == true
         ? screenshotController.capture(pixelRatio: 3, delay: const Duration(milliseconds: 10))
         : Future<Uint8List?>.value();
 
@@ -275,18 +274,72 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     );
   }
 
-  bool _isPrismLivePhoto(WallpaperDetailEntity entity) {
+  bool _isPrismContentType(WallpaperDetailEntity entity, String contentType) {
     return entity.when(
-      prism: (wallpaper) => wallpaper.aiMetadata?['catalogContentType'] == 'live_wallpaper',
+      prism: (wallpaper) => wallpaper.aiMetadata?['catalogContentType'] == contentType,
       wallhaven: (_) => false,
       pexels: (_) => false,
     );
+  }
+
+  bool _isPrismLivePhoto(WallpaperDetailEntity entity) {
+    return _isPrismContentType(entity, PrismCatalogDataSource.liveContentType);
+  }
+
+  bool _isPrismChargingAnimation(WallpaperDetailEntity entity) {
+    return _isPrismContentType(entity, PrismCatalogDataSource.chargingAnimationContentType);
+  }
+
+  bool _isPrismDiyTemplate(WallpaperDetailEntity entity) {
+    return _isPrismContentType(entity, PrismCatalogDataSource.diyTemplateContentType) ||
+        _isPrismContentType(entity, PrismCatalogDataSource.liveDiyTemplateContentType);
+  }
+
+  String _prismMetadataValue(WallpaperDetailEntity entity, String key) {
+    return entity.when(
+      prism: (wallpaper) => wallpaper.aiMetadata?[key]?.toString().trim() ?? '',
+      wallhaven: (_) => '',
+      pexels: (_) => '',
+    );
+  }
+
+  Future<void> _selectChargingAnimation(WallpaperDetailEntity entity) async {
+    final videoUrl = entity.fullUrl.trim();
+    if (videoUrl.isEmpty) {
+      toasts.error('Charging animation is missing its video.');
+      return;
+    }
+    final previewUrl = _prismMetadataValue(entity, 'catalogPreviewUrl').isNotEmpty
+        ? _prismMetadataValue(entity, 'catalogPreviewUrl')
+        : entity.thumbnailUrl;
+    final name = _prismMetadataValue(entity, 'catalogName').isNotEmpty
+        ? _prismMetadataValue(entity, 'catalogName')
+        : 'Charging animation';
+    await ChargingAnimationSelectionStore(getIt<SettingsLocalDataSource>()).save(
+      ChargingAnimationSelection(id: entity.id, name: name, videoUrl: videoUrl, previewUrl: previewUrl),
+    );
+    toasts.codeSend('Charging animation selected.');
+    if (mounted) {
+      unawaited(context.router.push(const ChargingAnimationPlayerRoute()));
+    }
+  }
+
+  String _catalogDisplayImageUrl(WallpaperDetailEntity entity) {
+    final preview = _prismMetadataValue(entity, 'catalogPreviewUrl');
+    if (preview.isNotEmpty) return preview;
+    final staticStill = _prismMetadataValue(entity, 'catalogStaticThumbnailUrl');
+    if (staticStill.isNotEmpty) return staticStill;
+    final firstFrameStill = _prismMetadataValue(entity, 'catalogFirstFrameThumbnailUrl');
+    if (firstFrameStill.isNotEmpty) return firstFrameStill;
+    return entity.thumbnailUrl.trim();
   }
 
   String? _catalogLiveStillUrl(WallpaperDetailEntity entity) {
     return entity.when(
       prism: (wallpaper) {
         final metadata = wallpaper.aiMetadata;
+        final firstFrameStill = metadata?['catalogFirstFrameThumbnailUrl']?.toString().trim() ?? '';
+        if (firstFrameStill.isNotEmpty) return firstFrameStill;
         final staticStill = metadata?['catalogStaticThumbnailUrl']?.toString().trim() ?? '';
         if (staticStill.isNotEmpty) return staticStill;
         final preview = metadata?['catalogPreviewUrl']?.toString().trim() ?? '';
@@ -847,13 +900,36 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
   Widget _buildActionButtons(BuildContext context, WallpaperDetailLoaded state) {
     final entity = state.entity;
     final isLivePhoto = _isPrismLivePhoto(entity);
+    final isChargingAnimation = _isPrismChargingAnimation(entity);
+    if (isChargingAnimation) {
+      final actions = <Widget>[
+        _SheetActionTapScale(
+          child: _ChargingAnimationSelectButton(onTap: () => unawaited(_selectChargingAnimation(entity))),
+        ),
+        _SheetActionTapScale(child: FavouriteWallpaperButton(wall: _toFavouriteWall(entity), trash: false)),
+        _SheetActionTapScale(
+          child: ShareButton(id: entity.id, source: entity.source, url: entity.fullUrl, thumbUrl: entity.thumbnailUrl),
+        ),
+      ];
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: _sheetHPad),
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: actions),
+        ),
+      );
+    }
+
     final liveStillUrl = isLivePhoto ? _catalogLiveStillUrl(entity) : null;
-    final url = isLivePhoto ? entity.fullUrl : (state.screenshotTaken && state.imageFile != null ? state.imageFile!.path : entity.fullUrl);
+    final downloadUrl = entity.fullUrl;
+    final setWallpaperUrl =
+        !isLivePhoto && state.colorChanged && state.screenshotTaken && state.imageFile != null
+            ? state.imageFile!.path
+            : entity.fullUrl;
     final List<Widget> actions = <Widget>[
       _SheetActionTapScale(
         child: DownloadButton(
-          colorChanged: state.colorChanged,
-          link: url,
+          colorChanged: false,
+          link: downloadUrl,
           sourceContext: _getSourceContext(state),
           livePhotoStillUrl: liveStillUrl,
         ),
@@ -862,7 +938,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
         _SheetActionTapScale(
           child: SetWallpaperButton(
             colorChanged: state.colorChanged,
-            url: url,
+            url: setWallpaperUrl,
             promptNotificationPermissionOnSuccess: true,
           ),
         ),
@@ -1044,8 +1120,9 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     bool progressOutsideScreenshot = false,
     VoidCallback? onWallpaperDisplayReady,
   }) {
+    final bool previewOnly = _isPrismChargingAnimation(entity) || _isPrismDiyTemplate(entity);
     final String thumb = entity.thumbnailUrl.trim();
-    final String full = entity.fullUrl.trim();
+    final String full = previewOnly ? _catalogDisplayImageUrl(entity) : entity.fullUrl.trim();
     final bool useProgressive = thumb.isNotEmpty && full.isNotEmpty && full != thumb;
 
     Widget imageLayer;

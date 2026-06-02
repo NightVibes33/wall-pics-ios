@@ -11,6 +11,7 @@ import 'package:Prism/features/wallpaper_detail/domain/usecases/wallpaper_views_
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:injectable/injectable.dart';
+import 'package:path_provider/path_provider.dart';
 
 @injectable
 class WallpaperDetailBloc extends Bloc<WallpaperDetailEvent, WallpaperDetailState> {
@@ -119,11 +120,15 @@ class WallpaperDetailBloc extends Bloc<WallpaperDetailEvent, WallpaperDetailStat
     emit(currentState.copyWith(colorChanged: false));
   }
 
-  void _onCaptureScreenshot(CaptureScreenshot event, Emitter<WallpaperDetailState> emit) {
+  Future<void> _onCaptureScreenshot(CaptureScreenshot event, Emitter<WallpaperDetailState> emit) async {
     final currentState = state;
     if (currentState is! WallpaperDetailLoaded) return;
 
-    final imageFile = File.fromRawPath(event.imageBytes);
+    final tempDir = await getTemporaryDirectory();
+    final imageFile = File(
+      '${tempDir.path}/prism_wallpaper_capture_${DateTime.now().microsecondsSinceEpoch}.png',
+    );
+    await imageFile.writeAsBytes(event.imageBytes, flush: true);
     emit(currentState.copyWith(screenshotTaken: true, imageFile: imageFile));
   }
 

@@ -591,6 +591,7 @@ class _MyAppState extends State<_MyApp> with WidgetsBindingObserver {
       SetupLinkIntent() => TargetTypeValue.setup,
       ReferLinkIntent() => TargetTypeValue.refer,
       ShortCodeIntent() => TargetTypeValue.shortCode,
+      ChargingAnimationIntent() => TargetTypeValue.unknown,
       UnknownIntent() => TargetTypeValue.unknown,
     };
   }
@@ -661,6 +662,13 @@ class _MyAppState extends State<_MyApp> with WidgetsBindingObserver {
         );
       case ShortCodeIntent():
         await _resolveAndNavigateShortCode(action.code);
+      case ChargingAnimationIntent():
+        _appRouter.push(const ChargingAnimationPlayerRoute());
+        unawaited(
+          analytics.track(
+            const DeepLinkNavigationResultEvent(targetType: TargetTypeValue.unknown, result: EventResultValue.navigated),
+          ),
+        );
       case UnknownIntent():
         _appRouter.push(const NotFoundRoute());
         unawaited(

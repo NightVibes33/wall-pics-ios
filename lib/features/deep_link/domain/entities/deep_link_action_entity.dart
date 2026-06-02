@@ -46,6 +46,10 @@ final class ShortCodeIntent extends DeepLinkActionEntity {
   final String code;
 }
 
+final class ChargingAnimationIntent extends DeepLinkActionEntity {
+  const ChargingAnimationIntent({required super.rawUri});
+}
+
 final class UnknownIntent extends DeepLinkActionEntity {
   const UnknownIntent({required super.rawUri});
 }

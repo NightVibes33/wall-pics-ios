@@ -56,10 +56,6 @@ class _SearchGridState extends State<SearchGrid> {
     if (!mounted) {
       return;
     }
-    await _precacheThumbnails(incoming);
-    if (!mounted) {
-      return;
-    }
     setState(() {
       if (refresh) {
         _items
@@ -78,6 +74,7 @@ class _SearchGridState extends State<SearchGrid> {
       }
       _hasMore = page.hasMore;
     });
+    unawaited(_precacheThumbnails(incoming));
     _trackResultsLoaded(page: _currentPage, result: _items.isEmpty ? EventResultValue.empty : EventResultValue.success);
   }
 
@@ -120,6 +117,15 @@ class _SearchGridState extends State<SearchGrid> {
         setState(() => _loadingMore = false);
       }
     }
+  }
+
+  double _gridAspectRatio() {
+    final sample = _items.take(12).toList(growable: false);
+    if (sample.isEmpty) {
+      return 0.5;
+    }
+    final profileCount = sample.where(WallpaperTile.isProfilePictureItem).length;
+    return profileCount * 2 >= sample.length ? 1.0 : 0.5;
   }
 
   Future<void> _precacheThumbnails(Iterable<PrismFeedItem> items) async {
@@ -186,7 +192,7 @@ class _SearchGridState extends State<SearchGrid> {
               itemCount: _items.length + (_hasMore ? 1 : 0),
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: MediaQuery.of(context).orientation == Orientation.portrait ? 3 : 5,
-                childAspectRatio: 0.5,
+                childAspectRatio: _gridAspectRatio(),
                 mainAxisSpacing: 0,
                 crossAxisSpacing: 0,
               ),

@@ -9,6 +9,11 @@ class DeepLinkParser {
   static const Set<String> _setupRoots = <String>{'setup', 'share-setup'};
   static const Set<String> _referRoots = <String>{'refer', 'referral'};
   static const Set<String> _shortCodeRoots = <String>{'l'};
+  static const Set<String> _chargingAnimationRoots = <String>{
+    'charging',
+    'charging-animation',
+    'charging-animation-player',
+  };
 
   Uri transform(Uri uri) {
     final List<String> segments = _segments(uri);
@@ -112,6 +117,10 @@ class DeepLinkParser {
         return UnknownIntent(rawUri: uri.toString());
       }
       return ShortCodeIntent(code: code, rawUri: uri.toString());
+    }
+
+    if (_chargingAnimationRoots.contains(root)) {
+      return ChargingAnimationIntent(rawUri: uri.toString());
     }
 
     return UnknownIntent(rawUri: uri.toString());

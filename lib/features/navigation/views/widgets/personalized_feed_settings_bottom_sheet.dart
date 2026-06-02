@@ -87,7 +87,7 @@ class _PersonalizedFeedSettingsSheetState extends State<PersonalizedFeedSettings
   void initState() {
     super.initState();
     _selectedInterests = {...widget.initialInterests};
-    _feedMix = widget.initialFeedMix;
+    _feedMix = widget.initialFeedMix == 'creators' ? 'catalog' : widget.initialFeedMix;
   }
 
   bool get _canSave => !_saving && _selectedInterests.length >= OnboardingV2Config.minInterests;
@@ -301,8 +301,8 @@ class _FeedMixSelector extends StatelessWidget {
           label: Text('Balanced', maxLines: 1, overflow: TextOverflow.ellipsis),
         ),
         ButtonSegment<String>(
-          value: 'creators',
-          label: Text('Creators', maxLines: 1, overflow: TextOverflow.ellipsis),
+          value: 'catalog',
+          label: Text('Catalog', maxLines: 1, overflow: TextOverflow.ellipsis),
         ),
         ButtonSegment<String>(
           value: 'discovery',

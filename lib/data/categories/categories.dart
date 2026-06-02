@@ -255,15 +255,6 @@ const List<CategoryDefinition> categoryDefinitions = <CategoryDefinition>[
     catalogContentType: 'regular_wallpaper',
   ),
   CategoryDefinition(
-    name: 'AI wallpapers 🤖',
-    source: WallpaperSource.prism,
-    searchType: CategorySearchType.nonSearch,
-    imageUrl: '',
-    secondaryImageUrl: '',
-    catalogSlug: 'ai-wallpapers',
-    catalogContentType: 'regular_wallpaper',
-  ),
-  CategoryDefinition(
     name: 'Motivational 🧠',
     source: WallpaperSource.prism,
     searchType: CategorySearchType.nonSearch,

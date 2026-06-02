@@ -51,6 +51,8 @@ class DeepLinkNavigation {
           return null;
         }
         return _mapActionToRoute(resolved);
+      case ChargingAnimationIntent():
+        return const ChargingAnimationPlayerRoute();
       case UnknownIntent():
         return null;
     }

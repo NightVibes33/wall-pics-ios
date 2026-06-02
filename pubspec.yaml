@@ -78,6 +78,7 @@ dependencies:
   sliding_up_panel: ^2.0.0+1
   timeago: ^3.0.2
   url_launcher: ^6.0.3
+  video_player: ^2.9.5
   auto_route: ^11.1.0
   mixpanel_flutter: ^2.5.0
   sign_in_with_apple: ^7.0.0

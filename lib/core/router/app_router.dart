@@ -6,6 +6,7 @@ import 'package:Prism/core/router/route_guards.dart';
 import 'package:Prism/core/wallpaper/wallpaper_source.dart';
 import 'package:Prism/features/admin_review/views/pages/remote_store_telemetry_screen.dart';
 import 'package:Prism/features/category_feed/views/pages/collection_view_screen.dart';
+import 'package:Prism/features/charging_animations/views/pages/charging_animation_player_screen.dart';
 import 'package:Prism/features/debug_panel/views/pages/debug_panel_page.dart';
 import 'package:Prism/features/favourite_walls/views/pages/favourite_wall_screen.dart';
 import 'package:Prism/features/navigation/views/pages/collection_tab_page.dart';
@@ -68,6 +69,7 @@ class AppRouter extends RootStackRouter {
     AutoRoute(path: '/fav-walls', page: FavouriteWallpaperRoute.page),
     AutoRoute(path: '/downloads', page: DownloadRoute.page),
     AutoRoute(path: '/theme', page: ThemeViewRoute.page),
+    AutoRoute(path: '/charging-animation', page: ChargingAnimationPlayerRoute.page),
     AutoRoute(path: '/collection-view', page: CollectionViewRoute.page),
     AutoRoute(path: '/admin-remote-store-telemetry', page: RemoteStoreTelemetryRoute.page, guards: [_adminGuard]),
     AutoRoute(path: '/debug-panel', page: DebugPanelRoute.page, guards: [_adminGuard]),

@@ -94,6 +94,7 @@ class PrismCatalogDataSource {
   };
 
   final Map<String, Future<_PrismCatalogPage>> _pageFutures = <String, Future<_PrismCatalogPage>>{};
+  final Map<String, Future<List<_PrismItem>>> _compactCatalogFutures = <String, Future<List<_PrismItem>>>{};
   final Map<String, int> _offsets = <String, int>{};
   Future<List<Map<String, dynamic>>>? _categoryRowsFuture;
   Future<Map<String, Map<String, List<String>>>>? _categoryIdsFuture;
@@ -401,20 +402,24 @@ class PrismCatalogDataSource {
   }
 
   Future<Map<String, Map<String, List<String>>>> _loadCategoryIdsInternal() async {
-    final raw = await _loadCatalogJson(
-      'prism_category_ids.json',
-      timeout: _metadataTimeout,
-      allowGeneratedFallback: false,
-    );
-    final payload = jsonDecode(raw) as Map<String, dynamic>;
-    final contentTypes = _asMap(payload['content_types']);
-    return <String, Map<String, List<String>>>{
-      for (final contentTypeEntry in contentTypes.entries)
-        contentTypeEntry.key: <String, List<String>>{
-          for (final categoryEntry in _asMap(contentTypeEntry.value).entries)
-            categoryEntry.key: _strings(categoryEntry.value),
-        },
-    };
+    try {
+      final raw = await _loadCatalogJson(
+        'prism_category_ids.json',
+        timeout: _metadataTimeout,
+        allowGeneratedFallback: false,
+      );
+      final payload = jsonDecode(raw) as Map<String, dynamic>;
+      final contentTypes = _asMap(payload['content_types']);
+      return <String, Map<String, List<String>>>{
+        for (final contentTypeEntry in contentTypes.entries)
+          contentTypeEntry.key: <String, List<String>>{
+            for (final categoryEntry in _asMap(contentTypeEntry.value).entries)
+              categoryEntry.key: _strings(categoryEntry.value),
+          },
+      };
+    } catch (_) {
+      return _buildCategoryIdsFromCompactCatalogs();
+    }
   }
 
   Future<Map<String, Map<String, int>>> _loadItemLocations() {
@@ -422,20 +427,24 @@ class PrismCatalogDataSource {
   }
 
   Future<Map<String, Map<String, int>>> _loadItemLocationsInternal() async {
-    final raw = await _loadCatalogJson(
-      'prism_item_locations.json',
-      timeout: _metadataTimeout,
-      allowGeneratedFallback: false,
-    );
-    final payload = jsonDecode(raw) as Map<String, dynamic>;
-    final contentTypes = _asMap(payload['content_types']);
-    return <String, Map<String, int>>{
-      for (final contentTypeEntry in contentTypes.entries)
-        contentTypeEntry.key: <String, int>{
-          for (final itemEntry in _asMap(contentTypeEntry.value).entries)
-            if (_int(itemEntry.value) != null) itemEntry.key: _int(itemEntry.value)!,
-        },
-    };
+    try {
+      final raw = await _loadCatalogJson(
+        'prism_item_locations.json',
+        timeout: _metadataTimeout,
+        allowGeneratedFallback: false,
+      );
+      final payload = jsonDecode(raw) as Map<String, dynamic>;
+      final contentTypes = _asMap(payload['content_types']);
+      return <String, Map<String, int>>{
+        for (final contentTypeEntry in contentTypes.entries)
+          contentTypeEntry.key: <String, int>{
+            for (final itemEntry in _asMap(contentTypeEntry.value).entries)
+              if (_int(itemEntry.value) != null) itemEntry.key: _int(itemEntry.value)!,
+          },
+      };
+    } catch (_) {
+      return _buildItemLocationsFromCompactCatalogs();
+    }
   }
 
   Future<List<_SearchIndexEntry>> _loadSearchIndex() {
@@ -443,17 +452,21 @@ class PrismCatalogDataSource {
   }
 
   Future<List<_SearchIndexEntry>> _loadSearchIndexInternal() async {
-    final raw = await _loadCatalogJson(
-      'prism_search_index.json',
-      timeout: _searchIndexTimeout,
-      allowGeneratedFallback: false,
-    );
-    final payload = jsonDecode(raw) as Map<String, dynamic>;
-    final rawItems = payload['items'];
-    if (rawItems is! List) {
-      return const <_SearchIndexEntry>[];
+    try {
+      final raw = await _loadCatalogJson(
+        'prism_search_index.json',
+        timeout: _searchIndexTimeout,
+        allowGeneratedFallback: false,
+      );
+      final payload = jsonDecode(raw) as Map<String, dynamic>;
+      final rawItems = payload['items'];
+      if (rawItems is! List) {
+        return const <_SearchIndexEntry>[];
+      }
+      return rawItems.whereType<Map>().map((item) => _SearchIndexEntry.fromJson(_asMap(item))).toList(growable: false);
+    } catch (_) {
+      return _buildSearchIndexFromCompactCatalogs();
     }
-    return rawItems.whereType<Map>().map((item) => _SearchIndexEntry.fromJson(_asMap(item))).toList(growable: false);
   }
 
   Future<_PrismCatalogPage> _loadCatalogPage(String contentType, int page) {
@@ -473,18 +486,135 @@ class PrismCatalogDataSource {
     required int page,
   }) async {
     final fileName = '${prefix}_page_${page.toString().padLeft(3, '0')}.json';
-    final raw = await _loadCatalogJson(fileName, timeout: _pageTimeout, allowGeneratedFallback: false);
-    final payload = jsonDecode(raw) as Map<String, dynamic>;
-    final contentType = _string(payload['content_type']).isNotEmpty ? _string(payload['content_type']) : fallbackType;
-    final rawItems = payload['wallpapers'];
-    final items = rawItems is List
-        ? _dedupeItems(rawItems.whereType<Map>().map((item) => _PrismItem.fromJson(_asMap(item), contentType)))
-        : <_PrismItem>[];
+    try {
+      final raw = await _loadCatalogJson(fileName, timeout: _pageTimeout, allowGeneratedFallback: false);
+      final payload = jsonDecode(raw) as Map<String, dynamic>;
+      final contentType = _string(payload['content_type']).isNotEmpty ? _string(payload['content_type']) : fallbackType;
+      final rawItems = payload['wallpapers'];
+      final items = rawItems is List
+          ? _dedupeItems(rawItems.whereType<Map>().map((item) => _PrismItem.fromJson(_asMap(item), contentType)))
+          : <_PrismItem>[];
+      return _PrismCatalogPage(
+        items: items,
+        itemCount: _int(payload['item_count']) ?? items.length,
+        hasMore: payload['has_more'] == true,
+      );
+    } catch (_) {
+      return _loadCompactCatalogPage(contentType: fallbackType, page: page);
+    }
+  }
+
+  Future<_PrismCatalogPage> _loadCompactCatalogPage({required String contentType, required int page}) async {
+    final items = await _loadCompactCatalog(contentType);
+    final start = (page - 1) * _catalogShardSize;
+    if (start >= items.length) {
+      return _PrismCatalogPage(items: const <_PrismItem>[], itemCount: items.length, hasMore: false);
+    }
+    final pageItems = items.skip(start).take(_catalogShardSize).toList(growable: false);
     return _PrismCatalogPage(
-      items: items,
-      itemCount: _int(payload['item_count']) ?? items.length,
-      hasMore: payload['has_more'] == true,
+      items: pageItems,
+      itemCount: items.length,
+      hasMore: start + pageItems.length < items.length,
     );
+  }
+
+  Future<List<_PrismItem>> _loadCompactCatalog(String contentType) {
+    final fileName = _catalogFilesByContentType[contentType];
+    if (fileName == null) {
+      return Future<List<_PrismItem>>.value(const <_PrismItem>[]);
+    }
+    return _compactCatalogFutures[contentType] ??= _loadCompactCatalogFile(
+      contentType: contentType,
+      fileName: fileName,
+    );
+  }
+
+  Future<List<_PrismItem>> _loadCompactCatalogFile({required String contentType, required String fileName}) async {
+    try {
+      final raw = await _loadCatalogJson(fileName, timeout: _metadataTimeout);
+      final payload = jsonDecode(raw) as Map<String, dynamic>;
+      final resolvedType = _string(payload['content_type']).isNotEmpty ? _string(payload['content_type']) : contentType;
+      final rawItems = payload['wallpapers'];
+      if (rawItems is! List) {
+        return const <_PrismItem>[];
+      }
+      return _dedupeItems(rawItems.whereType<Map>().map((item) => _PrismItem.fromJson(_asMap(item), resolvedType)));
+    } catch (_) {
+      return const <_PrismItem>[];
+    }
+  }
+
+  Future<Map<String, Map<String, List<String>>>> _buildCategoryIdsFromCompactCatalogs() async {
+    final result = <String, Map<String, List<String>>>{};
+    await Future.wait<void>([
+      for (final contentType in _catalogPagePrefixesByContentType.keys)
+        () async {
+          final items = await _loadCompactCatalog(contentType);
+          final bySlug = result.putIfAbsent(contentType, () => <String, List<String>>{});
+          for (final item in items) {
+            if (item.id.trim().isEmpty) {
+              continue;
+            }
+            for (final slug in item.categorySlugs) {
+              final normalizedSlug = slug.trim();
+              if (normalizedSlug.isEmpty) {
+                continue;
+              }
+              bySlug.putIfAbsent(normalizedSlug, () => <String>[]).add(item.id);
+            }
+          }
+        }(),
+    ]);
+    return result;
+  }
+
+  Future<Map<String, Map<String, int>>> _buildItemLocationsFromCompactCatalogs() async {
+    final result = <String, Map<String, int>>{};
+    await Future.wait<void>([
+      for (final contentType in _catalogPagePrefixesByContentType.keys)
+        () async {
+          final items = await _loadCompactCatalog(contentType);
+          final locations = result.putIfAbsent(contentType, () => <String, int>{});
+          for (var index = 0; index < items.length; index++) {
+            final id = items[index].id.trim();
+            if (id.isEmpty) {
+              continue;
+            }
+            locations[id] = (index ~/ _catalogShardSize) + 1;
+          }
+        }(),
+    ]);
+    return result;
+  }
+
+  Future<List<_SearchIndexEntry>> _buildSearchIndexFromCompactCatalogs() async {
+    final entries = <_SearchIndexEntry>[];
+    await Future.wait<void>([
+      for (final contentType in _catalogPagePrefixesByContentType.keys)
+        () async {
+          final items = await _loadCompactCatalog(contentType);
+          for (var index = 0; index < items.length; index++) {
+            final item = items[index];
+            if (item.id.trim().isEmpty) {
+              continue;
+            }
+            entries.add(
+              _SearchIndexEntry(
+                id: item.id,
+                contentType: contentType,
+                page: (index ~/ _catalogShardSize) + 1,
+                name: item.name,
+                slug: item.slug,
+                categoryNames: item.categoryNames,
+                categorySlugs: item.categorySlugs,
+                tags: item.tags,
+                createdAt: item.createdAt,
+              ),
+            );
+          }
+        }(),
+    ]);
+    return entries;
   }
 
   Future<List<_PrismItem>> _itemsByIds({required String contentType, required List<String> ids}) async {
@@ -808,8 +938,11 @@ class _PrismItem {
     required this.previewUrl,
     required this.thumbnailUrl,
     required this.staticThumbnailUrl,
+    required this.firstFrameThumbnailUrl,
     required this.videoUrl,
     required this.thumbnailVideoUrl,
+    required this.templateUrl,
+    required this.mediaAssetUrls,
     required this.pairedWallpapers,
     required this.pairedPreviewUrls,
     required this.authorName,
@@ -832,8 +965,11 @@ class _PrismItem {
   final String previewUrl;
   final String thumbnailUrl;
   final String staticThumbnailUrl;
+  final String firstFrameThumbnailUrl;
   final String videoUrl;
   final String thumbnailVideoUrl;
+  final String templateUrl;
+  final List<String> mediaAssetUrls;
   final List<Map<String, dynamic>> pairedWallpapers;
   final List<String> pairedPreviewUrls;
   final String? authorName;
@@ -850,48 +986,73 @@ class _PrismItem {
     final categories = _maps(json['categories']);
     final tagRows = _maps(json['tags']);
     final author = _asMap(json['author_data']);
-    final wallpaper = _string(json['wallpaper']);
-    final catalogDownload = _string(json['download_url']);
+    final sourceBase = _firstString(<Object?>[json['source'], json['media_source'], 'https://backend.wallpics.app']);
+    String url(Object? value) => _resolveCatalogUrl(value, sourceBase: sourceBase);
+
+    final wallpaper = url(json['wallpaper']);
+    final image = url(json['image']);
+    final template = url(json['template']);
+    final sticker = url(json['sticker']);
+    final parallaxFile = url(json['parallax_file']);
+    final catalogDownload = url(json['download_url']);
     final pairedWallpapers = _maps(json['paired_wallpapers']);
-    final pairedPreviewUrls = _strings(json['paired_preview_urls']);
+    final pairedPreviewUrls = _strings(json['paired_preview_urls'])
+        .map((value) => url(value))
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
+    final mediaAssetUrls = _strings(json['media_assets'])
+        .map((value) => url(value))
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
     final video = _firstString(<Object?>[
-      json['video_original '],
-      json['video_original'],
-      json['video'],
-      json['lq_video'],
-      json['android_video'],
+      url(json['video_original ']),
+      url(json['video_original']),
+      url(json['video']),
+      url(json['lq_video']),
+      url(json['android_video']),
     ]);
+    final firstFrameThumbnail = url(json['first_frame_thumbnail']);
+    final thumbnail = url(json['thumbnail']);
+    final staticThumbnail = url(json['static_thumbnail']);
+    final hqThumbnail = url(json['hq_thumbnail']);
     final thumb = _firstString(<Object?>[
-      json['thumbnail'],
-      json['static_thumbnail'],
-      json['hq_thumbnail'],
-      json['first_frame_thumbnail'],
+      thumbnail,
+      staticThumbnail,
+      hqThumbnail,
+      firstFrameThumbnail,
       wallpaper,
-      json['image'],
-      json['template'],
-      json['sticker'],
-      json['parallax_file'],
+      image,
+      sticker,
+      parallaxFile,
       video,
     ]);
-    final staticThumb = _firstString(<Object?>[
-      json['static_thumbnail'],
-      json['hq_thumbnail'],
-      json['first_frame_thumbnail'],
+    final staticThumb = contentType == PrismCatalogDataSource.liveContentType
+        ? _firstString(<Object?>[
+            firstFrameThumbnail,
+            staticThumbnail,
+            hqThumbnail,
+            thumb,
+          ])
+        : _firstString(<Object?>[
+            staticThumbnail,
+            hqThumbnail,
+            firstFrameThumbnail,
+            thumb,
+          ]);
+    final preview = _firstString(<Object?>[
+      url(json['preview_image']),
+      hqThumbnail,
+      staticThumbnail,
+      firstFrameThumbnail,
+      thumbnail,
+      wallpaper,
+      image,
+      sticker,
+      parallaxFile,
       thumb,
     ]);
-    final preview = _firstString(<Object?>[
-      json['preview_image'],
-      json['hq_thumbnail'],
-      json['static_thumbnail'],
-      json['first_frame_thumbnail'],
-      json['thumbnail'],
-      wallpaper,
-      json['image'],
-      json['template'],
-      json['sticker'],
-      json['parallax_file'],
-      video,
-    ]);
+    final displayOnlyContent = contentType == PrismCatalogDataSource.diyTemplateContentType ||
+        contentType == PrismCatalogDataSource.liveDiyTemplateContentType;
     return _PrismItem(
       id: _string(json['id']),
       name: _string(json['name']),
@@ -900,14 +1061,19 @@ class _PrismItem {
       contentType: contentType,
       width: _int(json['width']),
       height: _int(json['height']),
-      downloadUrl: contentType == PrismCatalogDataSource.liveContentType
+      downloadUrl: displayOnlyContent
+          ? _firstString(<Object?>[preview, wallpaper, image, thumb])
+          : contentType == PrismCatalogDataSource.liveContentType
           ? _firstString(<Object?>[catalogDownload, video, wallpaper])
-          : _firstString(<Object?>[catalogDownload, wallpaper, video]),
+          : _firstString(<Object?>[catalogDownload, wallpaper, image, video]),
       previewUrl: preview,
       thumbnailUrl: thumb,
       staticThumbnailUrl: staticThumb,
+      firstFrameThumbnailUrl: firstFrameThumbnail,
       videoUrl: video,
-      thumbnailVideoUrl: _string(json['thumbnail_video']),
+      thumbnailVideoUrl: url(json['thumbnail_video']),
+      templateUrl: template.isNotEmpty ? template : catalogDownload,
+      mediaAssetUrls: mediaAssetUrls,
       pairedWallpapers: pairedWallpapers,
       pairedPreviewUrls: pairedPreviewUrls,
       authorName: _firstString(<Object?>[author['name'], json['author']]).trim().isEmpty
@@ -924,7 +1090,9 @@ class _PrismItem {
 
   PrismWallpaper toWallpaper() {
     final String full = downloadUrl.isNotEmpty ? downloadUrl : previewUrl;
-    final String thumb = thumbnailUrl.isNotEmpty ? thumbnailUrl : previewUrl;
+    final String thumb = contentType == PrismCatalogDataSource.liveContentType
+        ? _firstString(<Object?>[firstFrameThumbnailUrl, thumbnailUrl, staticThumbnailUrl, previewUrl, full])
+        : _firstString(<Object?>[previewUrl, staticThumbnailUrl, thumbnailUrl, full]);
     return PrismWallpaper(
       core: WallpaperCore(
         id: id,
@@ -945,12 +1113,16 @@ class _PrismItem {
       tags: tags,
       aiMetadata: <String, Object?>{
         'catalogContentType': contentType,
+        'catalogName': name,
         'catalogSlug': slug,
         'catalogDescription': description,
         'catalogPreviewUrl': previewUrl,
         'catalogStaticThumbnailUrl': staticThumbnailUrl,
+        'catalogFirstFrameThumbnailUrl': firstFrameThumbnailUrl,
         'catalogVideoUrl': videoUrl,
         'catalogThumbnailVideoUrl': thumbnailVideoUrl,
+        'catalogTemplateUrl': templateUrl,
+        'catalogMediaAssetUrls': mediaAssetUrls,
         'catalogPairedWallpapers': pairedWallpapers,
         'catalogPairedPreviewUrls': pairedPreviewUrls,
         'catalogIsPremium': isPremium,

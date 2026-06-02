@@ -115,9 +115,16 @@ class _DownloadButtonState extends State<DownloadButton> {
           return false;
         }
         savedLivePhoto = true;
-      } else if (link.contains('com.hash.prism')) {
-        final SaveMediaRequest request = SaveMediaRequest(link: link, isLocalFile: true, kind: SaveMediaKind.wallpaper);
-        final OperationResult result = await PrismMediaHostApi().saveMedia(request).timeout(const Duration(seconds: 15));
+      } else if (hideSetWallpaperUi || link.contains('com.hash.prism')) {
+        final OperationResult result = await PrismMediaHostApi()
+            .saveMedia(
+              SaveMediaRequest(
+                link: link,
+                isLocalFile: link.contains('com.hash.prism'),
+                kind: SaveMediaKind.wallpaper,
+              ),
+            )
+            .timeout(const Duration(seconds: 60));
         if (!result.success) {
           toasts.error("Couldn't download! Please retry.");
           return false;

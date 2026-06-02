@@ -27,6 +27,22 @@ class AboutRoute extends PageRouteInfo<void> {
 }
 
 /// generated route for
+/// [ChargingAnimationPlayerScreen]
+class ChargingAnimationPlayerRoute extends PageRouteInfo<void> {
+  const ChargingAnimationPlayerRoute({List<PageRouteInfo>? children})
+    : super(ChargingAnimationPlayerRoute.name, initialChildren: children);
+
+  static const String name = 'ChargingAnimationPlayerRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const ChargingAnimationPlayerScreen();
+    },
+  );
+}
+
+/// generated route for
 /// [CollectionTabPage]
 class CollectionTabRoute extends PageRouteInfo<void> {
   const CollectionTabRoute({List<PageRouteInfo>? children})
