@@ -3,8 +3,6 @@ import 'dart:async';
 import 'package:Prism/analytics/analytics_service.dart';
 import 'package:Prism/core/analytics/events/events.dart';
 import 'package:Prism/core/router/app_router.dart';
-import 'package:Prism/core/widgets/common/autoplay_video_preview.dart';
-import 'package:Prism/core/widgets/common/parallax_archive_image.dart';
 import 'package:Prism/core/wallpaper/wallpaper_core.dart';
 import 'package:Prism/core/wallpaper/wallpaper_source.dart';
 import 'package:Prism/core/wallpaper/wallpaper_variants.dart';
@@ -79,9 +77,9 @@ class WallpaperTile extends StatelessWidget {
     return item.when(
       prism: (_, wallpaper) {
         if (!isMatchingSetItem(item)) return const <String>[];
-        final downloads = pairedImageUrlsForItem(item);
-        if (downloads.isNotEmpty) return downloads;
-        return _stringList(wallpaper.aiMetadata?['catalogPairedPreviewUrls']);
+        final previews = _stringList(wallpaper.aiMetadata?['catalogPairedPreviewUrls']);
+        if (previews.isNotEmpty) return previews;
+        return pairedImageUrlsForItem(item);
       },
       wallhaven: (_, _) => const <String>[],
       pexels: (_, _) => const <String>[],
@@ -163,13 +161,17 @@ class WallpaperTile extends StatelessWidget {
       ..['catalogMatchingSideIndex'] = index;
     final cleanFullUrl = fullUrl.trim();
     final cleanPreviewUrl = previewUrl.trim();
-    final thumb = cleanFullUrl.isNotEmpty ? cleanFullUrl : cleanPreviewUrl;
-    metadata['catalogPreviewUrl'] = thumb;
+    final fullSource = cleanFullUrl.isNotEmpty ? cleanFullUrl : cleanPreviewUrl;
+    final previewSource = cleanPreviewUrl.isNotEmpty ? cleanPreviewUrl : fullSource;
+    final fastThumb = PrismCatalogDataSource.fastImageTileUrl(fullSource);
+    final thumb = fastThumb.isNotEmpty ? fastThumb : previewSource;
+    metadata['catalogPreviewUrl'] = fullSource;
+    metadata['catalogStaticThumbnailUrl'] = thumb;
     final sideWallpaper = PrismWallpaper(
       core: WallpaperCore(
         id: sideId,
         source: WallpaperSource.prism,
-        fullUrl: cleanFullUrl,
+        fullUrl: fullSource,
         thumbnailUrl: thumb,
         resolution: wallpaper.core.resolution,
         sizeBytes: wallpaper.core.sizeBytes,
@@ -195,24 +197,6 @@ class WallpaperTile extends StatelessWidget {
     return FeedItemEntity.prism(id: sideId, wallpaper: sideWallpaper);
   }
 
-  static String animatedPreviewUrlForItem(FeedItemEntity item) {
-    return item.when(
-      prism: (_, wallpaper) {
-        final candidates = <String>[
-          _metadataString(wallpaper.aiMetadata, 'catalogThumbnailVideoUrl'),
-          _metadataString(wallpaper.aiMetadata, 'catalogVideoUrl'),
-          wallpaper.fullUrl.trim(),
-        ];
-        for (final candidate in candidates) {
-          if (candidate.isNotEmpty && _isVideoUrl(candidate)) return candidate;
-        }
-        return '';
-      },
-      wallhaven: (_, _) => '',
-      pexels: (_, _) => '',
-    );
-  }
-
   static List<String> _stringList(Object? raw) {
     if (raw is! List) return const <String>[];
     final seen = <String>{};
@@ -230,32 +214,9 @@ class WallpaperTile extends StatelessWidget {
         .toList(growable: false);
   }
 
-  static String _metadataString(Object? metadata, String key) {
-    if (metadata is! Map) return '';
-    return metadata[key]?.toString().trim() ?? '';
-  }
-
-  static bool _isVideoUrl(String url) {
-    final path = Uri.tryParse(url)?.path.toLowerCase() ?? url.toLowerCase();
-    return path.endsWith('.mp4') || path.endsWith('.mov');
-  }
-
   static bool _isArchiveUrl(String url) {
     final path = Uri.tryParse(url)?.path.toLowerCase() ?? url.toLowerCase();
     return path.endsWith('.zip');
-  }
-
-  static String parallaxArchiveUrlForItem(FeedItemEntity item) {
-    return item.when(
-      prism: (_, wallpaper) {
-        final metadataUrl = _metadataString(wallpaper.aiMetadata, 'catalogParallaxFileUrl');
-        if (_isArchiveUrl(metadataUrl)) return metadataUrl;
-        final fullUrl = wallpaper.fullUrl.trim();
-        return _isArchiveUrl(fullUrl) ? fullUrl : '';
-      },
-      wallhaven: (_, _) => '',
-      pexels: (_, _) => '',
-    );
   }
 
   static double aspectRatioForItem(FeedItemEntity item) {
@@ -269,10 +230,7 @@ class WallpaperTile extends StatelessWidget {
     required int cacheHeight,
   }) {
     if (_isArchiveUrl(url)) {
-      return ParallaxArchiveImage(
-        archiveUrl: url,
-        fit: BoxFit.cover,
-      );
+      return ColoredBox(color: Theme.of(context).colorScheme.surfaceContainerHighest);
     }
     return CachedNetworkImage(
       imageUrl: url,
@@ -329,18 +287,9 @@ class WallpaperTile extends StatelessWidget {
     final cacheWidth = (width * pixelRatio).ceil();
     final cacheHeight = (height * pixelRatio).ceil();
     final pairedImageUrls = pairedPreviewUrlsForItem(item);
-    final animatedPreviewUrl = animatedPreviewUrlForItem(item);
-    final parallaxArchiveUrl = parallaxArchiveUrlForItem(item);
     final image = pairedImageUrls.length >= 2
         ? _matchingSetTile(context, pairedImageUrls, cacheWidth: cacheWidth, cacheHeight: cacheHeight)
-        : animatedPreviewUrl.isNotEmpty
-            ? AutoplayVideoPreview(
-                videoUrl: animatedPreviewUrl,
-                fit: BoxFit.cover,
-              )
-            : parallaxArchiveUrl.isNotEmpty
-                ? _cachedTileImage(context, parallaxArchiveUrl, cacheWidth: cacheWidth, cacheHeight: cacheHeight)
-                : _cachedTileImage(context, item.thumbnailUrl, cacheWidth: cacheWidth, cacheHeight: cacheHeight);
+        : _cachedTileImage(context, item.thumbnailUrl, cacheWidth: cacheWidth, cacheHeight: cacheHeight);
     return Material(
       color: Colors.transparent,
       child: InkWell(

@@ -2,8 +2,6 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:Prism/core/router/app_router.dart';
-import 'package:Prism/core/widgets/common/autoplay_video_preview.dart';
-import 'package:Prism/core/widgets/common/parallax_archive_image.dart';
 import 'package:Prism/core/wallpaper/wallpaper_source.dart';
 import 'package:Prism/data/categories/category_definition.dart';
 import 'package:Prism/features/category_feed/domain/entities/category_entity.dart';
@@ -338,16 +336,15 @@ class _HomeTabPageState extends State<HomeTabPage> {
         .expand((item) {
           final paired = WallpaperTile.pairedPreviewUrlsForItem(item);
           if (paired.isNotEmpty) return paired;
-          if (WallpaperTile.animatedPreviewUrlForItem(item).isNotEmpty) {
+          final thumbnailUrl = item.thumbnailUrl.trim();
+          final thumbnailPath = Uri.tryParse(thumbnailUrl)?.path.toLowerCase() ?? thumbnailUrl.toLowerCase();
+          if (thumbnailUrl.isEmpty || thumbnailPath.endsWith('.zip')) {
             return const <String>[];
           }
-          if (WallpaperTile.parallaxArchiveUrlForItem(item).isNotEmpty) {
-            return const <String>[];
-          }
-          return <String>[item.thumbnailUrl.trim()];
+          return <String>[thumbnailUrl];
         })
         .where((url) => url.isNotEmpty)
-        .take(90)
+        .take(36)
         .where(_precachedUrls.add)
         .toList(growable: false);
     if (urls.isEmpty) {
@@ -823,43 +820,38 @@ class _HomeWallpaperCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final paired = WallpaperTile.pairedImageUrlsForItem(item);
-    final animatedPreviewUrl = WallpaperTile.animatedPreviewUrlForItem(item);
-    final parallaxArchiveUrl = WallpaperTile.parallaxArchiveUrlForItem(item);
-    final image = paired.length >= 2
-        ? _pairedImage(context, paired)
-        : animatedPreviewUrl.isNotEmpty
-            ? AutoplayVideoPreview(
-                videoUrl: animatedPreviewUrl,
-                fit: BoxFit.cover,
-              )
-            : parallaxArchiveUrl.isNotEmpty
-                ? _image(context, parallaxArchiveUrl)
-                : _image(context, item.thumbnailUrl);
+    final paired = WallpaperTile.pairedPreviewUrlsForItem(item);
+    final image = paired.length >= 2 ? _pairedImage(context, paired) : _image(context, item.thumbnailUrl);
+    final isProfile = section.kind == _SectionKind.profile;
+    final shape = isProfile ? const CircleBorder() : RoundedRectangleBorder(borderRadius: BorderRadius.circular(8));
     return Material(
       color: Colors.transparent,
+      shape: shape,
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
-        borderRadius: BorderRadius.circular(8),
+        customBorder: shape,
         onTap: () {
           WallpaperDetailGalleryStore.setFromFeedItems(items: galleryItems, index: index);
           context.router.push(WallpaperDetailRoute(entity: WallpaperDetailEntityX.fromFeedItem(item)));
         },
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Stack(
-            fit: StackFit.expand,
-            children: <Widget>[
-              image,
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              if (section.kind == _SectionKind.live)
-                Positioned(left: 8, top: 8, child: _MediaBadge(kind: section.kind)),
-            ],
-          ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            image,
+            DecoratedBox(
+              decoration: isProfile
+                  ? BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+                    )
+                  : BoxDecoration(
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+            ),
+            if (section.kind == _SectionKind.live)
+              Positioned(left: 8, top: 8, child: _MediaBadge(kind: section.kind)),
+          ],
         ),
       ),
     );
@@ -898,10 +890,7 @@ class _HomeWallpaperCard extends StatelessWidget {
       return const ColoredBox(color: Color(0xFF111114));
     }
     if (_isArchiveUrl(url)) {
-      return ParallaxArchiveImage(
-        archiveUrl: url,
-        fit: BoxFit.cover,
-      );
+      return const ColoredBox(color: Color(0xFF111114));
     }
     final size = MediaQuery.sizeOf(context);
     final pixelRatio = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 3.0);
@@ -1226,7 +1215,7 @@ class _MatchingCatalogScreenState extends State<_MatchingCatalogScreen> {
         .take(12)
         .expand(WallpaperTile.pairedPreviewUrlsForItem)
         .where((url) => url.trim().isNotEmpty)
-        .take(48)
+        .take(24)
         .toList(growable: false);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;

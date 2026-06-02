@@ -33,6 +33,8 @@ type GitHubFile = {
 };
 
 const defaultProfilePhotoUrl = 'https://raw.githubusercontent.com/Hash-Studios/Prism/master/assets/icon/ios.png';
+const allowedMediaImageHosts = new Set(['media.wallpics.app', 'backend.wallpics.app']);
+const allowedMediaImageExtensions = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -50,6 +52,10 @@ export default {
       const catalogMatch = url.pathname.match(/^\/v1\/catalog\/([A-Za-z0-9_.-]+\.json)$/);
       if (catalogMatch && request.method === 'GET') {
         return catalogResponse(catalogMatch[1], request, env);
+      }
+
+      if (request.method === 'GET' && url.pathname === '/v1/media/image') {
+        return mediaImageResponse(request, env);
       }
 
       if (request.method === 'POST' && url.pathname === '/v1/users/sign-in') {
@@ -105,6 +111,70 @@ async function catalogResponse(fileName: string, request: Request, env: Env): Pr
   });
   await caches.default.put(cacheKey, catalog.clone());
   return catalog;
+}
+
+
+async function mediaImageResponse(request: Request, env: Env): Promise<Response> {
+  const requestUrl = new URL(request.url);
+  const source = mediaImageSource(requestUrl.searchParams.get('src'));
+  const width = clampNumber(numberValue(requestUrl.searchParams.get('w') || 540), 120, 1400);
+  const quality = clampNumber(numberValue(requestUrl.searchParams.get('q') || 72), 45, 92);
+  const ttl = Math.max(3600, numberValue(env.CATALOG_CACHE_TTL_SECONDS || 86400));
+  const cacheKey = new Request(mediaImageCacheUrl(requestUrl, source, width, quality), { method: 'GET' });
+  const cached = await caches.default.match(cacheKey);
+  if (cached) {
+    return withCors(cached, env);
+  }
+
+  const upstream = await fetch(source.toString(), {
+    cf: {
+      cacheEverything: true,
+      cacheTtl: ttl,
+      image: {
+        width,
+        fit: 'scale-down',
+        format: 'webp',
+        quality,
+        metadata: 'none',
+        sharpen: 1,
+      },
+    },
+  });
+  if (!upstream.ok) {
+    return jsonResponse({ error: 'Media image not found' }, env, upstream.status === 404 ? 404 : 502);
+  }
+
+  const headers = new Headers(upstream.headers);
+  for (const [key, value] of Object.entries(corsHeaders(env))) {
+    headers.set(key, value);
+  }
+  headers.set('Cache-Control', `public, max-age=${ttl}, stale-while-revalidate=${ttl * 7}`);
+  headers.set('Content-Type', headers.get('Content-Type') || 'image/webp');
+  const response = new Response(upstream.body, { status: 200, headers });
+  await caches.default.put(cacheKey, response.clone());
+  return response;
+}
+
+function mediaImageSource(value: unknown): URL {
+  const raw = stringValue(value);
+  const source = new URL(raw);
+  if (source.protocol !== 'https:' || !allowedMediaImageHosts.has(source.hostname)) {
+    throw new Error('Invalid media image source');
+  }
+  const path = source.pathname.toLowerCase();
+  if (![...allowedMediaImageExtensions].some((extension) => path.endsWith(extension))) {
+    throw new Error('Invalid media image source');
+  }
+  return source;
+}
+
+function mediaImageCacheUrl(requestUrl: URL, source: URL, width: number, quality: number): string {
+  const cacheUrl = new URL(requestUrl.origin);
+  cacheUrl.pathname = '/v1/media/image';
+  cacheUrl.searchParams.set('src', source.toString());
+  cacheUrl.searchParams.set('w', String(width));
+  cacheUrl.searchParams.set('q', String(quality));
+  return cacheUrl.toString();
 }
 
 async function catalogStorageResponse(fileName: string, env: Env): Promise<Response | null> {
@@ -615,6 +685,10 @@ function stringValue(value: unknown): string {
 function numberValue(value: unknown): number {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(Math.max(Math.round(value), min), max);
 }
 
 function audienceContains(aud: unknown, expected: string): boolean {

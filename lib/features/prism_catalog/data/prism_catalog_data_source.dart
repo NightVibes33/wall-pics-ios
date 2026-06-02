@@ -20,6 +20,10 @@ class PrismCatalogDataSource {
 
   static final PrismCatalogDataSource instance = PrismCatalogDataSource._();
 
+  static String fastImageTileUrl(String url, {int width = 540, int quality = 72}) {
+    return _fastTileImageUrl(url, width: width, quality: quality);
+  }
+
   static const int _pageSize = 24;
   static const int _catalogShardSize = 100;
   static const Duration _metadataTimeout = Duration(seconds: 20);
@@ -27,7 +31,7 @@ class PrismCatalogDataSource {
   static const Duration _searchIndexTimeout = Duration(seconds: 35);
   static const Duration _bootstrapTimeout = Duration(seconds: 8);
   static const String _homeBootstrapFile = 'prism_bootstrap_home.json';
-  static const int _bootstrapPrefetchLimit = 90;
+  static const int _bootstrapPrefetchLimit = 36;
   static const String regularContentType = 'regular_wallpaper';
   static const String liveContentType = 'live_wallpaper';
   static const String matchingContentType = 'matching_wallpaper';
@@ -174,17 +178,34 @@ class PrismCatalogDataSource {
     if (bootstrap == null || !prefetchMedia) {
       return;
     }
-    final urls = bootstrap.prefetchUrls
-        .where((url) => url.trim().isNotEmpty)
-        .take(_bootstrapPrefetchLimit)
-        .toList(growable: false);
-    const batchSize = 6;
+    final seenUrls = <String>{};
+    final urls = <String>[];
+    void addPrefetchUrl(String rawUrl) {
+      if (urls.length >= _bootstrapPrefetchLimit) {
+        return;
+      }
+      final url = rawUrl.trim();
+      if (url.isEmpty || !_isFastPrefetchableUrl(url) || !seenUrls.add(url)) {
+        return;
+      }
+      urls.add(url);
+    }
+
+    for (final section in bootstrap.sections) {
+      for (final item in section.items) {
+        addPrefetchUrl(item.thumbnailUrl);
+      }
+    }
+    for (final rawUrl in bootstrap.prefetchUrls) {
+      addPrefetchUrl(_fastTileImageUrl(rawUrl));
+    }
+    const batchSize = 4;
     for (var index = 0; index < urls.length; index += batchSize) {
       final batch = urls.skip(index).take(batchSize);
       await Future.wait<void>(
         batch.map((url) async {
           try {
-            await DefaultCacheManager().downloadFile(url).timeout(const Duration(seconds: 20));
+            await DefaultCacheManager().downloadFile(url).timeout(const Duration(seconds: 6));
           } catch (_) {
             // Prefetch failures should not block startup or catalog rendering.
           }
@@ -1255,9 +1276,9 @@ class _PrismItem {
         .where((value) => value.isNotEmpty)
         .toList(growable: false);
     final pairedPreviewUrls = _uniqueStrings(<String>[
-      ...pairedDownloadUrls,
-      ...explicitPairedPreviewUrls,
-      ...derivedPairedPreviewUrls,
+      ...pairedDownloadUrls.map(_fastTileOrOriginal),
+      ...explicitPairedPreviewUrls.map(_fastTileOrOriginal),
+      ...derivedPairedPreviewUrls.map(_fastTileOrOriginal),
     ]);
     final pairedDisplayUrls = pairedPreviewUrls.isNotEmpty ? pairedPreviewUrls : pairedDownloadUrls;
     final mediaAssetUrls = _strings(json['media_assets'])
@@ -1294,6 +1315,17 @@ class _PrismItem {
           path.endsWith('.png') ||
           path.endsWith('.webp') ||
           path.endsWith('.gif');
+    }
+
+    String firstParallaxLayerImage() {
+      final thumbnailConfig = _asMap(json['thumbnail_config']);
+      for (final layer in _maps(thumbnailConfig['layers'])) {
+        final candidate = url(layer['url']);
+        if (isImageUrl(candidate)) {
+          return candidate;
+        }
+      }
+      return '';
     }
 
     final isLiveContent = contentType == PrismCatalogDataSource.liveContentType;
@@ -1343,25 +1375,33 @@ class _PrismItem {
       isImageUrl(thumbnail) ? thumbnail : '',
       isImageUrl(previewImage) ? previewImage : '',
     ]);
+    final parallaxLayerPreview = firstParallaxLayerImage();
+    final fastAppTileUrl = _fastTileOrOriginal(appTileUrl);
+    final fastFullImage = _fastTileOrOriginal(fullImage);
+    final fastLivePoster = _fastTileOrOriginal(livePoster);
+    final parallaxTileImage = _firstString(<Object?>[
+      _fastTileOrOriginal(parallaxLayerPreview),
+      fastFullImage,
+    ]);
     final tileImage = _firstString(<Object?>[
       isMatchingContent ? _firstString(<Object?>[...pairedDisplayUrls]) : '',
-      isProfilePictureContent && isImageUrl(appTileUrl) ? appTileUrl : '',
-      !isLiveContent && !isParallaxContent && isImageUrl(appTileUrl) ? appTileUrl : '',
-      fullImage,
-      livePoster,
+      fastFullImage,
+      isProfilePictureContent && isImageUrl(appTileUrl) ? fastAppTileUrl : '',
+      !isLiveContent && !isParallaxContent && isImageUrl(appTileUrl) ? fastAppTileUrl : '',
+      fastLivePoster,
     ]);
     final thumb = isLiveContent
-        ? _firstString(<Object?>[livePoster, tileImage])
+        ? _firstString(<Object?>[fastLivePoster, tileImage])
         : isParallaxContent
-            ? _firstString(<Object?>[fullImage, previewImage, thumbnail])
+            ? _firstString(<Object?>[parallaxTileImage, fastFullImage])
             : tileImage;
     final staticThumb = isLiveContent
-        ? _firstString(<Object?>[livePoster, thumb])
+        ? _firstString(<Object?>[fastLivePoster, thumb])
         : _firstString(<Object?>[
-            isImageUrl(staticThumbnail) ? staticThumbnail : '',
-            isImageUrl(hqThumbnail) ? hqThumbnail : '',
+            isImageUrl(staticThumbnail) ? _fastTileOrOriginal(staticThumbnail) : '',
+            isImageUrl(hqThumbnail) ? _fastTileOrOriginal(hqThumbnail) : '',
             thumb,
-            fullImage,
+            fastFullImage,
           ]);
     final preview = isMatchingContent
         ? _firstString(<Object?>[...pairedDisplayUrls, fullImage, thumb])
@@ -1535,6 +1575,64 @@ String _resolveCatalogUrl(Object? value, {required String sourceBase}) {
     return baseUri.replace(path: raw, query: null, fragment: null).toString();
   }
   return baseUri.resolve(raw).toString();
+}
+
+
+String _fastTileImageUrl(String rawUrl, {int width = 540, int quality = 72}) {
+  final source = rawUrl.trim();
+  if (!_isProxyableCatalogImageUrl(source)) {
+    return '';
+  }
+  final base = _workerMediaBaseUrl();
+  if (base.isEmpty) {
+    return '';
+  }
+  final endpoint = Uri.tryParse('$base/v1/media/image');
+  if (endpoint == null) {
+    return '';
+  }
+  return endpoint
+      .replace(queryParameters: <String, String>{
+        'src': source,
+        'w': '$width',
+        'q': '$quality',
+      })
+      .toString();
+}
+
+String _fastTileOrOriginal(String rawUrl, {int width = 540, int quality = 72}) {
+  final fastUrl = _fastTileImageUrl(rawUrl, width: width, quality: quality);
+  return fastUrl.isNotEmpty ? fastUrl : rawUrl.trim();
+}
+
+String _workerMediaBaseUrl() {
+  final apiBase = Env.normalize(Env.userStoreApiBaseUrl).replaceAll(RegExp(r'/+$'), '');
+  if (apiBase.isNotEmpty) {
+    return apiBase;
+  }
+  final catalogBase = Env.normalize(Env.prismCatalogBaseUrl).replaceAll(RegExp(r'/+$'), '');
+  const catalogSuffix = '/v1/catalog';
+  if (catalogBase.endsWith(catalogSuffix)) {
+    return catalogBase.substring(0, catalogBase.length - catalogSuffix.length);
+  }
+  return '';
+}
+
+bool _isProxyableCatalogImageUrl(String value) {
+  final uri = Uri.tryParse(value.trim());
+  if (uri == null || uri.scheme != 'https') {
+    return false;
+  }
+  if (uri.host != 'media.wallpics.app' && uri.host != 'backend.wallpics.app') {
+    return false;
+  }
+  final path = uri.path.toLowerCase();
+  return path.endsWith('.jpg') || path.endsWith('.jpeg') || path.endsWith('.png') || path.endsWith('.webp');
+}
+
+bool _isFastPrefetchableUrl(String value) {
+  final path = Uri.tryParse(value.trim())?.path.toLowerCase() ?? value.toLowerCase();
+  return value.trim().isNotEmpty && !path.endsWith('.mp4') && !path.endsWith('.mov') && !path.endsWith('.zip');
 }
 
 const Set<String> _blockedCatalogTerms = <String>{
