@@ -126,14 +126,16 @@ class _WallpaperGridState extends State<WallpaperGrid> {
   @override
   Widget build(BuildContext context) {
     final CategoryFeedState state = context.watch<CategoryFeedBloc>().state;
-    final List<PrismFeedItem> subWalls = state.items.whereType<PrismFeedItem>().toList(growable: false);
+    final List<PrismFeedItem> rawSubWalls = state.items.whereType<PrismFeedItem>().toList(growable: false);
+    final List<FeedItemEntity> subWalls = WallpaperTile.expandMatchingItemsForDisplay(rawSubWalls);
+    final List<PrismFeedItem> prismSubWalls = subWalls.whereType<PrismFeedItem>().toList(growable: false);
 
     if (_lastLoggedSubWallsCount != subWalls.length) {
       _lastLoggedSubWallsCount = subWalls.length;
       logger.d("[WallpaperGrid] build", fields: <String, Object?>{"items": subWalls.length, "hasMore": state.hasMore});
     }
-    if (subWalls.isNotEmpty) {
-      _prepareThumbnails(context, subWalls);
+    if (prismSubWalls.isNotEmpty) {
+      _prepareThumbnails(context, prismSubWalls);
     }
     final showSkeletonTiles = subWalls.isEmpty;
 
@@ -236,7 +238,7 @@ class _WallpaperGridState extends State<WallpaperGrid> {
                 );
               }
               final int itemIndex = index;
-              final PrismFeedItem item = subWalls[itemIndex];
+              final FeedItemEntity item = subWalls[itemIndex];
               return WallpaperTile(item: item, index: itemIndex, galleryItems: subWalls);
             },
           ),

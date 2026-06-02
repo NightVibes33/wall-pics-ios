@@ -127,6 +127,10 @@ class _AutoplayVideoPreviewState extends State<AutoplayVideoPreview> {
     }
     return CachedNetworkImage(
       imageUrl: poster,
+      imageBuilder: (context, imageProvider) {
+        widget.onReady?.call();
+        return SizedBox.expand(child: Image(image: imageProvider, fit: widget.fit, alignment: widget.alignment));
+      },
       fit: widget.fit,
       alignment: widget.alignment,
       fadeInDuration: Duration.zero,

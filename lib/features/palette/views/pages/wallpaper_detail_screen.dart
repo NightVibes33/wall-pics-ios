@@ -1261,6 +1261,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     if (pairedImageUrls.length < 2 && full.isNotEmpty && _isVideoUrl(full)) {
       imageLayer = AutoplayVideoPreview(
         videoUrl: full,
+        posterUrl: _catalogLiveStillUrl(entity),
         fit: BoxFit.contain,
         onReady: onWallpaperDisplayReady,
       );
@@ -1302,6 +1303,10 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
             fit: BoxFit.contain,
             width: double.infinity,
             height: double.infinity,
+            imageBuilder: (context, imageProvider) {
+              onWallpaperDisplayReady?.call();
+              return SizedBox.expand(child: Image(image: imageProvider, fit: BoxFit.contain));
+            },
             placeholder: (context, url) => Container(color: Theme.of(context).primaryColor),
             errorWidget: (context, url, error) {
               onWallpaperDisplayReady?.call();

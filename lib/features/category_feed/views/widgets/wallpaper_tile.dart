@@ -4,6 +4,9 @@ import 'package:Prism/analytics/analytics_service.dart';
 import 'package:Prism/core/analytics/events/events.dart';
 import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/widgets/common/autoplay_video_preview.dart';
+import 'package:Prism/core/wallpaper/wallpaper_core.dart';
+import 'package:Prism/core/wallpaper/wallpaper_source.dart';
+import 'package:Prism/core/wallpaper/wallpaper_variants.dart';
 import 'package:Prism/features/category_feed/domain/entities/feed_item_entity.dart';
 import 'package:Prism/features/palette/domain/entities/wallpaper_detail_entity.dart';
 import 'package:Prism/features/palette/domain/entities/wallpaper_detail_gallery_store.dart';
@@ -66,13 +69,114 @@ class WallpaperTile extends StatelessWidget {
     );
   }
 
+  static List<String> pairedPreviewUrlsForItem(FeedItemEntity item) {
+    return item.when(
+      prism: (_, wallpaper) {
+        if (!isMatchingSetItem(item)) return const <String>[];
+        final previews = _stringList(wallpaper.aiMetadata?['catalogPairedPreviewUrls']);
+        return previews.isNotEmpty ? previews : pairedImageUrlsForItem(item);
+      },
+      wallhaven: (_, _) => const <String>[],
+      pexels: (_, _) => const <String>[],
+    );
+  }
+
+  static List<FeedItemEntity> matchingSideItemsForItems(Iterable<FeedItemEntity> items) {
+    return items.expand(matchingSideItemsForItem).toList(growable: false);
+  }
+
+  static List<FeedItemEntity> expandMatchingItemsForDisplay(Iterable<FeedItemEntity> items) {
+    final displayItems = <FeedItemEntity>[];
+    for (final item in items) {
+      final sideItems = matchingSideItemsForItem(item);
+      if (sideItems.isEmpty) {
+        displayItems.add(item);
+      } else {
+        displayItems.addAll(sideItems);
+      }
+    }
+    return displayItems;
+  }
+
+  static List<FeedItemEntity> matchingSideItemsForItem(FeedItemEntity item) {
+    return item.when(
+      prism: (id, wallpaper) {
+        if (!isMatchingSetItem(item)) return const <FeedItemEntity>[];
+        final fullUrls = _stringList(wallpaper.aiMetadata?['catalogPairedDownloadUrls']);
+        if (fullUrls.length < 2) return const <FeedItemEntity>[];
+        final previewUrls = pairedPreviewUrlsForItem(item);
+        return <FeedItemEntity>[
+          for (var index = 0; index < fullUrls.length; index++)
+            _matchingSideItem(
+              parentId: id,
+              wallpaper: wallpaper,
+              fullUrl: fullUrls[index],
+              previewUrl: index < previewUrls.length ? previewUrls[index] : fullUrls[index],
+              index: index,
+            ),
+        ];
+      },
+      wallhaven: (_, _) => const <FeedItemEntity>[],
+      pexels: (_, _) => const <FeedItemEntity>[],
+    );
+  }
+
+  static FeedItemEntity _matchingSideItem({
+    required String parentId,
+    required PrismWallpaper wallpaper,
+    required String fullUrl,
+    required String previewUrl,
+    required int index,
+  }) {
+    final sideId = '$parentId-side-${index + 1}';
+    final metadata = Map<String, Object?>.of(wallpaper.aiMetadata ?? const <String, Object?>{});
+    metadata
+      ..remove('catalogPairedWallpapers')
+      ..remove('catalogPairedPreviewUrls')
+      ..remove('catalogPairedDownloadUrls')
+      ..['catalogContentType'] = PrismCatalogDataSource.regularContentType
+      ..['catalogParentContentType'] = PrismCatalogDataSource.matchingContentType
+      ..['catalogMatchingSetId'] = parentId
+      ..['catalogMatchingSideIndex'] = index
+      ..['catalogPreviewUrl'] = previewUrl;
+    final thumb = previewUrl.trim().isNotEmpty ? previewUrl.trim() : fullUrl.trim();
+    final sideWallpaper = PrismWallpaper(
+      core: WallpaperCore(
+        id: sideId,
+        source: WallpaperSource.prism,
+        fullUrl: fullUrl.trim(),
+        thumbnailUrl: thumb,
+        resolution: wallpaper.core.resolution,
+        sizeBytes: wallpaper.core.sizeBytes,
+        authorName: wallpaper.core.authorName,
+        authorEmail: wallpaper.core.authorEmail,
+        authorPhoto: wallpaper.core.authorPhoto,
+        authorId: wallpaper.core.authorId,
+        category: wallpaper.core.category,
+        createdAt: wallpaper.core.createdAt,
+        width: wallpaper.core.width,
+        height: wallpaper.core.height,
+        favourites: wallpaper.core.favourites,
+      ),
+      collections: wallpaper.collections,
+      review: wallpaper.review,
+      tags: wallpaper.tags,
+      aiMetadata: metadata,
+      isStreakExclusive: wallpaper.isStreakExclusive,
+      requiredStreakDays: wallpaper.requiredStreakDays,
+      streakShopCoinCost: wallpaper.streakShopCoinCost,
+      remoteStoreDocumentId: null,
+    );
+    return FeedItemEntity.prism(id: sideId, wallpaper: sideWallpaper);
+  }
+
   static String animatedPreviewUrlForItem(FeedItemEntity item) {
     return item.when(
       prism: (_, wallpaper) {
         final candidates = <String>[
-          wallpaper.fullUrl.trim(),
-          _metadataString(wallpaper.aiMetadata, 'catalogVideoUrl'),
           _metadataString(wallpaper.aiMetadata, 'catalogThumbnailVideoUrl'),
+          _metadataString(wallpaper.aiMetadata, 'catalogVideoUrl'),
+          wallpaper.fullUrl.trim(),
         ];
         for (final candidate in candidates) {
           if (candidate.isNotEmpty && _isVideoUrl(candidate)) return candidate;
@@ -87,8 +191,16 @@ class WallpaperTile extends StatelessWidget {
   static String posterUrlForItem(FeedItemEntity item) {
     return item.when(
       prism: (_, wallpaper) {
-        final full = wallpaper.fullUrl.trim();
-        if (full.isNotEmpty && !_isVideoUrl(full)) return full;
+        final candidates = <String>[
+          _metadataString(wallpaper.aiMetadata, 'catalogStaticThumbnailUrl'),
+          _metadataString(wallpaper.aiMetadata, 'catalogFirstFrameThumbnailUrl'),
+          _metadataString(wallpaper.aiMetadata, 'catalogPreviewUrl'),
+          wallpaper.thumbnailUrl.trim(),
+          wallpaper.fullUrl.trim(),
+        ];
+        for (final candidate in candidates) {
+          if (candidate.isNotEmpty && !_isVideoUrl(candidate)) return candidate;
+        }
         return '';
       },
       wallhaven: (_, wallpaper) => wallpaper.thumbnailUrl.trim(),
@@ -180,7 +292,7 @@ class WallpaperTile extends StatelessWidget {
     final pixelRatio = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 3.0);
     final cacheWidth = (width * pixelRatio).ceil();
     final cacheHeight = (height * pixelRatio).ceil();
-    final pairedImageUrls = pairedImageUrlsForItem(item);
+    final pairedImageUrls = pairedPreviewUrlsForItem(item);
     final animatedPreviewUrl = animatedPreviewUrlForItem(item);
     final image = pairedImageUrls.length >= 2
         ? _matchingSetTile(context, pairedImageUrls, cacheWidth: cacheWidth, cacheHeight: cacheHeight)
@@ -209,7 +321,16 @@ class WallpaperTile extends StatelessWidget {
               ),
             ),
           );
-          WallpaperDetailGalleryStore.setFromFeedItems(items: galleryItems ?? <FeedItemEntity>[item], index: index);
+          if (isMatchingSetItem(item)) {
+            final sideItems = matchingSideItemsForItem(item);
+            if (sideItems.isNotEmpty) {
+              WallpaperDetailGalleryStore.setFromFeedItems(items: sideItems, index: 0);
+              context.router.push(WallpaperDetailRoute(entity: WallpaperDetailEntityX.fromFeedItem(sideItems.first)));
+              return;
+            }
+          }
+          final items = galleryItems ?? <FeedItemEntity>[item];
+          WallpaperDetailGalleryStore.setFromFeedItems(items: items, index: index);
           context.router.push(WallpaperDetailRoute(entity: WallpaperDetailEntityX.fromFeedItem(item)));
         },
         child: isProfilePictureItem(item)

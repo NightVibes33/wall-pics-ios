@@ -49,12 +49,6 @@ class _HomeTabPageState extends State<HomeTabPage> {
       accent: Color(0xFF4A8DFF),
     ),
     _HomeShortcut(
-      label: 'Charging',
-      icon: Icons.bolt,
-      contentType: PrismCatalogDataSource.chargingAnimationContentType,
-      accent: Color(0xFFA6F34D),
-    ),
-    _HomeShortcut(
       label: 'Ringtone',
       icon: JamIcons.music_f,
       contentType: PrismCatalogDataSource.stickerContentType,
@@ -189,8 +183,6 @@ class _HomeTabPageState extends State<HomeTabPage> {
 
     addCatalog(title: 'Live Wallpapers', contentType: PrismCatalogDataSource.liveContentType, kind: _SectionKind.live);
     addCatalog(title: 'For You', contentType: PrismCatalogDataSource.regularContentType);
-    addCatalog(title: 'DIY Live Wallpapers', contentType: PrismCatalogDataSource.liveDiyTemplateContentType, kind: _SectionKind.live);
-    addCatalog(title: 'Charging', contentType: PrismCatalogDataSource.chargingAnimationContentType, kind: _SectionKind.charging);
     addCatalog(title: '3D Spatial', contentType: PrismCatalogDataSource.parallaxContentType);
     addCatalog(title: 'Matching', contentType: PrismCatalogDataSource.matchingContentType, kind: _SectionKind.matching);
     addCatalog(title: 'Profile Pictures', contentType: PrismCatalogDataSource.profilePictureContentType, kind: _SectionKind.profile);
@@ -290,7 +282,7 @@ class _HomeTabPageState extends State<HomeTabPage> {
     final urls = data.sections
         .expand((section) => section.items)
         .expand((item) {
-          final paired = WallpaperTile.pairedImageUrlsForItem(item);
+          final paired = WallpaperTile.pairedPreviewUrlsForItem(item);
           if (paired.isNotEmpty) return paired;
           final poster = WallpaperTile.posterUrlForItem(item);
           return <String>[(poster.isNotEmpty ? poster : item.thumbnailUrl).trim()];
@@ -628,7 +620,7 @@ class _CatalogPanel extends StatelessWidget {
             const _EmptyDashboard()
           else
             for (final section in sections) _WallpaperSection(section: section, onMore: () => onMore(section)),
-          const SizedBox(height: 140),
+          const SizedBox(height: 220),
         ],
       ),
     );
@@ -698,12 +690,11 @@ class _WallpaperSection extends StatelessWidget {
     final width = MediaQuery.sizeOf(context).width;
     final cardWidth = math.max(98.0, (width - 56) / 3);
     final cardHeight = section.kind == _SectionKind.profile ? cardWidth : cardWidth * 1.92;
-    final itemWidth = section.kind == _SectionKind.matching ? (cardWidth * 2) + 4 : cardWidth;
     final sourceItems = section.kind == _SectionKind.matching
-        ? section.items.where((item) => WallpaperTile.pairedImageUrlsForItem(item).length >= 2)
-        : section.items;
+        ? WallpaperTile.matchingSideItemsForItems(section.items)
+        : WallpaperTile.expandMatchingItemsForDisplay(section.items);
     final galleryItems = sourceItems.toList(growable: false);
-    final visibleItems = galleryItems.take(9).toList(growable: false);
+    final visibleItems = galleryItems.take(section.kind == _SectionKind.matching ? 12 : 9).toList(growable: false);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 24, 0, 0),
@@ -722,7 +713,7 @@ class _WallpaperSection extends StatelessWidget {
                     style: const TextStyle(
                       color: Colors.white,
                       fontFamily: 'Satoshi',
-                      fontSize: 28,
+                      fontSize: 27,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -739,7 +730,7 @@ class _WallpaperSection extends StatelessWidget {
               scrollDirection: Axis.horizontal,
               itemBuilder: (context, index) {
                 return SizedBox(
-                  width: itemWidth,
+                  width: cardWidth,
                   child: _HomeWallpaperCard(
                     item: visibleItems[index],
                     index: index,
@@ -804,7 +795,7 @@ class _HomeWallpaperCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              if (section.kind == _SectionKind.live || section.kind == _SectionKind.charging || section.kind == _SectionKind.matching)
+              if (section.kind == _SectionKind.live || section.kind == _SectionKind.charging)
                 Positioned(left: 8, top: 8, child: _MediaBadge(kind: section.kind)),
             ],
           ),
@@ -1144,7 +1135,7 @@ class _MatchingCatalogScreenState extends State<_MatchingCatalogScreen> {
   void _precacheVisiblePairs() {
     final urls = _items
         .take(10)
-        .expand(WallpaperTile.pairedImageUrlsForItem)
+        .expand(WallpaperTile.pairedPreviewUrlsForItem)
         .where((url) => url.trim().isNotEmpty)
         .take(20)
         .toList(growable: false);
@@ -1177,6 +1168,7 @@ class _MatchingCatalogScreenState extends State<_MatchingCatalogScreen> {
   @override
   Widget build(BuildContext context) {
     final displayItems = _displayItems;
+    final galleryItems = WallpaperTile.matchingSideItemsForItems(displayItems);
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
@@ -1212,7 +1204,7 @@ class _MatchingCatalogScreenState extends State<_MatchingCatalogScreen> {
                                 return _MatchingPairListItem(
                                   item: displayItems[index],
                                   index: index,
-                                  galleryItems: displayItems,
+                                  galleryItems: galleryItems,
                                 );
                               },
                               childCount: (displayItems.length * 2) - 1,
@@ -1358,8 +1350,8 @@ class _MatchingPairListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final urls = WallpaperTile.pairedImageUrlsForItem(item).take(2).toList(growable: false);
-    if (urls.length < 2) {
+    final sideItems = WallpaperTile.matchingSideItemsForItem(item).take(2).toList(growable: false);
+    if (sideItems.length < 2) {
       return const SizedBox.shrink();
     }
     final width = MediaQuery.sizeOf(context).width - 36;
@@ -1369,24 +1361,39 @@ class _MatchingPairListItem extends StatelessWidget {
     final cacheHeight = (height * pixelRatio).ceil();
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 18),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () {
-            WallpaperDetailGalleryStore.setFromFeedItems(items: galleryItems, index: index);
-            context.router.push(WallpaperDetailRoute(entity: WallpaperDetailEntityX.fromFeedItem(item)));
-          },
-          child: SizedBox(
-            height: height,
-            child: Row(
-              children: <Widget>[
-                Expanded(child: _MatchingCatalogImage(url: urls[0], cacheWidth: cacheWidth, cacheHeight: cacheHeight)),
-                const SizedBox(width: 3, child: ColoredBox(color: Colors.black)),
-                Expanded(child: _MatchingCatalogImage(url: urls[1], cacheWidth: cacheWidth, cacheHeight: cacheHeight)),
-              ],
-            ),
-          ),
+      child: SizedBox(
+        height: height,
+        child: Row(
+          children: <Widget>[
+            Expanded(child: _MatchingCatalogSide(item: sideItems[0], galleryItems: galleryItems, cacheWidth: cacheWidth, cacheHeight: cacheHeight)),
+            const SizedBox(width: 3),
+            Expanded(child: _MatchingCatalogSide(item: sideItems[1], galleryItems: galleryItems, cacheWidth: cacheWidth, cacheHeight: cacheHeight)),
+          ],
         ),
+      ),
+    );
+  }
+}
+
+class _MatchingCatalogSide extends StatelessWidget {
+  const _MatchingCatalogSide({required this.item, required this.galleryItems, required this.cacheWidth, required this.cacheHeight});
+
+  final FeedItemEntity item;
+  final List<FeedItemEntity> galleryItems;
+  final int cacheWidth;
+  final int cacheHeight;
+
+  @override
+  Widget build(BuildContext context) {
+    final galleryIndex = galleryItems.indexWhere((candidate) => candidate.id == item.id);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          WallpaperDetailGalleryStore.setFromFeedItems(items: galleryItems, index: galleryIndex >= 0 ? galleryIndex : 0);
+          context.router.push(WallpaperDetailRoute(entity: WallpaperDetailEntityX.fromFeedItem(item)));
+        },
+        child: _MatchingCatalogImage(url: item.thumbnailUrl, cacheWidth: cacheWidth, cacheHeight: cacheHeight),
       ),
     );
   }

@@ -32,6 +32,11 @@ class PrismCatalogDataSource {
   static const String diyTemplateContentType = 'diy_template';
   static const String liveDiyTemplateContentType = 'live_diy_template';
   static const String stickerContentType = 'sticker';
+  static const Set<String> _hiddenContentTypes = <String>{
+    chargingAnimationContentType,
+    diyTemplateContentType,
+    liveDiyTemplateContentType,
+  };
   static const Map<String, String> _catalogFilesByContentType = <String, String>{
     regularContentType: 'prism_regular.json',
     liveContentType: 'prism_live.json',
@@ -99,7 +104,11 @@ class PrismCatalogDataSource {
   bool supports(CategoryEntity category) {
     final slug = category.catalogSlug?.trim();
     final type = category.catalogContentType?.trim();
-    return slug != null && slug.isNotEmpty && type != null && _catalogPagePrefixesByContentType.containsKey(type);
+    return slug != null &&
+        slug.isNotEmpty &&
+        type != null &&
+        !_hiddenContentTypes.contains(type) &&
+        _catalogPagePrefixesByContentType.containsKey(type);
   }
 
   Future<CategoryFeedPage?> fetchCategoryFeed({required CategoryEntity category, required bool refresh}) async {
@@ -140,6 +149,9 @@ class PrismCatalogDataSource {
     final seen = <String>{};
 
     for (final entry in _contentTypeLabels.entries) {
+      if (_hiddenContentTypes.contains(entry.key)) {
+        continue;
+      }
       const preview = '';
       categories.add(
         CategoryEntity(
@@ -173,6 +185,7 @@ class PrismCatalogDataSource {
       if (name.isEmpty ||
           slug.isEmpty ||
           !_catalogPagePrefixesByContentType.containsKey(contentType) ||
+          _hiddenContentTypes.contains(contentType) ||
           _isBlockedCatalogLabel(name) ||
           _isBlockedCatalogLabel(slug) ||
           _isBlockedCatalogLabel(_string(row['parent_slug']))) {
@@ -280,7 +293,8 @@ class PrismCatalogDataSource {
       var ordinal = rankedRefs.length;
       final searchIndex = await _loadSearchIndex();
       for (final entry in searchIndex) {
-        if (!_catalogPagePrefixesByContentType.containsKey(entry.contentType)) {
+        if (!_catalogPagePrefixesByContentType.containsKey(entry.contentType) ||
+            _hiddenContentTypes.contains(entry.contentType)) {
           continue;
         }
         final score = _scoreSearchEntry(entry, normalizedQuery);
@@ -695,6 +709,7 @@ class PrismCatalogDataSource {
       if (name.isEmpty ||
           slug.isEmpty ||
           !_catalogPagePrefixesByContentType.containsKey(contentType) ||
+          _hiddenContentTypes.contains(contentType) ||
           _isBlockedCatalogLabel(name) ||
           _isBlockedCatalogLabel(slug) ||
           _isBlockedCatalogLabel(_string(row['parent_slug']))) {
@@ -1007,6 +1022,7 @@ class _PrismItem {
     final template = url(json['template']);
     final sticker = url(json['sticker']);
     final parallaxFile = url(json['parallax_file']);
+    final previewImage = url(json['preview_image']);
     final catalogDownload = url(json['download_url']);
     final pairedWallpapers = _maps(json['paired_wallpapers']);
     final pairedDownloadUrls = pairedWallpapers
@@ -1019,19 +1035,27 @@ class _PrismItem {
             ]))
         .where((value) => value.isNotEmpty)
         .toList(growable: false);
+    final explicitPairedPreviewUrls = _strings(json['paired_preview_urls'])
+        .map((value) => url(value))
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
     final derivedPairedPreviewUrls = pairedWallpapers
         .map((wallpaper) => _firstString(<Object?>[
+              url(wallpaper['thumbnail']),
+              url(wallpaper['static_thumbnail']),
+              url(wallpaper['preview_image']),
               url(wallpaper['download_url']),
               url(wallpaper['wallpaper']),
               url(wallpaper['image']),
               url(wallpaper['full_url']),
               url(wallpaper['url']),
-              url(wallpaper['thumbnail']),
-              url(wallpaper['static_thumbnail']),
             ]))
         .where((value) => value.isNotEmpty)
         .toList(growable: false);
-    final pairedDisplayUrls = pairedDownloadUrls.isNotEmpty ? pairedDownloadUrls : derivedPairedPreviewUrls;
+    final pairedPreviewUrls = explicitPairedPreviewUrls.isNotEmpty
+        ? explicitPairedPreviewUrls
+        : derivedPairedPreviewUrls;
+    final pairedDisplayUrls = pairedPreviewUrls.isNotEmpty ? pairedPreviewUrls : pairedDownloadUrls;
     final mediaAssetUrls = _strings(json['media_assets'])
         .map((value) => url(value))
         .where((value) => value.isNotEmpty)
@@ -1051,16 +1075,27 @@ class _PrismItem {
       return path.endsWith('.mp4') || path.endsWith('.mov');
     }
 
+    bool isArchiveUrl(String value) {
+      final path = Uri.tryParse(value)?.path.toLowerCase() ?? value.toLowerCase();
+      return path.endsWith('.zip');
+    }
+
     final isLiveContent = contentType == PrismCatalogDataSource.liveContentType;
     final isMatchingContent = contentType == PrismCatalogDataSource.matchingContentType ||
         contentType == PrismCatalogDataSource.doubleContentType;
-    final imageDownload = catalogDownload.isNotEmpty && !isVideoUrl(catalogDownload) ? catalogDownload : '';
+    final imageDownload = catalogDownload.isNotEmpty && !isVideoUrl(catalogDownload) && !isArchiveUrl(catalogDownload)
+        ? catalogDownload
+        : '';
     final fullImage = _firstString(<Object?>[
       imageDownload,
       wallpaper,
       image,
       sticker,
-      parallaxFile,
+      previewImage,
+      hqThumbnail,
+      staticThumbnail,
+      thumbnail,
+      firstFrameThumbnail,
     ]);
     final fullMedia = _firstString(<Object?>[
       catalogDownload,
@@ -1073,64 +1108,73 @@ class _PrismItem {
     final thumb = isMatchingContent
         ? _firstString(<Object?>[
             ...pairedDisplayUrls,
-            fullImage,
+            thumbnail,
             staticThumbnail,
             hqThumbnail,
-            thumbnail,
+            previewImage,
+            fullImage,
             firstFrameThumbnail,
           ])
         : isLiveContent
             ? _firstString(<Object?>[
-                fullImage,
                 staticThumbnail,
+                firstFrameThumbnail,
                 hqThumbnail,
                 thumbnail,
-                firstFrameThumbnail,
+                previewImage,
+                fullImage,
               ])
             : _firstString(<Object?>[
-                fullImage,
-                staticThumbnail,
-                hqThumbnail,
                 thumbnail,
+                hqThumbnail,
+                staticThumbnail,
+                previewImage,
                 firstFrameThumbnail,
+                fullImage,
               ]);
     final staticThumb = isLiveContent
         ? _firstString(<Object?>[
+            staticThumbnail,
+            firstFrameThumbnail,
+            hqThumbnail,
+            thumbnail,
+            previewImage,
             fullImage,
+          ])
+        : _firstString(<Object?>[
             staticThumbnail,
             hqThumbnail,
             thumbnail,
-            firstFrameThumbnail,
-          ])
-        : _firstString(<Object?>[
-            fullImage,
+            previewImage,
             thumb,
-            staticThumbnail,
-            hqThumbnail,
             firstFrameThumbnail,
+            fullImage,
           ]);
     final preview = isMatchingContent
         ? _firstString(<Object?>[
             ...pairedDisplayUrls,
-            fullImage,
+            previewImage,
             staticThumbnail,
             hqThumbnail,
             thumbnail,
             firstFrameThumbnail,
+            fullImage,
           ])
         : _firstString(<Object?>[
             fullImage,
+            previewImage,
             staticThumbnail,
             hqThumbnail,
             thumbnail,
             firstFrameThumbnail,
           ]);
     final displayOnlyContent = contentType == PrismCatalogDataSource.diyTemplateContentType ||
-        contentType == PrismCatalogDataSource.liveDiyTemplateContentType;
+        contentType == PrismCatalogDataSource.liveDiyTemplateContentType ||
+        contentType == PrismCatalogDataSource.parallaxContentType;
     final download = displayOnlyContent
-        ? _firstString(<Object?>[template, fullMedia, fullImage, preview, thumb])
+        ? _firstString(<Object?>[fullImage, preview, thumb, template, fullMedia])
         : isMatchingContent
-            ? _firstString(<Object?>[catalogDownload, ...pairedDisplayUrls, wallpaper, image])
+            ? _firstString(<Object?>[catalogDownload, ...pairedDownloadUrls, wallpaper, image, ...pairedDisplayUrls])
             : isLiveContent
                 ? _firstString(<Object?>[catalogDownload, video, wallpaper])
                 : fullMedia;
@@ -1172,13 +1216,13 @@ class _PrismItem {
         contentType == PrismCatalogDataSource.liveDiyTemplateContentType ||
         contentType == PrismCatalogDataSource.chargingAnimationContentType;
     final String thumb = contentType == PrismCatalogDataSource.liveContentType
-        ? _firstString(<Object?>[staticThumbnailUrl, thumbnailUrl, firstFrameThumbnailUrl, previewUrl])
+        ? _firstString(<Object?>[staticThumbnailUrl, firstFrameThumbnailUrl, thumbnailUrl, previewUrl])
         : (contentType == PrismCatalogDataSource.matchingContentType ||
                 contentType == PrismCatalogDataSource.doubleContentType)
-            ? _firstString(<Object?>[...pairedDownloadUrls, full, thumbnailUrl, previewUrl])
+            ? _firstString(<Object?>[...pairedPreviewUrls, thumbnailUrl, previewUrl, ...pairedDownloadUrls, full])
             : displayOnlyContent
-                ? _firstString(<Object?>[previewUrl, staticThumbnailUrl, thumbnailUrl, full])
-                : _firstString(<Object?>[full, thumbnailUrl, previewUrl, staticThumbnailUrl]);
+                ? _firstString(<Object?>[thumbnailUrl, staticThumbnailUrl, previewUrl, full])
+                : _firstString(<Object?>[thumbnailUrl, staticThumbnailUrl, previewUrl, full]);
     return PrismWallpaper(
       core: WallpaperCore(
         id: id,

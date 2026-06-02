@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreMedia
 import Flutter
 import Foundation
 import ImageIO
@@ -164,34 +165,130 @@ final class PrismLivePhotoSaver: NSObject {
 
   private func writePairedVideo(input: URL, output: URL, assetId: String) throws {
     let asset = AVURLAsset(url: input)
-    guard let export = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetPassthrough) else {
-      throw LivePhotoError.videoExportFailed
-    }
     try? FileManager.default.removeItem(at: output)
-    export.outputURL = output
-    export.outputFileType = .mov
 
-    let identifier = AVMutableMetadataItem()
-    identifier.keySpace = .quickTimeMetadata
-    identifier.key = "com.apple.quicktime.content.identifier" as NSString
-    identifier.value = assetId as NSString
-    identifier.dataType = "com.apple.metadata.datatype.UTF-8"
+    let reader = try AVAssetReader(asset: asset)
+    let writer = try AVAssetWriter(outputURL: output, fileType: .mov)
+    writer.metadata = asset.metadata + [contentIdentifierMetadataItem(assetId: assetId)]
 
+    var trackPairs: [(AVAssetWriterInput, AVAssetReaderOutput)] = []
+    var hasVideoTrack = false
+    for track in asset.tracks where track.mediaType == .video || track.mediaType == .audio {
+      let readerOutput = AVAssetReaderTrackOutput(track: track, outputSettings: nil)
+      readerOutput.alwaysCopiesSampleData = false
+      guard reader.canAdd(readerOutput) else { continue }
+
+      let writerInput = AVAssetWriterInput(mediaType: track.mediaType, outputSettings: nil)
+      writerInput.expectsMediaDataInRealTime = false
+      writerInput.transform = track.preferredTransform
+      guard writer.canAdd(writerInput) else { continue }
+
+      reader.add(readerOutput)
+      writer.add(writerInput)
+      if track.mediaType == .video {
+        hasVideoTrack = true
+      }
+      trackPairs.append((writerInput, readerOutput))
+    }
+
+    guard hasVideoTrack else {
+      throw LivePhotoError.videoTrackMissing
+    }
+
+    let metadataInput = try stillImageTimeMetadataInput()
+    let metadataAdaptor = AVAssetWriterInputMetadataAdaptor(assetWriterInput: metadataInput)
+    guard writer.canAdd(metadataInput) else { throw LivePhotoError.metadataWriteFailed }
+    writer.add(metadataInput)
+
+    guard writer.startWriting() else { throw writer.error ?? LivePhotoError.videoExportFailed }
+    guard reader.startReading() else {
+      writer.cancelWriting()
+      throw reader.error ?? LivePhotoError.videoExportFailed
+    }
+    writer.startSession(atSourceTime: .zero)
+
+    try appendStillImageTimeMetadata(adaptor: metadataAdaptor, input: metadataInput)
+
+    let copyQueue = DispatchQueue(label: "com.nightvibes.prism.live-photo.copy")
+    let group = DispatchGroup()
+
+    for (writerInput, readerOutput) in trackPairs {
+      group.enter()
+      writerInput.requestMediaDataWhenReady(on: copyQueue) {
+        while writerInput.isReadyForMoreMediaData {
+          if let sampleBuffer = readerOutput.copyNextSampleBuffer() {
+            if !writerInput.append(sampleBuffer) {
+              reader.cancelReading()
+              writerInput.markAsFinished()
+              group.leave()
+              return
+            }
+          } else {
+            writerInput.markAsFinished()
+            group.leave()
+            return
+          }
+        }
+      }
+    }
+
+    group.wait()
+
+    if reader.status == .failed || reader.status == .cancelled {
+      writer.cancelWriting()
+      throw reader.error ?? LivePhotoError.videoExportFailed
+    }
+
+    let semaphore = DispatchSemaphore(value: 0)
+    writer.finishWriting { semaphore.signal() }
+    semaphore.wait()
+
+    if writer.status != .completed {
+      throw writer.error ?? LivePhotoError.videoExportFailed
+    }
+  }
+
+  private func contentIdentifierMetadataItem(assetId: String) -> AVMetadataItem {
+    let item = AVMutableMetadataItem()
+    item.keySpace = .quickTimeMetadata
+    item.key = "com.apple.quicktime.content.identifier" as NSString
+    item.value = assetId as NSString
+    item.dataType = kCMMetadataBaseDataType_UTF8 as String
+    return item
+  }
+
+  private func stillImageTimeMetadataInput() throws -> AVAssetWriterInput {
+    let spec: [String: Any] = [
+      kCMMetadataFormatDescriptionMetadataSpecificationKey_Identifier as String: "mdta/com.apple.quicktime.still-image-time",
+      kCMMetadataFormatDescriptionMetadataSpecificationKey_DataType as String: kCMMetadataBaseDataType_SInt8,
+    ]
+    var description: CMFormatDescription?
+    let status = CMMetadataFormatDescriptionCreateWithMetadataSpecifications(
+      allocator: kCFAllocatorDefault,
+      metadataType: kCMMetadataFormatType_Boxed,
+      metadataSpecifications: [spec] as CFArray,
+      formatDescriptionOut: &description
+    )
+    guard status == noErr, let description else { throw LivePhotoError.metadataWriteFailed }
+    return AVAssetWriterInput(mediaType: .metadata, outputSettings: nil, sourceFormatHint: description)
+  }
+
+  private func appendStillImageTimeMetadata(
+    adaptor: AVAssetWriterInputMetadataAdaptor,
+    input: AVAssetWriterInput
+  ) throws {
     let stillTime = AVMutableMetadataItem()
     stillTime.keySpace = .quickTimeMetadata
     stillTime.key = "com.apple.quicktime.still-image-time" as NSString
     stillTime.value = NSNumber(value: 0)
-    stillTime.dataType = "com.apple.metadata.datatype.int8"
+    stillTime.dataType = kCMMetadataBaseDataType_SInt8 as String
 
-    export.metadata = asset.metadata + [identifier, stillTime]
-
-    let semaphore = DispatchSemaphore(value: 0)
-    export.exportAsynchronously { semaphore.signal() }
-    semaphore.wait()
-
-    if export.status != .completed {
-      throw export.error ?? LivePhotoError.videoExportFailed
-    }
+    let group = AVTimedMetadataGroup(
+      items: [stillTime],
+      timeRange: CMTimeRange(start: .zero, duration: CMTime(value: 1, timescale: 100))
+    )
+    guard adaptor.append(group) else { throw LivePhotoError.metadataWriteFailed }
+    input.markAsFinished()
   }
 
   private func savePairedAsset(photo: URL, video: URL) throws {
@@ -257,6 +354,8 @@ private enum LivePhotoError: LocalizedError {
   case invalidImage
   case imageWriteFailed
   case videoExportFailed
+  case videoTrackMissing
+  case metadataWriteFailed
   case photoSaveFailed
   case photoPermissionDenied
 
@@ -276,6 +375,10 @@ private enum LivePhotoError: LocalizedError {
       return "Live Photo still image could not be prepared."
     case .videoExportFailed:
       return "Live Photo video could not be prepared."
+    case .videoTrackMissing:
+      return "Live Photo video did not contain a playable video track."
+    case .metadataWriteFailed:
+      return "Live Photo pairing metadata could not be written."
     case .photoSaveFailed:
       return "Live Photo could not be saved."
     case .photoPermissionDenied:

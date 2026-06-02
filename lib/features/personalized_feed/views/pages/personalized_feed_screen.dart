@@ -184,7 +184,7 @@ class _PersonalizedFeedScreenState extends State<PersonalizedFeedScreen> with Au
 
   List<FeedItemEntity> _gridItemsWithoutCarouselPreview(PersonalizedFeedState state) {
     var skippedPrismCount = 0;
-    return state.items
+    final items = state.items
         .where((item) {
           if (item is PrismFeedItem && skippedPrismCount < _carouselPreviewCount) {
             skippedPrismCount += 1;
@@ -193,6 +193,7 @@ class _PersonalizedFeedScreenState extends State<PersonalizedFeedScreen> with Au
           return true;
         })
         .toList(growable: false);
+    return WallpaperTile.expandMatchingItemsForDisplay(items);
   }
 }
 

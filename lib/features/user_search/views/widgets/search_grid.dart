@@ -134,7 +134,7 @@ class _SearchGridState extends State<SearchGrid> {
   }
 
   double _gridAspectRatio() {
-    final sample = _items.take(12).toList(growable: false);
+    final sample = WallpaperTile.expandMatchingItemsForDisplay(_items).take(12).toList(growable: false);
     if (sample.isEmpty) {
       return 0.5;
     }
@@ -144,7 +144,7 @@ class _SearchGridState extends State<SearchGrid> {
 
   Future<void> _precacheThumbnails(Iterable<PrismFeedItem> items) async {
     final futures = <Future<void>>[];
-    for (final item in items) {
+    for (final item in WallpaperTile.expandMatchingItemsForDisplay(items)) {
       final url = item.thumbnailUrl.trim();
       if (url.isEmpty || !_prefetchedThumbnailUrls.add(url)) {
         continue;
@@ -190,6 +190,7 @@ class _SearchGridState extends State<SearchGrid> {
             ),
           );
         }
+        final displayItems = WallpaperTile.expandMatchingItemsForDisplay(_items);
         return RefreshIndicator(
           key: _refreshKey,
           backgroundColor: Theme.of(context).primaryColor,
@@ -203,7 +204,7 @@ class _SearchGridState extends State<SearchGrid> {
             },
             child: GridView.builder(
               padding: const EdgeInsets.fromLTRB(5, 4, 5, 120),
-              itemCount: _items.length + (_hasMore ? 1 : 0),
+              itemCount: displayItems.length + (_hasMore ? 1 : 0),
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: MediaQuery.of(context).orientation == Orientation.portrait ? 3 : 5,
                 childAspectRatio: _gridAspectRatio(),
@@ -211,7 +212,7 @@ class _SearchGridState extends State<SearchGrid> {
                 crossAxisSpacing: 0,
               ),
               itemBuilder: (context, index) {
-                if (index >= _items.length) {
+                if (index >= displayItems.length) {
                   return MaterialButton(
                     color: Theme.of(context).colorScheme.surfaceContainerHighest,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -219,7 +220,7 @@ class _SearchGridState extends State<SearchGrid> {
                     child: _loadingMore ? Loader() : const Text('See more'),
                   );
                 }
-                return WallpaperTile(item: _items[index], index: index, galleryItems: _items);
+                return WallpaperTile(item: displayItems[index], index: index, galleryItems: displayItems);
               },
             ),
           ),
