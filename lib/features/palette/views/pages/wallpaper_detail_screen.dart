@@ -23,6 +23,7 @@ import 'package:Prism/features/palette/domain/bloc/wallpaper_detail_bloc.dart';
 import 'package:Prism/features/palette/domain/bloc/wallpaper_detail_event.dart';
 import 'package:Prism/features/palette/domain/bloc/wallpaper_detail_state.dart';
 import 'package:Prism/features/palette/domain/entities/wallpaper_detail_entity.dart';
+import 'package:Prism/features/palette/domain/entities/wallpaper_detail_gallery_store.dart';
 import 'package:Prism/features/palette/palette.dart';
 import 'package:Prism/features/prism_catalog/data/prism_catalog_data_source.dart';
 import 'package:Prism/logger/logger.dart';
@@ -77,6 +78,10 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
   ScreenshotController screenshotController = ScreenshotController();
   PanelController panelController = PanelController();
   int _toastFirstTime = 0;
+  List<WallpaperDetailEntity> _galleryItems = const <WallpaperDetailEntity>[];
+  int _galleryIndex = 0;
+  double _activeDragDx = 0;
+  double _activeDragDy = 0;
 
   /// Identity for the wallpaper currently shown; resets capture readiness when it changes.
   String? _wallpaperLoadIdentity;
@@ -154,6 +159,45 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     }
   }
 
+  void _hydrateGalleryContext() {
+    final initialEntity = widget.entity;
+    if (initialEntity == null) {
+      _galleryItems = const <WallpaperDetailEntity>[];
+      _galleryIndex = 0;
+      return;
+    }
+    final snapshot = WallpaperDetailGalleryStore.snapshotFor(initialEntity);
+    if (snapshot == null) {
+      _galleryItems = <WallpaperDetailEntity>[initialEntity];
+      _galleryIndex = 0;
+      return;
+    }
+    _galleryItems = snapshot.items;
+    _galleryIndex = snapshot.index;
+  }
+
+  void _showGalleryOffset(BuildContext context, int offset) {
+    if (_galleryItems.length < 2) return;
+    final nextIndex = _galleryIndex + offset;
+    if (nextIndex < 0 || nextIndex >= _galleryItems.length) {
+      HapticFeedback.selectionClick();
+      return;
+    }
+    final nextEntity = _galleryItems[nextIndex];
+    setState(() {
+      _galleryIndex = nextIndex;
+      _wallpaperReadyForCapture = false;
+    });
+    _contentLoadTracker.start();
+    context.read<WallpaperDetailBloc>().add(LoadFromEntity(entity: nextEntity, analyticsSurface: widget.analyticsSurface));
+    HapticFeedback.selectionClick();
+  }
+
+  void _resetActiveDrag() {
+    _activeDragDx = 0;
+    _activeDragDy = 0;
+  }
+
   void _scheduleWallpaperDisplayReady() {
     if (_wallpaperReadyForCapture) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -215,6 +259,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
             if (status == AnimationStatus.completed) shakeController.reverse();
           });
     _contentLoadTracker.start();
+    _hydrateGalleryContext();
 
     final bloc = context.read<WallpaperDetailBloc>();
     if (widget.entity != null) {
@@ -240,7 +285,10 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
 
   void _retryWallpaperLoad(BuildContext context) {
     final bloc = context.read<WallpaperDetailBloc>();
-    if (widget.entity != null) {
+    final currentState = bloc.state;
+    if (currentState is WallpaperDetailLoaded) {
+      bloc.add(LoadFromEntity(entity: currentState.entity, analyticsSurface: widget.analyticsSurface));
+    } else if (widget.entity != null) {
       bloc.add(LoadFromEntity(entity: widget.entity!, analyticsSurface: widget.analyticsSurface));
     } else {
       bloc.add(
@@ -1019,11 +1067,22 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
             final t = reduceMotion ? 0.0 : offsetAnimation.value;
             return Semantics(
               label: 'Wallpaper',
-              hint: 'Tap to cycle accent color. Long press to reset. Swipe up for details.',
+              hint: 'Tap to cycle accent color. Long press to reset. Swipe up for details. Swipe left or right for the next wallpaper.',
               child: GestureDetector(
+                onPanStart: (_) => _resetActiveDrag(),
                 onPanUpdate: (details) {
-                  if (details.delta.dy < -10) panelController.open();
+                  _activeDragDx += details.delta.dx;
+                  _activeDragDy += details.delta.dy;
+                  if (details.delta.dy < -10 && _activeDragDy.abs() > _activeDragDx.abs()) panelController.open();
                 },
+                onPanEnd: (_) {
+                  final horizontal = _activeDragDx.abs() > 64 && _activeDragDx.abs() > _activeDragDy.abs() * 1.25;
+                  if (horizontal) {
+                    _showGalleryOffset(context, _activeDragDx < 0 ? 1 : -1);
+                  }
+                  _resetActiveDrag();
+                },
+                onPanCancel: _resetActiveDrag,
                 onLongPress: () => _handleAccentLongPress(context, state),
                 onTap: () {
                   HapticFeedback.vibrate();

@@ -143,7 +143,7 @@ class _WallHavenGridState extends State<WallHavenGrid> {
                 },
               );
             }
-            return WallpaperTile(item: walls[index], index: index);
+            return WallpaperTile(item: walls[index], index: index, galleryItems: walls);
           },
         ),
       ),

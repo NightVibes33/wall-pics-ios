@@ -143,7 +143,7 @@ class _PexelsGridState extends State<PexelsGrid> {
                 },
               );
             }
-            return WallpaperTile(item: walls[index], index: index);
+            return WallpaperTile(item: walls[index], index: index, galleryItems: walls);
           },
         ),
       ),

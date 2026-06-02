@@ -136,6 +136,7 @@ class _PersonalizedFeedScreenState extends State<PersonalizedFeedScreen> with Au
                         index: index,
                         crossAxisCount: crossAxisCount,
                         memCacheHeight: tileMemCacheHeight,
+                        galleryItems: visibleItems,
                       ),
                       childCount: visibleItems.length,
                     ),

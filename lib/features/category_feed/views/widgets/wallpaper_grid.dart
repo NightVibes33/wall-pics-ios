@@ -237,7 +237,7 @@ class _WallpaperGridState extends State<WallpaperGrid> {
               }
               final int itemIndex = index;
               final PrismFeedItem item = subWalls[itemIndex];
-              return WallpaperTile(item: item, index: itemIndex);
+              return WallpaperTile(item: item, index: itemIndex, galleryItems: subWalls);
             },
           ),
         ),

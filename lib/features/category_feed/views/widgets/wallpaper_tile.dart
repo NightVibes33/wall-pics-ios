@@ -5,17 +5,26 @@ import 'package:Prism/core/analytics/events/events.dart';
 import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/features/category_feed/domain/entities/feed_item_entity.dart';
 import 'package:Prism/features/palette/domain/entities/wallpaper_detail_entity.dart';
+import 'package:Prism/features/palette/domain/entities/wallpaper_detail_gallery_store.dart';
 import 'package:Prism/features/prism_catalog/data/prism_catalog_data_source.dart';
 import 'package:auto_route/auto_route.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 class WallpaperTile extends StatelessWidget {
-  const WallpaperTile({super.key, required this.item, required this.index, this.memCacheHeight, this.crossAxisCount});
+  const WallpaperTile({
+    super.key,
+    required this.item,
+    required this.index,
+    this.memCacheHeight,
+    this.crossAxisCount,
+    this.galleryItems,
+  });
 
   final FeedItemEntity item;
   final int index;
   final int? memCacheHeight;
+  final List<FeedItemEntity>? galleryItems;
 
   /// When null, uses the app's standard grid (3 columns portrait, 5 landscape).
   final int? crossAxisCount;
@@ -142,6 +151,7 @@ class WallpaperTile extends StatelessWidget {
               ),
             ),
           );
+          WallpaperDetailGalleryStore.setFromFeedItems(items: galleryItems ?? <FeedItemEntity>[item], index: index);
           context.router.push(WallpaperDetailRoute(entity: WallpaperDetailEntityX.fromFeedItem(item)));
         },
         child: isProfilePictureItem(item)

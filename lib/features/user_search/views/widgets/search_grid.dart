@@ -219,7 +219,7 @@ class _SearchGridState extends State<SearchGrid> {
                     child: _loadingMore ? Loader() : const Text('See more'),
                   );
                 }
-                return WallpaperTile(item: _items[index], index: index);
+                return WallpaperTile(item: _items[index], index: index, galleryItems: _items);
               },
             ),
           ),
