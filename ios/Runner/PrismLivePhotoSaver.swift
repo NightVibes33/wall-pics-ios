@@ -23,25 +23,34 @@ final class PrismLivePhotoSaver: NSObject {
         return
       }
       guard let args = call.arguments as? [String: Any],
-            let videoUrl = args["videoUrl"] as? String,
-            let stillUrl = args["stillUrl"] as? String else {
-        result(["success": false, "message": "Missing Live Photo URLs"])
+            let videoUrl = args["videoUrl"] as? String else {
+        result(["success": false, "message": "Missing Live Photo video URL"])
         return
       }
+      let stillUrl = args["stillUrl"] as? String
       saver.save(videoUrl: videoUrl, stillUrl: stillUrl) { saveResult in
         result(saveResult)
       }
     }
   }
 
-  private func save(videoUrl: String, stillUrl: String, completion: @escaping ([String: Any]) -> Void) {
+  private func save(videoUrl: String, stillUrl: String?, completion: @escaping ([String: Any]) -> Void) {
     queue.async {
       do {
         try self.ensurePhotoPermission()
         let assetId = UUID().uuidString
         let workDir = try self.makeWorkDirectory()
         let rawVideo = try self.fetchFile(urlString: videoUrl, fallbackExtension: "mp4", directory: workDir)
-        let rawStill = try self.fetchFile(urlString: stillUrl, fallbackExtension: "jpg", directory: workDir)
+        let rawStill: URL
+        do {
+          rawStill = try self.makeStillFrame(from: rawVideo, directory: workDir)
+        } catch {
+          if let stillUrl = stillUrl?.trimmingCharacters(in: .whitespacesAndNewlines), !stillUrl.isEmpty {
+            rawStill = try self.fetchFile(urlString: stillUrl, fallbackExtension: "jpg", directory: workDir)
+          } else {
+            throw error
+          }
+        }
         let pairedPhoto = workDir.appendingPathComponent("live-photo.jpg")
         let pairedVideo = workDir.appendingPathComponent("live-video.mov")
         try self.writePairedPhoto(input: rawStill, output: pairedPhoto, assetId: assetId)
@@ -65,12 +74,73 @@ final class PrismLivePhotoSaver: NSObject {
     guard let url = URL(string: urlString), let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
       throw LivePhotoError.invalidUrl
     }
-    let data = try Data(contentsOf: url, options: [.mappedIfSafe])
+    let data = try fetchData(url: url)
     guard !data.isEmpty else { throw LivePhotoError.emptyPayload }
     let ext = url.pathExtension.isEmpty ? fallbackExtension : url.pathExtension
     let destination = directory.appendingPathComponent("source-\(UUID().uuidString).\(ext)")
     try data.write(to: destination, options: .atomic)
     return destination
+  }
+
+  private func fetchData(url: URL) throws -> Data {
+    let config = URLSessionConfiguration.ephemeral
+    config.timeoutIntervalForRequest = 45
+    config.timeoutIntervalForResource = 90
+    let session = URLSession(configuration: config)
+    defer { session.invalidateAndCancel() }
+
+    var request = URLRequest(url: url)
+    request.setValue(
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+      forHTTPHeaderField: "User-Agent"
+    )
+    request.setValue("*/*", forHTTPHeaderField: "Accept")
+
+    let semaphore = DispatchSemaphore(value: 0)
+    var fetchedData: Data?
+    var fetchError: Error?
+    var statusCode: Int?
+
+    let task = session.dataTask(with: request) { data, response, error in
+      fetchedData = data
+      fetchError = error
+      statusCode = (response as? HTTPURLResponse)?.statusCode
+      semaphore.signal()
+    }
+    task.resume()
+    semaphore.wait()
+
+    if fetchError != nil {
+      throw LivePhotoError.downloadFailed
+    }
+    if let statusCode = statusCode, !(200...299).contains(statusCode) {
+      throw LivePhotoError.httpStatus(code: statusCode)
+    }
+    guard let fetchedData, !fetchedData.isEmpty else { throw LivePhotoError.emptyPayload }
+    return fetchedData
+  }
+
+  private func makeStillFrame(from video: URL, directory: URL) throws -> URL {
+    let asset = AVURLAsset(url: video)
+    let generator = AVAssetImageGenerator(asset: asset)
+    generator.appliesPreferredTrackTransform = true
+    generator.requestedTimeToleranceBefore = .zero
+    generator.requestedTimeToleranceAfter = CMTime(seconds: 0.2, preferredTimescale: 600)
+    let image = try generator.copyCGImage(at: CMTime(seconds: 0.15, preferredTimescale: 600), actualTime: nil)
+    let output = directory.appendingPathComponent("generated-live-still.jpg")
+    let type: CFString
+    if #available(iOS 14.0, *) {
+      type = UTType.jpeg.identifier as CFString
+    } else {
+      type = kUTTypeJPEG
+    }
+    guard let destination = CGImageDestinationCreateWithURL(output as CFURL, type, 1, nil) else {
+      throw LivePhotoError.imageWriteFailed
+    }
+    let options = [kCGImageDestinationLossyCompressionQuality as String: 0.96] as CFDictionary
+    CGImageDestinationAddImage(destination, image, options)
+    guard CGImageDestinationFinalize(destination) else { throw LivePhotoError.imageWriteFailed }
+    return output
   }
 
   private func writePairedPhoto(input: URL, output: URL, assetId: String) throws {
@@ -182,6 +252,8 @@ final class PrismLivePhotoSaver: NSObject {
 private enum LivePhotoError: LocalizedError {
   case invalidUrl
   case emptyPayload
+  case downloadFailed
+  case httpStatus(code: Int)
   case invalidImage
   case imageWriteFailed
   case videoExportFailed
@@ -194,6 +266,10 @@ private enum LivePhotoError: LocalizedError {
       return "Invalid Live Photo URL."
     case .emptyPayload:
       return "Downloaded Live Photo asset was empty."
+    case .downloadFailed:
+      return "Live Photo asset could not be downloaded."
+    case .httpStatus(let code):
+      return "Live Photo asset download failed with HTTP \(code)."
     case .invalidImage:
       return "Live Photo still image could not be read."
     case .imageWriteFailed:

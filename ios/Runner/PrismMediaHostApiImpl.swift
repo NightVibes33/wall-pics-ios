@@ -123,7 +123,14 @@ final class PrismMediaHostApiImpl: PrismMediaHostApi {
     var fetchError: Error?
     var statusCode: Int?
 
-    let task = session.dataTask(with: url) { data, response, error in
+    var request = URLRequest(url: url)
+    request.setValue(
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+      forHTTPHeaderField: "User-Agent"
+    )
+    request.setValue("*/*", forHTTPHeaderField: "Accept")
+
+    let task = session.dataTask(with: request) { data, response, error in
       fetchedData = data
       fetchError = error
       statusCode = (response as? HTTPURLResponse)?.statusCode

@@ -106,11 +106,7 @@ class _DownloadButtonState extends State<DownloadButton> {
       var savedLivePhoto = false;
       logger.d(link);
       if (_isLivePhotoVideo(link)) {
-        final stillUrl = widget.livePhotoStillUrl?.trim() ?? '';
-        if (stillUrl.isEmpty) {
-          toasts.error('This Live Photo is missing its still frame.');
-          return false;
-        }
+        final stillUrl = widget.livePhotoStillUrl?.trim();
         final message = await PrismLivePhotoSaver.save(
           videoUrl: link,
           stillUrl: stillUrl,

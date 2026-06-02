@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:Prism/core/router/app_router.dart';
+import 'package:Prism/core/widgets/common/autoplay_video_preview.dart';
 import 'package:Prism/core/wallpaper/wallpaper_source.dart';
 import 'package:Prism/data/categories/category_definition.dart';
 import 'package:Prism/features/category_feed/domain/entities/category_entity.dart';
@@ -290,7 +291,9 @@ class _HomeTabPageState extends State<HomeTabPage> {
         .expand((section) => section.items)
         .expand((item) {
           final paired = WallpaperTile.pairedImageUrlsForItem(item);
-          return paired.isNotEmpty ? paired : <String>[item.thumbnailUrl.trim()];
+          if (paired.isNotEmpty) return paired;
+          final poster = WallpaperTile.posterUrlForItem(item);
+          return <String>[(poster.isNotEmpty ? poster : item.thumbnailUrl).trim()];
         })
         .where((url) => url.isNotEmpty)
         .take(54)
@@ -771,7 +774,16 @@ class _HomeWallpaperCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final paired = WallpaperTile.pairedImageUrlsForItem(item);
-    final image = paired.length >= 2 ? _pairedImage(context, paired) : _image(context, item.thumbnailUrl);
+    final animatedPreviewUrl = WallpaperTile.animatedPreviewUrlForItem(item);
+    final image = paired.length >= 2
+        ? _pairedImage(context, paired)
+        : animatedPreviewUrl.isNotEmpty
+            ? AutoplayVideoPreview(
+                videoUrl: animatedPreviewUrl,
+                posterUrl: WallpaperTile.posterUrlForItem(item),
+                fit: BoxFit.cover,
+              )
+            : _image(context, item.thumbnailUrl);
     return Material(
       color: Colors.transparent,
       child: InkWell(

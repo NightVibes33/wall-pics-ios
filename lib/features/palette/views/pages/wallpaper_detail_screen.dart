@@ -9,6 +9,7 @@ import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:Prism/core/utils/edge_to_edge_overlay_style.dart';
 import 'package:Prism/core/utils/status.dart';
+import 'package:Prism/core/widgets/common/autoplay_video_preview.dart';
 import 'package:Prism/core/wallpaper/wallpaper_source.dart';
 import 'package:Prism/core/wallpaper/wallpaper_variants.dart';
 import 'package:Prism/core/widgets/menuButton/editButton.dart';
@@ -396,10 +397,10 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     final pairedImageUrls = _catalogPairedImageUrlsForEntity(entity);
     if (pairedImageUrls.isNotEmpty) return pairedImageUrls.first;
 
-    final firstFrameStill = _prismMetadataValue(entity, 'catalogFirstFrameThumbnailUrl');
-    if (firstFrameStill.isNotEmpty) return firstFrameStill;
     final full = entity.fullUrl.trim();
     if (full.isNotEmpty && !_isVideoUrl(full)) return full;
+    final firstFrameStill = _prismMetadataValue(entity, 'catalogFirstFrameThumbnailUrl');
+    if (firstFrameStill.isNotEmpty) return firstFrameStill;
     final staticStill = _prismMetadataValue(entity, 'catalogStaticThumbnailUrl');
     if (staticStill.isNotEmpty) return staticStill;
     final thumb = entity.thumbnailUrl.trim();
@@ -470,14 +471,15 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
 
     if (thumbnailUrl != null && thumbnailUrl.isNotEmpty) {
       return Scaffold(
+        backgroundColor: Colors.black,
         body: Stack(
           fit: StackFit.expand,
           children: [
             CachedNetworkImage(
               imageUrl: thumbnailUrl,
-              fit: BoxFit.cover,
-              placeholder: (ctx, _) => Container(color: Theme.of(ctx).primaryColor),
-              errorWidget: (ctx, _, _) => Container(color: Theme.of(ctx).primaryColor),
+              fit: BoxFit.contain,
+              placeholder: (ctx, _) => const ColoredBox(color: Colors.black),
+              errorWidget: (ctx, _, _) => const ColoredBox(color: Colors.black),
             ),
             Center(
               child: Semantics(label: 'Loading wallpaper', child: const CircularProgressIndicator()),
@@ -1250,22 +1252,29 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
   }) {
     final bool previewOnly = _isPrismChargingAnimation(entity) || _isPrismDiyTemplate(entity);
     final String thumb = entity.thumbnailUrl.trim();
-    final String full = previewOnly ? _catalogDisplayImageUrl(entity) : entity.fullUrl.trim();
-    final bool useProgressive = thumb.isNotEmpty && full.isNotEmpty && full != thumb;
+    final String entityFull = entity.fullUrl.trim();
+    final String full = previewOnly && !_isVideoUrl(entityFull) ? _catalogDisplayImageUrl(entity) : entityFull;
+    final bool useProgressive = thumb.isNotEmpty && full.isNotEmpty && full != thumb && !_isVideoUrl(full);
     final pairedImageUrls = _catalogPairedImageUrlsForEntity(entity);
 
     Widget imageLayer;
-    if (pairedImageUrls.length >= 2) {
+    if (pairedImageUrls.length < 2 && full.isNotEmpty && _isVideoUrl(full)) {
+      imageLayer = AutoplayVideoPreview(
+        videoUrl: full,
+        fit: BoxFit.contain,
+        onReady: onWallpaperDisplayReady,
+      );
+    } else if (pairedImageUrls.length >= 2) {
       final sides = pairedImageUrls.take(2).toList(growable: false);
       Widget pairedSide(String url) {
         return CachedNetworkImage(
           imageUrl: url,
-          fit: BoxFit.cover,
+          fit: BoxFit.contain,
           width: double.infinity,
           height: double.infinity,
           imageBuilder: (context, imageProvider) {
             onWallpaperDisplayReady?.call();
-            return SizedBox.expand(child: Image(image: imageProvider, fit: BoxFit.cover));
+            return SizedBox.expand(child: Image(image: imageProvider, fit: BoxFit.contain));
           },
           placeholder: (context, url) => Container(color: Theme.of(context).primaryColor),
           errorWidget: (context, url, error) {
@@ -1290,7 +1299,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
         children: [
           CachedNetworkImage(
             imageUrl: thumb,
-            fit: BoxFit.cover,
+            fit: BoxFit.contain,
             width: double.infinity,
             height: double.infinity,
             placeholder: (context, url) => Container(color: Theme.of(context).primaryColor),
@@ -1303,13 +1312,13 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
           ),
           CachedNetworkImage(
             imageUrl: full,
-            fit: BoxFit.cover,
+            fit: BoxFit.contain,
             fadeInDuration: const Duration(milliseconds: 280),
             fadeOutDuration: Duration.zero,
             imageBuilder: (context, imageProvider) {
               onWallpaperDisplayReady?.call();
               return SizedBox.expand(
-                child: Image(image: imageProvider, fit: BoxFit.cover),
+                child: Image(image: imageProvider, fit: BoxFit.contain),
               );
             },
             progressIndicatorBuilder: progressOutsideScreenshot
@@ -1342,7 +1351,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
           imageBuilder: (context, imageProvider) {
             onWallpaperDisplayReady?.call();
             return SizedBox.expand(
-              child: Image(image: imageProvider, fit: BoxFit.cover),
+              child: Image(image: imageProvider, fit: BoxFit.contain),
             );
           },
           progressIndicatorBuilder: progressOutsideScreenshot
@@ -1373,7 +1382,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
       imageLayer = ColorFiltered(colorFilter: ColorFilter.mode(state.accent!, BlendMode.hue), child: imageLayer);
     }
 
-    return SizedBox.expand(child: imageLayer);
+    return ColoredBox(color: Colors.black, child: SizedBox.expand(child: imageLayer));
   }
 
   Color _wallpaperErrorIconColor(BuildContext context, bool paletteLoading, WallpaperDetailLoaded state) {

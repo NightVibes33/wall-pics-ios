@@ -1046,54 +1046,94 @@ class _PrismItem {
     final thumbnail = url(json['thumbnail']);
     final staticThumbnail = url(json['static_thumbnail']);
     final hqThumbnail = url(json['hq_thumbnail']);
+    bool isVideoUrl(String value) {
+      final path = Uri.tryParse(value)?.path.toLowerCase() ?? value.toLowerCase();
+      return path.endsWith('.mp4') || path.endsWith('.mov');
+    }
+
+    final isLiveContent = contentType == PrismCatalogDataSource.liveContentType;
+    final isMatchingContent = contentType == PrismCatalogDataSource.matchingContentType ||
+        contentType == PrismCatalogDataSource.doubleContentType;
+    final imageDownload = catalogDownload.isNotEmpty && !isVideoUrl(catalogDownload) ? catalogDownload : '';
     final fullImage = _firstString(<Object?>[
+      imageDownload,
       wallpaper,
       image,
+      sticker,
+      parallaxFile,
+    ]);
+    final fullMedia = _firstString(<Object?>[
       catalogDownload,
-      sticker,
-      parallaxFile,
-    ]);
-    final thumb = _firstString(<Object?>[
-      firstFrameThumbnail,
-      ...pairedDisplayUrls,
-      fullImage,
+      video,
       wallpaper,
       image,
       sticker,
       parallaxFile,
-      staticThumbnail,
-      hqThumbnail,
-      thumbnail,
     ]);
-    final staticThumb = contentType == PrismCatalogDataSource.liveContentType
+    final thumb = isMatchingContent
         ? _firstString(<Object?>[
-            firstFrameThumbnail,
+            ...pairedDisplayUrls,
+            fullImage,
             staticThumbnail,
             hqThumbnail,
-            thumb,
+            thumbnail,
+            firstFrameThumbnail,
+          ])
+        : isLiveContent
+            ? _firstString(<Object?>[
+                fullImage,
+                staticThumbnail,
+                hqThumbnail,
+                thumbnail,
+                firstFrameThumbnail,
+              ])
+            : _firstString(<Object?>[
+                fullImage,
+                staticThumbnail,
+                hqThumbnail,
+                thumbnail,
+                firstFrameThumbnail,
+              ]);
+    final staticThumb = isLiveContent
+        ? _firstString(<Object?>[
+            fullImage,
+            staticThumbnail,
+            hqThumbnail,
+            thumbnail,
+            firstFrameThumbnail,
           ])
         : _firstString(<Object?>[
-            thumb,
             fullImage,
+            thumb,
             staticThumbnail,
             hqThumbnail,
             firstFrameThumbnail,
           ]);
-    final preview = _firstString(<Object?>[
-      firstFrameThumbnail,
-      ...pairedDisplayUrls,
-      fullImage,
-      wallpaper,
-      image,
-      sticker,
-      parallaxFile,
-      thumb,
-      staticThumbnail,
-      hqThumbnail,
-      thumbnail,
-    ]);
+    final preview = isMatchingContent
+        ? _firstString(<Object?>[
+            ...pairedDisplayUrls,
+            fullImage,
+            staticThumbnail,
+            hqThumbnail,
+            thumbnail,
+            firstFrameThumbnail,
+          ])
+        : _firstString(<Object?>[
+            fullImage,
+            staticThumbnail,
+            hqThumbnail,
+            thumbnail,
+            firstFrameThumbnail,
+          ]);
     final displayOnlyContent = contentType == PrismCatalogDataSource.diyTemplateContentType ||
         contentType == PrismCatalogDataSource.liveDiyTemplateContentType;
+    final download = displayOnlyContent
+        ? _firstString(<Object?>[template, fullMedia, fullImage, preview, thumb])
+        : isMatchingContent
+            ? _firstString(<Object?>[catalogDownload, ...pairedDisplayUrls, wallpaper, image])
+            : isLiveContent
+                ? _firstString(<Object?>[catalogDownload, video, wallpaper])
+                : fullMedia;
     return _PrismItem(
       id: _string(json['id']),
       name: _string(json['name']),
@@ -1102,14 +1142,7 @@ class _PrismItem {
       contentType: contentType,
       width: _int(json['width']),
       height: _int(json['height']),
-      downloadUrl: displayOnlyContent
-          ? _firstString(<Object?>[template, wallpaper, image, fullImage, preview, thumb])
-          : (contentType == PrismCatalogDataSource.matchingContentType ||
-                contentType == PrismCatalogDataSource.doubleContentType)
-          ? _firstString(<Object?>[catalogDownload, ...pairedDisplayUrls, wallpaper, image])
-          : contentType == PrismCatalogDataSource.liveContentType
-          ? _firstString(<Object?>[catalogDownload, video, wallpaper])
-          : _firstString(<Object?>[catalogDownload, wallpaper, image, video]),
+      downloadUrl: download,
       previewUrl: preview,
       thumbnailUrl: thumb,
       staticThumbnailUrl: staticThumb,
@@ -1139,10 +1172,10 @@ class _PrismItem {
         contentType == PrismCatalogDataSource.liveDiyTemplateContentType ||
         contentType == PrismCatalogDataSource.chargingAnimationContentType;
     final String thumb = contentType == PrismCatalogDataSource.liveContentType
-        ? _firstString(<Object?>[firstFrameThumbnailUrl, staticThumbnailUrl, thumbnailUrl, previewUrl, full])
+        ? _firstString(<Object?>[staticThumbnailUrl, thumbnailUrl, firstFrameThumbnailUrl, previewUrl])
         : (contentType == PrismCatalogDataSource.matchingContentType ||
                 contentType == PrismCatalogDataSource.doubleContentType)
-            ? _firstString(<Object?>[...pairedDownloadUrls, thumbnailUrl, full, previewUrl])
+            ? _firstString(<Object?>[...pairedDownloadUrls, full, thumbnailUrl, previewUrl])
             : displayOnlyContent
                 ? _firstString(<Object?>[previewUrl, staticThumbnailUrl, thumbnailUrl, full])
                 : _firstString(<Object?>[full, thumbnailUrl, previewUrl, staticThumbnailUrl]);

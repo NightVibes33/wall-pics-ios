@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:Prism/analytics/analytics_service.dart';
 import 'package:Prism/core/analytics/events/events.dart';
 import 'package:Prism/core/router/app_router.dart';
+import 'package:Prism/core/widgets/common/autoplay_video_preview.dart';
 import 'package:Prism/features/category_feed/domain/entities/feed_item_entity.dart';
 import 'package:Prism/features/palette/domain/entities/wallpaper_detail_entity.dart';
 import 'package:Prism/features/palette/domain/entities/wallpaper_detail_gallery_store.dart';
@@ -65,6 +66,36 @@ class WallpaperTile extends StatelessWidget {
     );
   }
 
+  static String animatedPreviewUrlForItem(FeedItemEntity item) {
+    return item.when(
+      prism: (_, wallpaper) {
+        final candidates = <String>[
+          wallpaper.fullUrl.trim(),
+          _metadataString(wallpaper.aiMetadata, 'catalogVideoUrl'),
+          _metadataString(wallpaper.aiMetadata, 'catalogThumbnailVideoUrl'),
+        ];
+        for (final candidate in candidates) {
+          if (candidate.isNotEmpty && _isVideoUrl(candidate)) return candidate;
+        }
+        return '';
+      },
+      wallhaven: (_, _) => '',
+      pexels: (_, _) => '',
+    );
+  }
+
+  static String posterUrlForItem(FeedItemEntity item) {
+    return item.when(
+      prism: (_, wallpaper) {
+        final full = wallpaper.fullUrl.trim();
+        if (full.isNotEmpty && !_isVideoUrl(full)) return full;
+        return '';
+      },
+      wallhaven: (_, wallpaper) => wallpaper.thumbnailUrl.trim(),
+      pexels: (_, wallpaper) => wallpaper.thumbnailUrl.trim(),
+    );
+  }
+
   static List<String> _stringList(Object? raw) {
     if (raw is! List) return const <String>[];
     final seen = <String>{};
@@ -72,6 +103,16 @@ class WallpaperTile extends StatelessWidget {
         .map((value) => value.toString().trim())
         .where((value) => value.isNotEmpty && seen.add(value))
         .toList(growable: false);
+  }
+
+  static String _metadataString(Object? metadata, String key) {
+    if (metadata is! Map) return '';
+    return metadata[key]?.toString().trim() ?? '';
+  }
+
+  static bool _isVideoUrl(String url) {
+    final path = Uri.tryParse(url)?.path.toLowerCase() ?? url.toLowerCase();
+    return path.endsWith('.mp4') || path.endsWith('.mov');
   }
 
   static double aspectRatioForItem(FeedItemEntity item) {
@@ -140,9 +181,16 @@ class WallpaperTile extends StatelessWidget {
     final cacheWidth = (width * pixelRatio).ceil();
     final cacheHeight = (height * pixelRatio).ceil();
     final pairedImageUrls = pairedImageUrlsForItem(item);
+    final animatedPreviewUrl = animatedPreviewUrlForItem(item);
     final image = pairedImageUrls.length >= 2
         ? _matchingSetTile(context, pairedImageUrls, cacheWidth: cacheWidth, cacheHeight: cacheHeight)
-        : _cachedTileImage(context, item.thumbnailUrl, cacheWidth: cacheWidth, cacheHeight: cacheHeight);
+        : animatedPreviewUrl.isNotEmpty
+            ? AutoplayVideoPreview(
+                videoUrl: animatedPreviewUrl,
+                posterUrl: posterUrlForItem(item),
+                fit: BoxFit.cover,
+              )
+            : _cachedTileImage(context, item.thumbnailUrl, cacheWidth: cacheWidth, cacheHeight: cacheHeight);
     return Material(
       color: Colors.transparent,
       child: InkWell(
