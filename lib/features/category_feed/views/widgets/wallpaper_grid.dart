@@ -34,8 +34,10 @@ class _WallpaperGridState extends State<WallpaperGrid> {
   final Set<String> _prefetchedThumbnailUrls = <String>{};
 
   bool seeMoreLoader = false;
+  int _activeVideoRow = 0;
   int _lastLoggedSubWallsCount = -1;
   String? _lastLookAheadBatchKey;
+  String? _lastContentType;
 
   @override
   void initState() {
@@ -123,9 +125,28 @@ class _WallpaperGridState extends State<WallpaperGrid> {
         : 0.5;
   }
 
+  bool _isLiveCategory(CategoryFeedState state) {
+    return state.selectedCategory?.catalogContentType == PrismCatalogDataSource.liveContentType;
+  }
+
+  void _updateActiveVideoRow(ScrollMetrics metrics, double rowExtent) {
+    if (rowExtent <= 0) {
+      return;
+    }
+    final nextRow = ((metrics.pixels + metrics.viewportDimension * 0.42) / rowExtent).floor().clamp(0, 1 << 20).toInt();
+    if (nextRow != _activeVideoRow) {
+      setState(() => _activeVideoRow = nextRow);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final CategoryFeedState state = context.watch<CategoryFeedBloc>().state;
+    final contentType = state.selectedCategory?.catalogContentType;
+    if (_lastContentType != contentType) {
+      _lastContentType = contentType;
+      _activeVideoRow = 0;
+    }
     final List<PrismFeedItem> rawSubWalls = state.items.whereType<PrismFeedItem>().toList(growable: false);
     final List<FeedItemEntity> subWalls = WallpaperTile.expandMatchingItemsForDisplay(rawSubWalls);
     final List<PrismFeedItem> prismSubWalls = subWalls.whereType<PrismFeedItem>().toList(growable: false);
@@ -138,6 +159,10 @@ class _WallpaperGridState extends State<WallpaperGrid> {
       _prepareThumbnails(context, prismSubWalls);
     }
     final showSkeletonTiles = subWalls.isEmpty;
+    final columns = MediaQuery.of(context).orientation == Orientation.portrait ? 3 : 5;
+    final aspectRatio = _gridAspectRatio(state);
+    final rowExtent = MediaQuery.sizeOf(context).width / columns / aspectRatio;
+    final playLiveVideos = _isLiveCategory(state);
 
     if (subWalls.isNotEmpty) {
       _contentLoadTracker.success(
@@ -193,6 +218,9 @@ class _WallpaperGridState extends State<WallpaperGrid> {
                 );
               },
             );
+            if (playLiveVideos) {
+              _updateActiveVideoRow(scrollInfo.metrics, rowExtent);
+            }
             if (scrollInfo.metrics.pixels >= scrollInfo.metrics.maxScrollExtent - 320) {
               unawaited(_triggerSeeMore(hasMore: state.hasMore, currentItemCount: subWalls.length));
             }
@@ -204,8 +232,8 @@ class _WallpaperGridState extends State<WallpaperGrid> {
             itemCount: showSkeletonTiles ? 20 : subWalls.length + (state.hasMore ? 1 : 0),
             shrinkWrap: true,
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: MediaQuery.of(context).orientation == Orientation.portrait ? 3 : 5,
-              childAspectRatio: _gridAspectRatio(state),
+              crossAxisCount: columns,
+              childAspectRatio: aspectRatio,
               mainAxisSpacing: 0,
               crossAxisSpacing: 0,
             ),
@@ -239,7 +267,12 @@ class _WallpaperGridState extends State<WallpaperGrid> {
               }
               final int itemIndex = index;
               final FeedItemEntity item = subWalls[itemIndex];
-              return WallpaperTile(item: item, index: itemIndex, galleryItems: subWalls);
+              return WallpaperTile(
+                item: item,
+                index: itemIndex,
+                galleryItems: subWalls,
+                playVideoPreview: playLiveVideos && itemIndex ~/ columns == _activeVideoRow,
+              );
             },
           ),
         ),

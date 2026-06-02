@@ -11,6 +11,7 @@ class AutoplayVideoPreview extends StatefulWidget {
     this.fit = BoxFit.cover,
     this.alignment = Alignment.center,
     this.muted = true,
+    this.playing = true,
     this.onReady,
     super.key,
   });
@@ -20,6 +21,7 @@ class AutoplayVideoPreview extends StatefulWidget {
   final BoxFit fit;
   final Alignment alignment;
   final bool muted;
+  final bool playing;
   final VoidCallback? onReady;
 
   @override
@@ -34,13 +36,21 @@ class _AutoplayVideoPreviewState extends State<AutoplayVideoPreview> {
   @override
   void initState() {
     super.initState();
-    unawaited(_load());
+    if (widget.playing) {
+      unawaited(_load());
+    }
   }
 
   @override
   void didUpdateWidget(covariant AutoplayVideoPreview oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.videoUrl != widget.videoUrl) {
+    if (!widget.playing) {
+      _loadGeneration++;
+      _disposeController();
+      widget.onReady?.call();
+      return;
+    }
+    if (oldWidget.videoUrl != widget.videoUrl || !oldWidget.playing) {
       unawaited(_load());
     }
   }
@@ -48,25 +58,29 @@ class _AutoplayVideoPreviewState extends State<AutoplayVideoPreview> {
   @override
   void dispose() {
     _loadGeneration++;
+    _disposeController();
+    super.dispose();
+  }
+
+  void _disposeController() {
     final controller = _controller;
     _controller = null;
     if (controller != null) {
       unawaited(controller.dispose());
     }
-    super.dispose();
   }
 
   Future<void> _load() async {
     final rawUrl = widget.videoUrl.trim();
     final generation = ++_loadGeneration;
-    final oldController = _controller;
-    _controller = null;
     _failed = false;
-    if (oldController != null) {
-      unawaited(oldController.dispose());
-    }
+    _disposeController();
     if (mounted) {
       setState(() {});
+    }
+    if (!widget.playing) {
+      widget.onReady?.call();
+      return;
     }
     if (rawUrl.isEmpty) {
       widget.onReady?.call();
@@ -88,12 +102,14 @@ class _AutoplayVideoPreviewState extends State<AutoplayVideoPreview> {
       if (widget.muted) {
         await controller.setVolume(0);
       }
-      if (!mounted || generation != _loadGeneration) {
+      if (!mounted || generation != _loadGeneration || !widget.playing) {
         await controller.dispose();
         return;
       }
       setState(() => _controller = controller);
-      unawaited(controller.play());
+      if (widget.playing) {
+        unawaited(controller.play());
+      }
       widget.onReady?.call();
     } catch (_) {
       await controller.dispose();

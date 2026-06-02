@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/wallpaper/wallpaper_source.dart';
+import 'package:Prism/core/widgets/common/autoplay_video_preview.dart';
 import 'package:Prism/data/categories/category_definition.dart';
 import 'package:Prism/features/category_feed/domain/entities/category_entity.dart';
 import 'package:Prism/features/category_feed/domain/entities/feed_item_entity.dart';
@@ -69,7 +70,12 @@ class _HomeTabPageState extends State<HomeTabPage> {
   ];
 
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   final Set<String> _precachedUrls = <String>{};
+  final Map<String, GlobalKey> _sectionKeys = <String, GlobalKey>{};
+
+  List<_HomeSection> _latestSections = const <_HomeSection>[];
+  String? _activeVideoSectionKey;
 
   late Future<_HomeDashboardData> _dashboardFuture;
   bool _hasConnection = true;
@@ -81,13 +87,16 @@ class _HomeTabPageState extends State<HomeTabPage> {
     super.initState();
     _dashboardFuture = _loadDashboard();
     _searchController.addListener(_onSearchTextChanged);
+    _scrollController.addListener(_updateActiveVideoSection);
     _checkConnection();
   }
 
   @override
   void dispose() {
     _searchController.removeListener(_onSearchTextChanged);
+    _scrollController.removeListener(_updateActiveVideoSection);
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -140,6 +149,56 @@ class _HomeTabPageState extends State<HomeTabPage> {
       _searchController.clear();
       _dashboardFuture = _loadDashboard();
     });
+  }
+
+  GlobalKey _sectionKeyFor(_HomeSection section) {
+    return _sectionKeys.putIfAbsent(section.playbackKey, () => GlobalKey());
+  }
+
+  void _captureDashboardData(_HomeDashboardData? data) {
+    final sections = data?.sections ?? const <_HomeSection>[];
+    _latestSections = sections;
+    final liveKeys = sections.map((section) => section.playbackKey).toSet();
+    _sectionKeys.removeWhere((key, _) => !liveKeys.contains(key));
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateActiveVideoSection());
+  }
+
+  void _updateActiveVideoSection() {
+    if (!mounted || _latestSections.isEmpty) {
+      return;
+    }
+    final mediaQuery = MediaQuery.of(context);
+    final viewportTop = mediaQuery.padding.top + 4;
+    final viewportBottom = mediaQuery.size.height - mediaQuery.padding.bottom - 112;
+    var bestScore = 0.0;
+    String? bestKey;
+    for (final section in _latestSections) {
+      if (section.kind != _SectionKind.live) {
+        continue;
+      }
+      final renderObject = _sectionKeys[section.playbackKey]?.currentContext?.findRenderObject();
+      if (renderObject is! RenderBox || !renderObject.attached) {
+        continue;
+      }
+      final top = renderObject.localToGlobal(Offset.zero).dy;
+      final height = renderObject.size.height;
+      if (height <= 0) {
+        continue;
+      }
+      final bottom = top + height;
+      final visible = math.min(bottom, viewportBottom) - math.max(top, viewportTop);
+      final score = math.max(0.0, visible) / height;
+      if (score > bestScore) {
+        bestScore = score;
+        bestKey = section.playbackKey;
+      }
+    }
+    if (bestScore < 0.28) {
+      bestKey = null;
+    }
+    if (bestKey != _activeVideoSectionKey) {
+      setState(() => _activeVideoSectionKey = bestKey);
+    }
   }
 
   Future<_HomeDashboardData> _loadDashboard() async {
@@ -375,6 +434,7 @@ class _HomeTabPageState extends State<HomeTabPage> {
               future: _dashboardFuture,
               builder: (context, snapshot) {
                 final data = snapshot.data;
+                _captureDashboardData(data);
                 if (data != null) {
                   _precacheDashboardImages(data);
                 }
@@ -383,6 +443,7 @@ class _HomeTabPageState extends State<HomeTabPage> {
                   backgroundColor: Colors.black,
                   onRefresh: _refreshDashboard,
                   child: CustomScrollView(
+                    controller: _scrollController,
                     physics: const AlwaysScrollableScrollPhysics(),
                     slivers: <Widget>[
                       SliverToBoxAdapter(
@@ -407,6 +468,8 @@ class _HomeTabPageState extends State<HomeTabPage> {
                           loading: snapshot.connectionState == ConnectionState.waiting && data == null,
                           sections: data?.sections ?? const <_HomeSection>[],
                           onTabSelected: _selectTab,
+                          activeVideoSectionKey: _activeVideoSectionKey,
+                          sectionKeyFor: _sectionKeyFor,
                           onMore: (section) => _openCatalog(
                             title: section.title,
                             contentType: section.contentType,
@@ -649,6 +712,8 @@ class _CatalogPanel extends StatelessWidget {
     required this.activeTabIndex,
     required this.loading,
     required this.sections,
+    required this.activeVideoSectionKey,
+    required this.sectionKeyFor,
     required this.onTabSelected,
     required this.onMore,
   });
@@ -657,6 +722,8 @@ class _CatalogPanel extends StatelessWidget {
   final int activeTabIndex;
   final bool loading;
   final List<_HomeSection> sections;
+  final String? activeVideoSectionKey;
+  final GlobalKey Function(_HomeSection section) sectionKeyFor;
   final ValueChanged<int> onTabSelected;
   final ValueChanged<_HomeSection> onMore;
 
@@ -678,7 +745,15 @@ class _CatalogPanel extends StatelessWidget {
           else if (sections.isEmpty)
             const _EmptyDashboard()
           else
-            for (final section in sections) _WallpaperSection(section: section, onMore: () => onMore(section)),
+            for (final section in sections)
+              KeyedSubtree(
+                key: sectionKeyFor(section),
+                child: _WallpaperSection(
+                  section: section,
+                  playVideo: activeVideoSectionKey == section.playbackKey,
+                  onMore: () => onMore(section),
+                ),
+              ),
           const SizedBox(height: 220),
         ],
       ),
@@ -739,9 +814,10 @@ class _TopTabs extends StatelessWidget {
 }
 
 class _WallpaperSection extends StatelessWidget {
-  const _WallpaperSection({required this.section, required this.onMore});
+  const _WallpaperSection({required this.section, required this.playVideo, required this.onMore});
 
   final _HomeSection section;
+  final bool playVideo;
   final VoidCallback onMore;
 
   @override
@@ -795,6 +871,7 @@ class _WallpaperSection extends StatelessWidget {
                     index: index,
                     section: section,
                     galleryItems: galleryItems,
+                    playVideo: playVideo,
                   ),
                 );
               },
@@ -814,17 +891,26 @@ class _HomeWallpaperCard extends StatelessWidget {
     required this.index,
     required this.section,
     required this.galleryItems,
+    required this.playVideo,
   });
 
   final FeedItemEntity item;
   final int index;
   final _HomeSection section;
   final List<FeedItemEntity> galleryItems;
+  final bool playVideo;
 
   @override
   Widget build(BuildContext context) {
     final paired = WallpaperTile.pairedPreviewUrlsForItem(item);
-    final image = paired.length >= 2 ? _pairedImage(context, paired) : _image(context, item.thumbnailUrl);
+    final videoUrl = WallpaperTile.videoUrlForItem(item);
+    final posterUrl = WallpaperTile.posterUrlForItem(item);
+    final imageUrl = posterUrl.isNotEmpty ? posterUrl : item.thumbnailUrl;
+    final image = paired.length >= 2
+        ? _pairedImage(context, paired)
+        : section.kind == _SectionKind.live && playVideo && videoUrl.isNotEmpty
+            ? AutoplayVideoPreview(videoUrl: videoUrl, posterUrl: imageUrl)
+            : _image(context, imageUrl);
     final isProfile = section.kind == _SectionKind.profile;
     final shape = isProfile ? const CircleBorder() : RoundedRectangleBorder(borderRadius: BorderRadius.circular(8));
     return Material(
@@ -1679,6 +1765,8 @@ class _HomeSection {
   final String slug;
   final _SectionKind kind;
   final List<FeedItemEntity> items;
+
+  String get playbackKey => '$contentType|$slug|$title';
 }
 
 class _HomeTabSpec {

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:Prism/analytics/analytics_service.dart';
 import 'package:Prism/core/analytics/events/events.dart';
 import 'package:Prism/core/router/app_router.dart';
+import 'package:Prism/core/widgets/common/autoplay_video_preview.dart';
 import 'package:Prism/core/wallpaper/wallpaper_core.dart';
 import 'package:Prism/core/wallpaper/wallpaper_source.dart';
 import 'package:Prism/core/wallpaper/wallpaper_variants.dart';
@@ -22,12 +23,14 @@ class WallpaperTile extends StatelessWidget {
     this.memCacheHeight,
     this.crossAxisCount,
     this.galleryItems,
+    this.playVideoPreview = false,
   });
 
   final FeedItemEntity item;
   final int index;
   final int? memCacheHeight;
   final List<FeedItemEntity>? galleryItems;
+  final bool playVideoPreview;
 
   /// When null, uses the app's standard grid (3 columns portrait, 5 landscape).
   final int? crossAxisCount;
@@ -83,6 +86,41 @@ class WallpaperTile extends StatelessWidget {
       },
       wallhaven: (_, _) => const <String>[],
       pexels: (_, _) => const <String>[],
+    );
+  }
+
+  static String videoUrlForItem(FeedItemEntity item) {
+    return item.when(
+      prism: (_, wallpaper) {
+        final metadata = wallpaper.aiMetadata ?? const <String, Object?>{};
+        final fullUrl = wallpaper.core.fullUrl.trim();
+        return _firstStringValue(<Object?>[
+          metadata['catalogVideoUrl'],
+          metadata['catalogThumbnailVideoUrl'],
+          _isVideoUrl(fullUrl) ? fullUrl : '',
+        ]);
+      },
+      wallhaven: (_, _) => '',
+      pexels: (_, _) => '',
+    );
+  }
+
+  static String posterUrlForItem(FeedItemEntity item) {
+    return item.when(
+      prism: (_, wallpaper) {
+        final metadata = wallpaper.aiMetadata ?? const <String, Object?>{};
+        return _firstStringValue(
+          <Object?>[
+            metadata['catalogStaticThumbnailUrl'],
+            metadata['catalogFirstFrameThumbnailUrl'],
+            wallpaper.core.thumbnailUrl,
+            metadata['catalogPreviewUrl'],
+          ],
+          imageOnly: true,
+        );
+      },
+      wallhaven: (_, wallpaper) => wallpaper.thumbnailUrl,
+      pexels: (_, wallpaper) => wallpaper.thumbnailUrl,
     );
   }
 
@@ -219,6 +257,25 @@ class WallpaperTile extends StatelessWidget {
     return path.endsWith('.zip');
   }
 
+  static bool _isVideoUrl(String url) {
+    final path = Uri.tryParse(url)?.path.toLowerCase() ?? url.toLowerCase();
+    return path.endsWith('.mp4') || path.endsWith('.mov');
+  }
+
+  static String _firstStringValue(Iterable<Object?> values, {bool imageOnly = false}) {
+    for (final value in values) {
+      final text = value?.toString().trim() ?? '';
+      if (text.isEmpty) {
+        continue;
+      }
+      if (imageOnly && (_isVideoUrl(text) || _isArchiveUrl(text))) {
+        continue;
+      }
+      return text;
+    }
+    return '';
+  }
+
   static double aspectRatioForItem(FeedItemEntity item) {
     return isProfilePictureItem(item) ? 1.0 : 0.5;
   }
@@ -287,9 +344,14 @@ class WallpaperTile extends StatelessWidget {
     final cacheWidth = (width * pixelRatio).ceil();
     final cacheHeight = (height * pixelRatio).ceil();
     final pairedImageUrls = pairedPreviewUrlsForItem(item);
+    final videoUrl = videoUrlForItem(item);
+    final posterUrl = posterUrlForItem(item);
+    final tileImageUrl = posterUrl.isNotEmpty ? posterUrl : item.thumbnailUrl;
     final image = pairedImageUrls.length >= 2
         ? _matchingSetTile(context, pairedImageUrls, cacheWidth: cacheWidth, cacheHeight: cacheHeight)
-        : _cachedTileImage(context, item.thumbnailUrl, cacheWidth: cacheWidth, cacheHeight: cacheHeight);
+        : playVideoPreview && videoUrl.isNotEmpty
+            ? AutoplayVideoPreview(videoUrl: videoUrl, posterUrl: tileImageUrl)
+            : _cachedTileImage(context, tileImageUrl, cacheWidth: cacheWidth, cacheHeight: cacheHeight);
     return Material(
       color: Colors.transparent,
       child: InkWell(
