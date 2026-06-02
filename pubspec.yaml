@@ -7,8 +7,6 @@ publish_to: none
 # followed by an optional build number separated by a +.
 # Both the version and the builder number may be overridden in flutter
 # build by specifying --build-name and --build-number, respectively.
-# In Android, build-name is used as versionName while build-number used as versionCode.
-# Read more about Android versioning at https://developer.android.com/studio/publish/versioning
 # In iOS, build-name is used as CFBundleShortVersionString while build-number used as CFBundleVersion.
 # Read more about iOS versioning at
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
@@ -34,7 +32,6 @@ dependencies:
     sdk: flutter
   flutter_archive: ^6.0.4
   flutter_cache_manager: ^3.4.1
-  flutter_displaymode: ^0.7.0
   flutter_image_compress: ^2.4.0
   flutter_local_notifications: ^20.1.0
   flutter_mailer: ^3.0.1
@@ -105,9 +102,8 @@ sentry:
   upload_sources: true
 
 flutter_icons:
-  android: true
+  android: false
   ios: true
-  image_path_android: assets/icon/ic_launcher_xxxhdpi.png
   image_path_ios: assets/icon/ios.png
   adaptive_icon_background: assets/icon/ic_background.png
   adaptive_icon_foreground: assets/icon/ic_foreground.png

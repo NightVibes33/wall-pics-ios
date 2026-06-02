@@ -63,13 +63,15 @@ class _SearchGridState extends State<SearchGrid> {
           ..addAll(incoming);
         _currentPage = 1;
       } else {
-        final byId = <String, PrismFeedItem>{for (final item in _items) item.id: item};
+        final byKey = <String, PrismFeedItem>{
+          for (final item in _items) _resultKey(item): item,
+        };
         for (final item in incoming) {
-          byId[item.id] = item;
+          byKey[_resultKey(item)] = item;
         }
         _items
           ..clear()
-          ..addAll(byId.values);
+          ..addAll(byKey.values);
         _currentPage += 1;
       }
       _hasMore = page.hasMore;
@@ -88,6 +90,18 @@ class _SearchGridState extends State<SearchGrid> {
         result: result,
       ),
     );
+  }
+
+  String _resultKey(PrismFeedItem item) {
+    final fullUrl = item.wallpaper.fullUrl.trim();
+    final thumbnailUrl = item.thumbnailUrl.trim();
+    if (fullUrl.isNotEmpty) {
+      return fullUrl.toLowerCase();
+    }
+    if (thumbnailUrl.isNotEmpty) {
+      return thumbnailUrl.toLowerCase();
+    }
+    return item.id;
   }
 
   Future<void> _refresh() async {

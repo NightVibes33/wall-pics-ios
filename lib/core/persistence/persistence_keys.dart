@@ -47,15 +47,8 @@ class PersistenceKeys {
 
   // Quick tile configuration — written as raw strings so native TileServices
   // can read them directly from SharedPreferences without the Flutter codec.
-  static const String quickTileCategoryName = 'quick_tile.category.name';
-  static const String quickTileCategorySource = 'quick_tile.category.source';
-  static const String quickTileCategoryTarget = 'quick_tile.category.target';
 
-  static const String quickTileWotdTarget = 'quick_tile.wotd.target';
   // Pre-cached WOTD wallpaper URL written by Flutter when WOTD loads.
-  static const String quickTileWotdUrl = 'quick_tile.wotd.url';
 
-  static const String quickTileFavsTarget = 'quick_tile.favs.target';
   // JSON-encoded list of full-resolution URLs from the user's favourites.
-  static const String quickTileFavWallUrls = 'quick_tile.favs.wall_urls';
 }

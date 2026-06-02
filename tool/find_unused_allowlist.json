@@ -57,11 +57,6 @@
     "lib/core/utils/string_extensions.dart": [
       "CapExtension"
     ],
-    "lib/core/platform/quick_tile_config_service.dart": [
-      "QuickTileCategoryConfig",
-      "QuickTileWotdConfig",
-      "QuickTileFavsConfig"
-    ],
     "lib/features/in_app_notifications/views/pages/notification_screen.dart": [
       "NotificationCard",
       "NotificationSettingsSheet"

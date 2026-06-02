@@ -337,14 +337,8 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
   String? _catalogLiveStillUrl(WallpaperDetailEntity entity) {
     return entity.when(
       prism: (wallpaper) {
-        final metadata = wallpaper.aiMetadata;
-        final firstFrameStill = metadata?['catalogFirstFrameThumbnailUrl']?.toString().trim() ?? '';
-        if (firstFrameStill.isNotEmpty) return firstFrameStill;
-        final staticStill = metadata?['catalogStaticThumbnailUrl']?.toString().trim() ?? '';
-        if (staticStill.isNotEmpty) return staticStill;
-        final preview = metadata?['catalogPreviewUrl']?.toString().trim() ?? '';
-        if (preview.isNotEmpty) return preview;
-        return wallpaper.thumbnailUrl.trim().isEmpty ? null : wallpaper.thumbnailUrl.trim();
+        final firstFrameStill = wallpaper.aiMetadata?['catalogFirstFrameThumbnailUrl']?.toString().trim() ?? '';
+        return firstFrameStill.isEmpty ? null : firstFrameStill;
       },
       wallhaven: (_) => null,
       pexels: (_) => null,
@@ -795,8 +789,6 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
                   const SizedBox(height: 4),
                   _buildInfoRow(context, JamIcons.calendar, _formatDate(wallpaper.core.createdAt!), reversed: true),
                 ],
-                const SizedBox(height: 4),
-                _buildInfoRow(context, JamIcons.database, 'Prism', reversed: true),
               ],
             ),
           ),

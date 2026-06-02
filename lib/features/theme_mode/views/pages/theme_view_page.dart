@@ -1,32 +1,23 @@
 import 'package:Prism/analytics/analytics_service.dart';
 import 'package:Prism/core/analytics/events/events.dart';
-import 'package:Prism/core/di/injection.dart';
-import 'package:Prism/core/persistence/data_sources/settings_local_data_source.dart';
 import 'package:Prism/features/theme_mode/views/theme_mode_bloc_utils.dart';
-import 'package:Prism/global/svgAssets.dart';
-import 'package:Prism/logger/logger.dart';
 import 'package:Prism/theme/jam_icons_icons.dart';
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 List<Color> accentColors = [
   const Color(0xFFE57697),
-  const Color(0xFFFF0000),
   const Color(0xFFF44436),
   const Color(0xFFe91e63),
   const Color(0xFF9c27b0),
   const Color(0xFF673ab7),
-  const Color(0xFF0000FF),
   const Color(0xFF1976D2),
   const Color(0xFF03a9f4),
   const Color(0xFF00bcd4),
   const Color(0xFF009688),
   const Color(0xFF4caf50),
-  const Color(0xFF00FF00),
   const Color(0xFF8bc34a),
   const Color(0xFFcddc39),
-  const Color(0xFFffeb3b),
   const Color(0xFFffc107),
   const Color(0xFFff9800),
   const Color(0xFFff5722),
@@ -37,665 +28,311 @@ List<Color> accentColors = [
 
 @RoutePage(name: 'ThemeViewRoute')
 class ThemeView extends StatefulWidget {
+  const ThemeView({super.key});
+
   @override
-  _ThemeViewState createState() => _ThemeViewState();
+  State<ThemeView> createState() => _ThemeViewState();
 }
 
 class _ThemeViewState extends State<ThemeView> {
-  final SettingsLocalDataSource _settingsLocal = getIt<SettingsLocalDataSource>();
-  ThemeData? currentTheme;
-  ThemeData? currentDarkTheme;
-  Color? selectedAccentColor;
-  Color? selectedDarkAccentColor;
-  int? selectedTheme;
-  int? selectedDarkTheme;
-  late bool changingLight;
+  late String _selectedMode;
+  late String _selectedLightThemeId;
+  late String _selectedDarkThemeId;
+  late Color _selectedLightAccent;
+  late Color _selectedDarkAccent;
+  late bool _editingLight;
+
   @override
   void initState() {
-    currentTheme = context.prismLightTheme(listen: false);
-    selectedTheme = PrismThemeMapper.lightThemeIndex(context.prismLightThemeId(listen: false));
-    currentDarkTheme = context.prismDarkTheme(listen: false);
-    selectedDarkTheme = PrismThemeMapper.darkThemeIndex(context.prismDarkThemeId(listen: false));
-    selectedAccentColor = Color(context.prismLightAccentValue(listen: false));
-    selectedDarkAccentColor = Color(context.prismDarkAccentValue(listen: false));
-    changingLight = context.prismModeStyleForWindow(listen: false) == "Light";
     super.initState();
+    _selectedLightThemeId = context.prismLightThemeId(listen: false);
+    _selectedDarkThemeId = context.prismDarkThemeId(listen: false);
+    _selectedLightAccent = Color(context.prismLightAccentValue(listen: false));
+    _selectedDarkAccent = Color(context.prismDarkAccentValue(listen: false));
+    _selectedMode = switch (context.prismThemeMode(listen: false)) {
+      ThemeMode.light => 'Light',
+      ThemeMode.dark => 'Dark',
+      ThemeMode.system => 'System',
+    };
+    _editingLight = context.prismModeStyleForWindow(listen: false) == 'Light';
+  }
+
+  ThemeData get _previewTheme {
+    if (_editingLight) {
+      return PrismThemeMapper.resolveLightTheme(
+        themeId: _selectedLightThemeId,
+        accentColorValue: _selectedLightAccent.toARGB32(),
+      );
+    }
+    return PrismThemeMapper.resolveDarkTheme(
+      themeId: _selectedDarkThemeId,
+      accentColorValue: _selectedDarkAccent.toARGB32(),
+    );
+  }
+
+  Color get _currentAccent => _editingLight ? _selectedLightAccent : _selectedDarkAccent;
+
+  void _setMode(String mode) {
+    context.setPrismThemeMode(mode);
+    setState(() {
+      _selectedMode = mode;
+      if (mode == 'Light') {
+        _editingLight = true;
+      } else if (mode == 'Dark') {
+        _editingLight = false;
+      } else {
+        _editingLight = context.prismModeStyleForWindow(listen: false) == 'Light';
+      }
+    });
+  }
+
+  void _setLightTheme(String themeId) {
+    context.setPrismLightTheme(themeId);
+    setState(() {
+      _selectedLightThemeId = themeId;
+      _editingLight = true;
+    });
+  }
+
+  void _setDarkTheme(String themeId) {
+    context.setPrismDarkTheme(themeId);
+    setState(() {
+      _selectedDarkThemeId = themeId;
+      _editingLight = false;
+    });
+  }
+
+  void _setAccent(Color color) {
+    if (_editingLight) {
+      context.setPrismLightAccent(color);
+      setState(() => _selectedLightAccent = color);
+    } else {
+      context.setPrismDarkAccent(color);
+      setState(() => _selectedDarkAccent = color);
+    }
+    final hex = color.toARGB32().toRadixString(16).padLeft(8, '0').substring(2);
+    analytics.track(AccentChangedEvent(color: hex));
   }
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        actions: <Widget>[
-          IconButton(
-            icon: Icon(JamIcons.check, size: 30, color: Theme.of(context).colorScheme.secondary),
-            onPressed: () {
-              final Color resolvedAccentColor = selectedAccentColor ?? const Color(0xFFE57697);
-              final int accentColor = resolvedAccentColor.toARGB32();
-              final String hexString = accentColor.toRadixString(16).padLeft(8, '0').substring(2);
-              _settingsLocal.set("systemOverlayColor", accentColor);
-              analytics.track(AccentChangedEvent(color: hexString));
-              Navigator.pop(context);
-            },
-          ),
-        ],
-        elevation: 0,
-        title: Row(
-          children: [
-            Text(
-              "Theme Manager",
-              style: Theme.of(context).textTheme.displaySmall!.copyWith(color: Theme.of(context).colorScheme.secondary),
-            ),
-            Container(
-              margin: const EdgeInsets.only(left: 3, bottom: 5),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.error,
-                borderRadius: BorderRadius.circular(500),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 1.0, horizontal: 4),
-                child: Text("BETA", style: TextStyle(fontSize: 9, color: Theme.of(context).colorScheme.secondary)),
-              ),
-            ),
-          ],
-        ),
-      ),
       backgroundColor: Theme.of(context).primaryColor,
-      body: Column(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: <Widget>[
-          ListTile(
-            onTap: () {
-              showModalBottomSheet(
-                isScrollControlled: true,
-                context: context,
-                builder: (context) => _PreferencePanel(
-                  selectedValue: context.prismThemeMode(listen: false) == ThemeMode.light
-                      ? 1
-                      : context.prismThemeMode(listen: false) == ThemeMode.dark
-                      ? 2
-                      : 0,
-                  func: (bool value) {
-                    setState(() {
-                      changingLight = value;
-                    });
-                  },
-                ),
-              );
-            },
-            leading: const Icon(JamIcons.brightness),
-            title: Text(
-              "Theme Preference",
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.secondary,
-                fontWeight: FontWeight.w500,
-                fontFamily: "Proxima Nova",
-              ),
-            ),
-            subtitle: Text(context.prismModeAbs(), style: const TextStyle(fontSize: 12)),
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Theme.of(context).primaryColor,
+        surfaceTintColor: Colors.transparent,
+        leading: IconButton(
+          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+          icon: const Icon(JamIcons.chevron_left),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text('Appearance', style: Theme.of(context).textTheme.headlineSmall),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        children: [
+          _PreviewPanel(theme: _previewTheme, accent: _currentAccent, editingLight: _editingLight),
+          const SizedBox(height: 20),
+          _SectionTitle(title: 'Mode', trailing: _selectedMode),
+          const SizedBox(height: 10),
+          _ModeControl(selectedMode: _selectedMode, onChanged: _setMode),
+          const SizedBox(height: 24),
+          _SectionTitle(title: 'Light Theme'),
+          const SizedBox(height: 10),
+          _ThemeStrip(
+            themeIds: prismLightThemes.keys.toList(growable: false),
+            selectedThemeId: _selectedLightThemeId,
+            onSelected: _setLightTheme,
           ),
-          Center(
-            child: Container(
-              decoration: BoxDecoration(
-                color: Theme.of(context).primaryColor,
-                borderRadius: BorderRadius.circular(17),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withValues(alpha: .15), blurRadius: 38, offset: const Offset(0, 19)),
-                  BoxShadow(color: Colors.black.withValues(alpha: .10), blurRadius: 12, offset: const Offset(0, 15)),
-                ],
-              ),
-              width: context.prismThemeMode() == ThemeMode.system
-                  ? MediaQuery.of(context).size.height * 0.35 * 0.4993924666
-                  : MediaQuery.of(context).size.height * 0.45 * 0.4993924666,
-              height: context.prismThemeMode() == ThemeMode.system
-                  ? MediaQuery.of(context).size.height * 0.35
-                  : MediaQuery.of(context).size.height * 0.45,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(17),
-                child: changingLight
-                    ? SvgPicture.string(
-                        themePicture
-                            .replaceAll(
-                              "181818",
-                              context.prismLightTheme().primaryColor.toARGB32().toRadixString(16).substring(2),
-                            )
-                            .replaceAll("E57697", selectedAccentColor!.toARGB32().toRadixString(16).substring(2))
-                            .replaceAll(
-                              "F0F0F0",
-                              context.prismLightTheme().colorScheme.secondary.toARGB32().toRadixString(16).substring(2),
-                            )
-                            .replaceAll(
-                              "2F2F2F",
-                              context.prismLightTheme().hintColor.toARGB32().toRadixString(16).substring(2),
-                            ),
-                        fit: BoxFit.cover,
-                      )
-                    : SvgPicture.string(
-                        themePicture
-                            .replaceAll(
-                              "181818",
-                              context.prismDarkTheme().primaryColor.toARGB32().toRadixString(16).substring(2),
-                            )
-                            .replaceAll("E57697", selectedDarkAccentColor!.toARGB32().toRadixString(16).substring(2))
-                            .replaceAll(
-                              "F0F0F0",
-                              context.prismDarkTheme().colorScheme.secondary.toARGB32().toRadixString(16).substring(2),
-                            )
-                            .replaceAll(
-                              "2F2F2F",
-                              context.prismDarkTheme().hintColor.toARGB32().toRadixString(16).substring(2),
-                            ),
-                        fit: BoxFit.cover,
-                      ),
-              ),
-            ),
+          const SizedBox(height: 24),
+          _SectionTitle(title: 'Dark Theme'),
+          const SizedBox(height: 10),
+          _ThemeStrip(
+            themeIds: prismDarkThemes.keys.toList(growable: false),
+            selectedThemeId: _selectedDarkThemeId,
+            onSelected: _setDarkTheme,
           ),
-          const Divider(),
-          if (context.prismThemeMode() != ThemeMode.dark)
-            Container(
-              width: MediaQuery.of(context).size.width,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text("Light Themes", style: Theme.of(context).textTheme.headlineMedium),
-            )
-          else
-            Container(),
-          if (context.prismThemeMode() != ThemeMode.dark)
-            SizedBox(
-              width: MediaQuery.of(context).size.width,
-              height: MediaQuery.of(context).size.height * 0.07,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: prismLightThemes.length,
-                padding: const EdgeInsets.fromLTRB(8, 0, 8, 0),
-                itemBuilder: (context, index) {
-                  return Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: MaterialButton(
-                        color: Theme.of(context).hintColor,
-                        padding: EdgeInsets.zero,
-                        onPressed: () {
-                          final themeId = prismLightThemes.keys.elementAt(index);
-                          final accentColor = prismLightThemes[themeId]!.colorScheme.error;
-                          context.setPrismLightTheme(themeId);
-                          logger.d(selectedAccentColor.toString());
-                          setState(() {
-                            changingLight = true;
-                            selectedTheme = index;
-                            selectedAccentColor = accentColor;
-                          });
-                          logger.d(selectedAccentColor.toString());
-                        },
-                        child: Stack(
-                          children: [
-                            Container(
-                              width: MediaQuery.of(context).size.width * 0.3,
-                              height: MediaQuery.of(context).size.height * 0.06,
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.black12),
-                                borderRadius: BorderRadius.circular(10),
-                                color: prismLightThemes[prismLightThemes.keys.toList()[index]]!.hintColor,
-                              ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Padding(
-                                    padding: const EdgeInsets.all(4.0),
-                                    child: Text(
-                                      prismLightThemes.keys.toList()[index].substring(2),
-                                      style: Theme.of(context).textTheme.titleSmall!.copyWith(
-                                        color: prismLightThemes[prismLightThemes.keys.toList()[index]]!
-                                            .colorScheme
-                                            .secondary,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            if (index == selectedTheme)
-                              Container(
-                                width: MediaQuery.of(context).size.width * 0.3,
-                                height: MediaQuery.of(context).size.height * 0.06,
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.5),
-                                  border: Border.all(color: Colors.black45),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [Icon(JamIcons.check, color: Theme.of(context).primaryColor)],
-                                ),
-                              )
-                            else
-                              Container(),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            )
-          else
-            Container(),
-          if (context.prismThemeMode() != ThemeMode.light)
-            Container(
-              width: MediaQuery.of(context).size.width,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text("Dark Themes", style: Theme.of(context).textTheme.headlineMedium),
-            )
-          else
-            Container(),
-          if (context.prismThemeMode() != ThemeMode.light)
-            SizedBox(
-              width: MediaQuery.of(context).size.width,
-              height: MediaQuery.of(context).size.height * 0.07,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: prismDarkThemes.length,
-                padding: const EdgeInsets.fromLTRB(8, 0, 8, 0),
-                itemBuilder: (context, index) {
-                  return Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: MaterialButton(
-                        color: Theme.of(context).hintColor,
-                        padding: EdgeInsets.zero,
-                        onPressed: () {
-                          final themeId = prismDarkThemes.keys.elementAt(index);
-                          final accentColor = prismDarkThemes[themeId]!.colorScheme.error;
-                          context.setPrismDarkTheme(themeId);
-                          logger.d(selectedDarkAccentColor.toString());
-                          setState(() {
-                            changingLight = false;
-                            selectedDarkTheme = index;
-                            selectedDarkAccentColor = accentColor;
-                          });
-                          logger.d(selectedDarkAccentColor.toString());
-                        },
-                        child: Stack(
-                          children: [
-                            Container(
-                              width: MediaQuery.of(context).size.width * 0.3,
-                              height: MediaQuery.of(context).size.height * 0.06,
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.black12),
-                                borderRadius: BorderRadius.circular(10),
-                                color: prismDarkThemes[prismDarkThemes.keys.toList()[index]]!.hintColor,
-                              ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Padding(
-                                    padding: const EdgeInsets.all(4.0),
-                                    child: Text(
-                                      prismDarkThemes.keys.toList()[index].substring(2),
-                                      style: Theme.of(context).textTheme.titleSmall!.copyWith(
-                                        color: prismDarkThemes[prismDarkThemes.keys.toList()[index]]!
-                                            .colorScheme
-                                            .secondary,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            if (index == selectedDarkTheme)
-                              Container(
-                                width: MediaQuery.of(context).size.width * 0.3,
-                                height: MediaQuery.of(context).size.height * 0.06,
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.5),
-                                  border: Border.all(color: Colors.black45),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [Icon(JamIcons.check, color: Theme.of(context).primaryColor)],
-                                ),
-                              )
-                            else
-                              Container(),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            )
-          else
-            Container(),
-          const Divider(),
-          if (context.prismThemeMode() != ThemeMode.dark)
-            Container(
-              width: MediaQuery.of(context).size.width,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text("Light Accent Color", style: Theme.of(context).textTheme.headlineMedium),
-            )
-          else
-            Container(),
-          if (context.prismThemeMode() != ThemeMode.dark)
-            SizedBox(
-              width: MediaQuery.of(context).size.width,
-              height: MediaQuery.of(context).size.height * 0.055,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: accentColors.length,
-                padding: const EdgeInsets.fromLTRB(0, 0, 8, 0),
-                itemBuilder: (context, index) {
-                  return GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        changingLight = true;
-                        selectedAccentColor = accentColors[index];
-                      });
-                      context.setPrismLightAccent(selectedAccentColor);
-                    },
-                    child: Stack(
-                      children: [
-                        Container(
-                          margin: const EdgeInsets.fromLTRB(8, 8, 0, 8),
-                          decoration: BoxDecoration(
-                            border: Border.all(
-                              color: selectedAccentColor == accentColors[index] ? Colors.white : Colors.white38,
-                            ),
-                            color: accentColors[index],
-                            shape: BoxShape.circle,
-                          ),
-                          child: const SizedBox(width: 41, height: 41),
-                        ),
-                        if (selectedAccentColor == accentColors[index])
-                          Container(
-                            margin: const EdgeInsets.fromLTRB(8, 8, 0, 8),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.6),
-                              shape: BoxShape.circle,
-                            ),
-                            child: SizedBox(
-                              width: 41,
-                              height: 41,
-                              child: Icon(JamIcons.check, color: Theme.of(context).primaryColor),
-                            ),
-                          )
-                        else
-                          Container(),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            )
-          else
-            Container(),
-          if (context.prismThemeMode() != ThemeMode.light)
-            Container(
-              width: MediaQuery.of(context).size.width,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text("Dark Accent Color", style: Theme.of(context).textTheme.headlineMedium),
-            )
-          else
-            Container(),
-          if (context.prismThemeMode() != ThemeMode.light)
-            SizedBox(
-              width: MediaQuery.of(context).size.width,
-              height: MediaQuery.of(context).size.height * 0.055,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: accentColors.length,
-                padding: const EdgeInsets.fromLTRB(0, 0, 8, 0),
-                itemBuilder: (context, index) {
-                  return GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        changingLight = false;
-                        selectedDarkAccentColor = accentColors[index];
-                      });
-                      context.setPrismDarkAccent(selectedDarkAccentColor);
-                    },
-                    child: Stack(
-                      children: [
-                        Container(
-                          margin: const EdgeInsets.fromLTRB(8, 8, 0, 8),
-                          decoration: BoxDecoration(
-                            border: Border.all(
-                              color: selectedDarkAccentColor == accentColors[index] ? Colors.white : Colors.white38,
-                            ),
-                            color: accentColors[index],
-                            shape: BoxShape.circle,
-                          ),
-                          child: const SizedBox(width: 41, height: 41),
-                        ),
-                        if (selectedDarkAccentColor == accentColors[index])
-                          Container(
-                            margin: const EdgeInsets.fromLTRB(8, 8, 0, 8),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.6),
-                              shape: BoxShape.circle,
-                            ),
-                            child: SizedBox(
-                              width: 41,
-                              height: 41,
-                              child: Icon(JamIcons.check, color: Theme.of(context).primaryColor),
-                            ),
-                          )
-                        else
-                          Container(),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            )
-          else
-            Container(),
+          const SizedBox(height: 24),
+          _SectionTitle(title: _editingLight ? 'Light Accent' : 'Dark Accent'),
+          const SizedBox(height: 12),
+          _AccentGrid(selected: _currentAccent, onSelected: _setAccent),
+          const SizedBox(height: 20),
+          Text(
+            'Changes apply immediately.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+          ),
         ],
       ),
     );
   }
 }
 
-class _PreferencePanel extends StatefulWidget {
-  final int? selectedValue;
-  final void Function(bool value)? func;
-  const _PreferencePanel({this.selectedValue, this.func});
+class _PreviewPanel extends StatelessWidget {
+  const _PreviewPanel({required this.theme, required this.accent, required this.editingLight});
 
-  @override
-  _PreferencePanelState createState() => _PreferencePanelState();
-}
-
-class _PreferencePanelState extends State<_PreferencePanel> {
-  late int? _selectedValue;
-
-  @override
-  void initState() {
-    _selectedValue = widget.selectedValue;
-    super.initState();
-  }
+  final ThemeData theme;
+  final Color accent;
+  final bool editingLight;
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width * 0.85;
+    final onPrimary = theme.colorScheme.secondary;
     return Container(
-      height: MediaQuery.of(context).size.height / 2 > 400 ? MediaQuery.of(context).size.height / 2 : 400,
+      height: 170,
       decoration: BoxDecoration(
-        color: Theme.of(context).primaryColor,
-        borderRadius: const BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20)),
+        color: theme.primaryColor,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: onPrimary.withValues(alpha: 0.12)),
       ),
+      padding: const EdgeInsets.all(18),
       child: Column(
-        children: <Widget>[
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: Container(
-                  height: 5,
-                  width: 30,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).hintColor,
-                    borderRadius: BorderRadius.circular(500),
-                  ),
-                ),
-              ),
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(editingLight ? 'Light preview' : 'Dark preview', style: theme.textTheme.titleMedium?.copyWith(color: onPrimary)),
+              Container(width: 34, height: 34, decoration: BoxDecoration(color: accent, shape: BoxShape.circle)),
             ],
           ),
           const Spacer(),
-          Text("Theme Preference", style: Theme.of(context).textTheme.displayMedium),
-          const Spacer(flex: 2),
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedValue = 0;
-                    });
-                    Navigator.pop(context);
-                    context.setPrismThemeMode("System");
-                    widget.func!(context.prismModeStyleForWindow(listen: false) == "Light");
-                  },
-                  child: SizedBox(
-                    width: width - 20,
-                    height: 60,
-                    child: Container(
-                      width: width - 14,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        color: _selectedValue != 0
-                            ? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.2)
-                            : Theme.of(context).colorScheme.error.withValues(alpha: 0.2),
-                        border: Border.all(
-                          color: _selectedValue != 0
-                              ? Theme.of(context).colorScheme.secondary
-                              : Theme.of(context).colorScheme.error,
-                          width: 3,
-                        ),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Center(
-                        child: Text(
-                          "System",
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Theme.of(context).colorScheme.secondary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedValue = 1;
-                    });
-                    Navigator.pop(context);
-                    context.setPrismThemeMode("Light");
-                    widget.func!(true);
-                  },
-                  child: SizedBox(
-                    width: width - 20,
-                    height: 60,
-                    child: Container(
-                      width: width - 14,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        color: _selectedValue != 1
-                            ? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.2)
-                            : Theme.of(context).colorScheme.error.withValues(alpha: 0.2),
-                        border: Border.all(
-                          color: _selectedValue != 1
-                              ? Theme.of(context).colorScheme.secondary
-                              : Theme.of(context).colorScheme.error,
-                          width: 3,
-                        ),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Center(
-                        child: Text(
-                          "Light",
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Theme.of(context).colorScheme.secondary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedValue = 2;
-                    });
-                    Navigator.pop(context);
-                    context.setPrismThemeMode("Dark");
-                    widget.func!(false);
-                  },
-                  child: SizedBox(
-                    width: width - 20,
-                    height: 60,
-                    child: Container(
-                      width: width - 14,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        color: _selectedValue != 2
-                            ? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.2)
-                            : Theme.of(context).colorScheme.error.withValues(alpha: 0.2),
-                        border: Border.all(
-                          color: _selectedValue != 2
-                              ? Theme.of(context).colorScheme.secondary
-                              : Theme.of(context).colorScheme.error,
-                          width: 3,
-                        ),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Center(
-                        child: Text(
-                          "Dark",
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Theme.of(context).colorScheme.secondary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+          Row(
+            children: [
+              Expanded(child: _PreviewTile(color: accent, height: 64)),
+              const SizedBox(width: 10),
+              Expanded(child: _PreviewTile(color: onPrimary.withValues(alpha: 0.22), height: 64)),
+              const SizedBox(width: 10),
+              Expanded(child: _PreviewTile(color: onPrimary.withValues(alpha: 0.12), height: 64)),
             ],
           ),
-          const Spacer(flex: 2),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(0, 0, 0, 32),
-            child: SizedBox(
-              width: MediaQuery.of(context).size.width * 0.8,
-              child: Text(
-                "Select your preferred theme mode. System mode automatically switches between light and dark depending on your device mode.",
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.secondary),
-              ),
-            ),
-          ),
-          const Spacer(),
         ],
+      ),
+    );
+  }
+}
+
+class _PreviewTile extends StatelessWidget {
+  const _PreviewTile({required this.color, required this.height});
+
+  final Color color;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(height: height, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(12)));
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle({required this.title, this.trailing});
+
+  final String title;
+  final String? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+        if (trailing != null) Text(trailing!, style: Theme.of(context).textTheme.bodySmall),
+      ],
+    );
+  }
+}
+
+class _ModeControl extends StatelessWidget {
+  const _ModeControl({required this.selectedMode, required this.onChanged});
+
+  final String selectedMode;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SegmentedButton<String>(
+      segments: const [
+        ButtonSegment(value: 'System', label: Text('System'), icon: Icon(Icons.brightness_auto_outlined)),
+        ButtonSegment(value: 'Light', label: Text('Light'), icon: Icon(Icons.light_mode_outlined)),
+        ButtonSegment(value: 'Dark', label: Text('Dark'), icon: Icon(Icons.dark_mode_outlined)),
+      ],
+      selected: {selectedMode},
+      onSelectionChanged: (value) => onChanged(value.first),
+    );
+  }
+}
+
+class _ThemeStrip extends StatelessWidget {
+  const _ThemeStrip({required this.themeIds, required this.selectedThemeId, required this.onSelected});
+
+  final List<String> themeIds;
+  final String selectedThemeId;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 48,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: themeIds.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final id = themeIds[index];
+          final selected = id == selectedThemeId;
+          return ChoiceChip(
+            label: Text(id.substring(2), maxLines: 1, overflow: TextOverflow.ellipsis),
+            selected: selected,
+            onSelected: (_) => onSelected(id),
+            avatar: selected ? const Icon(Icons.check, size: 16) : null,
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _AccentGrid extends StatelessWidget {
+  const _AccentGrid({required this.selected, required this.onSelected});
+
+  final Color selected;
+  final ValueChanged<Color> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: [
+        for (final color in accentColors)
+          _AccentDot(color: color, selected: color.toARGB32() == selected.toARGB32(), onTap: () => onSelected(color)),
+      ],
+    );
+  }
+}
+
+class _AccentDot extends StatelessWidget {
+  const _AccentDot({required this.color, required this.selected, required this.onTap});
+
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      customBorder: const CircleBorder(),
+      onTap: onTap,
+      child: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          border: Border.all(color: selected ? Theme.of(context).colorScheme.secondary : Colors.white54, width: selected ? 3 : 1),
+        ),
+        child: selected ? Icon(Icons.check, color: color.computeLuminance() > 0.55 ? Colors.black : Colors.white, size: 18) : null,
       ),
     );
   }

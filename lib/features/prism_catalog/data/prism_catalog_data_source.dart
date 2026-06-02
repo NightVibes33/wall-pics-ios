@@ -58,10 +58,10 @@ class PrismCatalogDataSource {
   };
   static const Map<String, String> _contentTypeLabels = <String, String>{
     regularContentType: 'For You',
-    liveContentType: 'Live Wallpapers',
-    matchingContentType: 'Matching Wallpapers',
-    doubleContentType: 'Double Wallpapers',
-    parallaxContentType: '3D Spatial',
+    liveContentType: 'Live Photos',
+    matchingContentType: 'Matching Sets',
+    doubleContentType: 'Wallpaper Pairs',
+    parallaxContentType: 'Spatial Wallpapers',
     profilePictureContentType: 'Profile Pictures',
     chargingAnimationContentType: 'Charging Animations',
     diyTemplateContentType: 'DIY Templates',
@@ -170,7 +170,12 @@ class PrismCatalogDataSource {
       final name = _string(row['name']).trim();
       final slug = _string(row['slug']).trim();
       final contentType = _contentTypeForCategory(row);
-      if (name.isEmpty || slug.isEmpty || !_catalogPagePrefixesByContentType.containsKey(contentType)) {
+      if (name.isEmpty ||
+          slug.isEmpty ||
+          !_catalogPagePrefixesByContentType.containsKey(contentType) ||
+          _isBlockedCatalogLabel(name) ||
+          _isBlockedCatalogLabel(slug) ||
+          _isBlockedCatalogLabel(_string(row['parent_slug']))) {
         continue;
       }
       final key = '$contentType:$slug';
@@ -203,7 +208,7 @@ class PrismCatalogDataSource {
         return;
       }
       final trimmed = value.trim();
-      if (trimmed.isEmpty || !seen.add(trimmed.toLowerCase())) {
+      if (trimmed.isEmpty || _isBlockedCatalogLabel(trimmed) || !seen.add(trimmed.toLowerCase())) {
         return;
       }
       searches.add(trimmed);
@@ -262,7 +267,7 @@ class PrismCatalogDataSource {
 
   Future<CategoryFeedPage> search({required String query, required bool refresh}) async {
     final normalizedQuery = _normalizeForSearch(query);
-    if (normalizedQuery.isEmpty) {
+    if (normalizedQuery.isEmpty || _isBlockedCatalogSearch(normalizedQuery)) {
       return const CategoryFeedPage(items: <FeedItemEntity>[], hasMore: false, nextCursor: null);
     }
 
@@ -687,7 +692,12 @@ class PrismCatalogDataSource {
       final name = _string(row['name']).trim();
       final slug = _string(row['slug']).trim();
       final contentType = _contentTypeForCategory(row);
-      if (name.isEmpty || slug.isEmpty || !_catalogPagePrefixesByContentType.containsKey(contentType)) {
+      if (name.isEmpty ||
+          slug.isEmpty ||
+          !_catalogPagePrefixesByContentType.containsKey(contentType) ||
+          _isBlockedCatalogLabel(name) ||
+          _isBlockedCatalogLabel(slug) ||
+          _isBlockedCatalogLabel(_string(row['parent_slug']))) {
         continue;
       }
       final score = _scoreSearchFields(
@@ -946,6 +956,7 @@ class _PrismItem {
     required this.mediaAssetUrls,
     required this.pairedWallpapers,
     required this.pairedPreviewUrls,
+    required this.pairedDownloadUrls,
     required this.authorName,
     required this.authorId,
     required this.createdAt,
@@ -973,6 +984,7 @@ class _PrismItem {
   final List<String> mediaAssetUrls;
   final List<Map<String, dynamic>> pairedWallpapers;
   final List<String> pairedPreviewUrls;
+  final List<String> pairedDownloadUrls;
   final String? authorName;
   final String? authorId;
   final DateTime? createdAt;
@@ -997,10 +1009,31 @@ class _PrismItem {
     final parallaxFile = url(json['parallax_file']);
     final catalogDownload = url(json['download_url']);
     final pairedWallpapers = _maps(json['paired_wallpapers']);
-    final pairedPreviewUrls = _strings(json['paired_preview_urls'])
+    final pairedDownloadUrls = pairedWallpapers
+        .map((wallpaper) => _firstString(<Object?>[
+              url(wallpaper['download_url']),
+              url(wallpaper['wallpaper']),
+              url(wallpaper['image']),
+              url(wallpaper['full_url']),
+              url(wallpaper['url']),
+            ]))
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
+    final explicitPairedPreviewUrls = _strings(json['paired_preview_urls'])
         .map((value) => url(value))
         .where((value) => value.isNotEmpty)
         .toList(growable: false);
+    final derivedPairedPreviewUrls = pairedWallpapers
+        .map((wallpaper) => _firstString(<Object?>[
+              url(wallpaper['preview_image']),
+              url(wallpaper['thumbnail']),
+              url(wallpaper['static_thumbnail']),
+              url(wallpaper['image']),
+              url(wallpaper['wallpaper']),
+            ]))
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
+    final pairedPreviewUrls = explicitPairedPreviewUrls.isNotEmpty ? explicitPairedPreviewUrls : derivedPairedPreviewUrls;
     final mediaAssetUrls = _strings(json['media_assets'])
         .map((value) => url(value))
         .where((value) => value.isNotEmpty)
@@ -1010,7 +1043,6 @@ class _PrismItem {
       url(json['video_original']),
       url(json['video']),
       url(json['lq_video']),
-      url(json['android_video']),
     ]);
     final firstFrameThumbnail = url(json['first_frame_thumbnail']);
     final thumbnail = url(json['thumbnail']);
@@ -1064,6 +1096,9 @@ class _PrismItem {
       height: _int(json['height']),
       downloadUrl: displayOnlyContent
           ? _firstString(<Object?>[preview, wallpaper, image, thumb])
+          : (contentType == PrismCatalogDataSource.matchingContentType ||
+                contentType == PrismCatalogDataSource.doubleContentType)
+          ? _firstString(<Object?>[catalogDownload, ...pairedDownloadUrls, wallpaper, image])
           : contentType == PrismCatalogDataSource.liveContentType
           ? _firstString(<Object?>[catalogDownload, video, wallpaper])
           : _firstString(<Object?>[catalogDownload, wallpaper, image, video]),
@@ -1077,6 +1112,7 @@ class _PrismItem {
       mediaAssetUrls: mediaAssetUrls,
       pairedWallpapers: pairedWallpapers,
       pairedPreviewUrls: pairedPreviewUrls,
+      pairedDownloadUrls: pairedDownloadUrls,
       authorName: _firstString(<Object?>[author['name'], json['author']]).trim().isEmpty
           ? null
           : _firstString(<Object?>[author['name'], json['author']]),
@@ -1126,7 +1162,8 @@ class _PrismItem {
         'catalogMediaAssetUrls': mediaAssetUrls,
         'catalogPairedWallpapers': pairedWallpapers,
         'catalogPairedPreviewUrls': pairedPreviewUrls,
-        'catalogIsPremium': isPremium,
+        'catalogPairedDownloadUrls': pairedDownloadUrls,
+        'catalogIsPremium': false,
       },
       remoteStoreDocumentId: 'prism-$id',
     );
@@ -1179,6 +1216,30 @@ String _resolveCatalogUrl(Object? value, {required String sourceBase}) {
   return baseUri.resolve(raw).toString();
 }
 
+const Set<String> _blockedCatalogTerms = <String>{
+  'desktop',
+  'macbook',
+  'computer',
+  'monitor',
+  'tablet',
+  'ipad',
+  'widescreen',
+};
+
+bool _isBlockedCatalogLabel(String value) {
+  final normalized = _normalizeForSearch(value);
+  if (normalized.isEmpty) {
+    return false;
+  }
+  final compact = normalized.replaceAll(' ', '');
+  return _blockedCatalogTerms.any((term) => normalized.split(' ').contains(term) || compact == term);
+}
+
+bool _isBlockedCatalogSearch(String normalizedQuery) {
+  final tokens = normalizedQuery.split(' ').where((token) => token.isNotEmpty).toSet();
+  return tokens.any(_blockedCatalogTerms.contains);
+}
+
 String _normalizeForSearch(String value) {
   return value
       .toLowerCase()
@@ -1226,6 +1287,11 @@ int _scoreSearchFields({
     ...normalizedCategorySlugs,
     ...normalizedTags,
   ].where((value) => value.isNotEmpty).toList(growable: false);
+  if (_isBlockedCatalogLabel(name) || _isBlockedCatalogLabel(slug)) {
+    return 0;
+  }
+  final compactQuery = normalizedQuery.replaceAll(' ', '');
+  final compactFields = fields.map((value) => value.replaceAll(' ', '')).toList(growable: false);
   if (normalizedName == normalizedQuery || normalizedSlug == normalizedQuery) {
     return 10000;
   }
@@ -1244,11 +1310,16 @@ int _scoreSearchFields({
       normalizedTags.any((value) => value.startsWith(normalizedQuery))) {
     return 6000;
   }
-  if (normalizedName.contains(normalizedQuery) || normalizedSlug.contains(normalizedQuery)) {
+  if (normalizedName.contains(normalizedQuery) ||
+      normalizedSlug.contains(normalizedQuery) ||
+      compactFields.any((value) => compactQuery.isNotEmpty && value.contains(compactQuery))) {
     return 5000;
   }
   if (fields.any((value) => value.contains(normalizedQuery))) {
     return 4000;
+  }
+  if (tokens.length > 1 && fields.any((value) => tokens.every(value.contains))) {
+    return 3000;
   }
 
   return 0;

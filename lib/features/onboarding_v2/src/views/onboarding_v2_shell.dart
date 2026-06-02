@@ -148,15 +148,11 @@ class _OnboardingV2ShellState extends State<OnboardingV2Shell> {
   }
 
   void _handleCtaTap(OnboardingV2Step step) {
-    switch (step) {
-      case OnboardingV2Step.auth:
-        _handleGoogleSignIn();
-      case OnboardingV2Step.interests:
-      case OnboardingV2Step.starterPack:
-      case OnboardingV2Step.aiGenerate:
-      case OnboardingV2Step.firstWallpaper:
-        _bloc.add(const OnboardingV2Event.firstWallpaperStepContinued());
+    if (step == OnboardingV2Step.auth) {
+      _handleGoogleSignIn();
+      return;
     }
+    _bloc.add(const OnboardingV2Event.authCompleted());
   }
 
   Widget _pageFor(OnboardingV2Step step) {
@@ -452,7 +448,7 @@ class _Headline extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = _headlineText(step);
     final style = step == OnboardingV2Step.auth
-        ? OnboardingTypography.headline.copyWith(fontSize: 35, height: 1.1)
+        ? OnboardingTypography.headline.copyWith(fontSize: 32, height: 1.08)
         : step == OnboardingV2Step.firstWallpaper
         ? OnboardingTypography.headline.copyWith(color: wallpaperColor)
         : OnboardingTypography.headline;
@@ -597,7 +593,7 @@ class _AuthButtons extends StatelessWidget {
         SizedBox(
           height: buttonHeight,
           child: OnboardingPrimaryButton(
-            label: 'continue with Google',
+            label: 'Continue with Google',
             onPressed: onGoogleTap,
             enabled: enabled && !anyLoading,
             loading: loadingProvider == _AuthProvider.google,
@@ -655,7 +651,7 @@ class _AppleSignInButton extends StatelessWidget {
                       children: [
                         const Icon(Icons.apple, color: Colors.white, size: 20),
                         const SizedBox(width: 8),
-                        Text('continue with Apple', style: OnboardingTypography.cta.copyWith(color: Colors.white)),
+                        Text('Continue with Apple', style: OnboardingTypography.cta.copyWith(color: Colors.white)),
                       ],
                     ),
             ),

@@ -540,42 +540,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _sendBugReport() async {
-    if (!Platform.isAndroid) return;
-    final androidInfo = await DeviceInfoPlugin().androidInfo;
-    final release = androidInfo.version.release;
-    final sdkInt = androidInfo.version.sdkInt;
-    final manufacturer = androidInfo.manufacturer;
-    final model = androidInfo.model;
+    final deviceBody = await _bugReportDeviceBody();
     final String zipPath = await zipLogs();
     if (zipPath.startsWith(logExportDisabledMarker)) {
       toasts.error('Log export is temporarily disabled.');
       return;
     }
-    final String encryptedZipKey = zipPath.split('::::').first;
-    final String encryptedZipPath = zipPath.split('::::').last;
-    final deviceBody =
-        '----x-x-x----<br>Device info -<br><br>Android version: Android $release<br>SDK Number: SDK $sdkInt<br>Device Manufacturer: $manufacturer<br>Device Model: $model<br>----x-x-x----<br><br>Enter the bug/issue below -<br><br>';
-    final MailOptions mailOptions = MailOptions(
-      body: deviceBody,
+    final parts = zipPath.split('::::');
+    final encryptedZipKey = parts.length > 1 ? parts.first : 'logs';
+    final encryptedZipPath = parts.length > 1 ? parts.last : zipPath;
+    final mailOptions = MailOptions(
+      body: '$deviceBody<br><br>Enter the bug/issue below -<br><br>',
       subject: '[BUG REPORT::PRISM] - $encryptedZipKey',
       recipients: ['nightvibes33@users.noreply.github.com'],
       isHTML: true,
       attachments: [encryptedZipPath],
-      appSchema: 'com.google.android.gm',
     );
-    final MailerResponse response = await FlutterMailer.send(mailOptions);
-    if (response != MailerResponse.android) {
-      final MailOptions fallback = MailOptions(
-        body: deviceBody,
-        subject: '[BUG REPORT::PRISM]',
-        recipients: ['nightvibes33@users.noreply.github.com'],
-        isHTML: true,
-        attachments: [zipPath],
-      );
-      await FlutterMailer.send(fallback);
-    } else {
-      toasts.codeSend('Bug report sent!');
+    await FlutterMailer.send(mailOptions);
+    toasts.codeSend('Bug report opened.');
+  }
+
+  Future<String> _bugReportDeviceBody() async {
+    try {
+      if (Platform.isIOS) {
+        final info = await DeviceInfoPlugin().iosInfo;
+        return '----x-x-x----<br>Device info -<br><br>iOS ${info.systemVersion}<br>Device: ${info.utsname.machine}<br>Name: ${info.name}<br>----x-x-x----';
+      }
+    } catch (_) {
+      // Device info is helpful but should not block report creation.
     }
+    return '----x-x-x----<br>Device info unavailable<br>----x-x-x----';
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────

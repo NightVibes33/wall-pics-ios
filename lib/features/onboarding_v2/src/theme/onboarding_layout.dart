@@ -8,7 +8,7 @@ class OnboardingLayout {
   static const double ctaY = 721;
   static const double ctaWidth = 329;
   static const double ctaHeight = 64;
-  static const double authCtaY = 655;
+  static const double authCtaY = 676;
   static const double authCtaHeight = 56;
   static const double authCtaGap = 10;
 
@@ -17,11 +17,11 @@ class OnboardingLayout {
   static const double welcomeLogoWidth = 50;
 
   static const double welcomeHeadlineX = 84;
-  static const double welcomeHeadlineY = 398;
+  static const double welcomeHeadlineY = 352;
   static const double welcomeHeadlineWidth = 227;
 
   static const double welcomeBodyX = 53;
-  static const double welcomeBodyY = 592;
+  static const double welcomeBodyY = 558;
   static const double welcomeBodyWidth = 288;
 
   static const double legalY = 811;
@@ -58,7 +58,7 @@ class OnboardingLayout {
   static const double creatorHeight = 164;
   static const double creatorGap = 12;
 
-  static const double helperY = 811;
+  static const double helperY = 808;
   static const double helperStep2X = 73;
   static const double helperStep2Width = 246;
   static const double helperStep3X = 79;

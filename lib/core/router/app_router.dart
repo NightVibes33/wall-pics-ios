@@ -19,7 +19,6 @@ import 'package:Prism/features/palette/views/pages/download_screen.dart';
 import 'package:Prism/features/palette/views/pages/download_wallpaper_screen.dart';
 import 'package:Prism/features/palette/views/pages/wallpaper_detail_screen.dart';
 import 'package:Prism/features/palette/views/pages/wallpaper_filter_screen.dart';
-import 'package:Prism/features/quick_tiles/views/quick_tile_settings_screen.dart';
 import 'package:Prism/features/session/views/pages/about_screen.dart';
 import 'package:Prism/features/session/views/pages/settings_screen.dart';
 import 'package:Prism/features/startup/views/pages/splash_widget.dart';
@@ -73,7 +72,6 @@ class AppRouter extends RootStackRouter {
     AutoRoute(path: '/collection-view', page: CollectionViewRoute.page),
     AutoRoute(path: '/admin-remote-store-telemetry', page: RemoteStoreTelemetryRoute.page, guards: [_adminGuard]),
     AutoRoute(path: '/debug-panel', page: DebugPanelRoute.page, guards: [_adminGuard]),
-    AutoRoute(path: '/quick-tile-settings', page: QuickTileSettingsRoute.page),
     AutoRoute(path: '/not-found', page: NotFoundRoute.page),
     RedirectRoute(path: '*', redirectTo: '/not-found'),
   ];

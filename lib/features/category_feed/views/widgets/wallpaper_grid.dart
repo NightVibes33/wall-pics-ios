@@ -191,7 +191,7 @@ class _WallpaperGridState extends State<WallpaperGrid> {
                 );
               },
             );
-            if (scrollInfo.metrics.pixels == scrollInfo.metrics.maxScrollExtent) {
+            if (scrollInfo.metrics.pixels >= scrollInfo.metrics.maxScrollExtent - 320) {
               unawaited(_triggerSeeMore(hasMore: state.hasMore, currentItemCount: subWalls.length));
             }
             return false;
@@ -199,7 +199,7 @@ class _WallpaperGridState extends State<WallpaperGrid> {
           child: GridView.builder(
             physics: const ScrollPhysics(),
             padding: EdgeInsets.zero,
-            itemCount: showSkeletonTiles ? 20 : subWalls.length,
+            itemCount: showSkeletonTiles ? 20 : subWalls.length + (state.hasMore ? 1 : 0),
             shrinkWrap: true,
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: MediaQuery.of(context).orientation == Orientation.portrait ? 3 : 5,
@@ -218,8 +218,7 @@ class _WallpaperGridState extends State<WallpaperGrid> {
                   ),
                 );
               }
-              final int itemIndex = index;
-              if (itemIndex == subWalls.length - 1) {
+              if (index >= subWalls.length) {
                 return SeeMoreButton(
                   seeMoreLoader: seeMoreLoader,
                   func: () {
@@ -236,6 +235,7 @@ class _WallpaperGridState extends State<WallpaperGrid> {
                   },
                 );
               }
+              final int itemIndex = index;
               final PrismFeedItem item = subWalls[itemIndex];
               return WallpaperTile(item: item, index: itemIndex);
             },

@@ -84,7 +84,15 @@ extension CategoryFeedBlocAdapterX on BuildContext {
       bloc.add(CategoryFeedEvent.categorySelected(category: category));
     } else {
       final current = bloc.state.selectedCategory;
-      if (current == null || current.name != category.name) {
+      final sameCatalogCategory = current != null &&
+          (current.catalogSlug ?? '').isNotEmpty &&
+          (current.catalogContentType ?? '').isNotEmpty &&
+          current.catalogSlug == category.catalogSlug &&
+          current.catalogContentType == category.catalogContentType;
+      final sameLegacyCategory = current != null &&
+          (current.catalogSlug == null || current.catalogSlug!.isEmpty) &&
+          current.name == category.name;
+      if (!sameCatalogCategory && !sameLegacyCategory) {
         bloc.add(CategoryFeedEvent.categorySelected(category: category));
       } else {
         bloc.add(const CategoryFeedEvent.fetchMoreRequested());

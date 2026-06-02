@@ -805,22 +805,6 @@ class OnboardingV2ShellRoute extends PageRouteInfo<void> {
 }
 
 /// generated route for
-/// [QuickTileSettingsScreen]
-class QuickTileSettingsRoute extends PageRouteInfo<void> {
-  const QuickTileSettingsRoute({List<PageRouteInfo>? children})
-    : super(QuickTileSettingsRoute.name, initialChildren: children);
-
-  static const String name = 'QuickTileSettingsRoute';
-
-  static PageInfo page = PageInfo(
-    name,
-    builder: (data) {
-      return const QuickTileSettingsScreen();
-    },
-  );
-}
-
-/// generated route for
 /// [SearchScreen]
 class SearchRoute extends PageRouteInfo<void> {
   const SearchRoute({List<PageRouteInfo>? children})
