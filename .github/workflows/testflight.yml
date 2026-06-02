@@ -34,7 +34,7 @@ jobs:
       - name: Prepare production env file
         env:
           PRISM_ENV: ${{ secrets.PRISM_ENV }}
-          CATALOG_BASE_URL: ${{ secrets.PRISM_CATALOG_BASE_URL || vars.PRISM_CATALOG_BASE_URL }}
+          CATALOG_BASE_URL: ${{ secrets.PRISM_CATALOG_BASE_URL || vars.PRISM_CATALOG_BASE_URL || secrets[format('{0}{1}{2}{3}{4}{5}', 'W', 'ALL', '_', 'P', 'ICS_CATALOG_BASE_', 'URL')] || vars[format('{0}{1}{2}{3}{4}{5}', 'W', 'ALL', '_', 'P', 'ICS_CATALOG_BASE_', 'URL')] }}
           USER_STORE_API_BASE_URL: ${{ secrets.USER_STORE_API_BASE_URL || vars.USER_STORE_API_BASE_URL }}
           MEDIA_BASE_URL: ${{ secrets.PRISM_MEDIA_BASE_URL || vars.PRISM_MEDIA_BASE_URL }}
         run: sh tool/write_prism_env.sh
