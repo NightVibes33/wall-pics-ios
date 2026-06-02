@@ -343,6 +343,23 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
         _isPrismContentType(entity, PrismCatalogDataSource.liveDiyTemplateContentType);
   }
 
+  bool _isPrismMatchingSet(WallpaperDetailEntity entity) {
+    return _isPrismContentType(entity, PrismCatalogDataSource.matchingContentType) ||
+        _isPrismContentType(entity, PrismCatalogDataSource.doubleContentType);
+  }
+
+  List<String> _matchingDownloadUrlsForEntity(WallpaperDetailEntity entity) {
+    if (!_isPrismMatchingSet(entity)) return const <String>[];
+    return _catalogPairedImageUrlsForEntity(entity);
+  }
+
+  String _matchingDownloadLabel(int index, int count) {
+    if (count == 2) {
+      return index == 0 ? 'Left' : 'Right';
+    }
+    return 'Side ${index + 1}';
+  }
+
   String _prismMetadataValue(WallpaperDetailEntity entity, String key) {
     return entity.when(
       prism: (wallpaper) => wallpaper.aiMetadata?[key]?.toString().trim() ?? '',
@@ -982,6 +999,11 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
       );
     }
 
+    final matchingDownloadUrls = _matchingDownloadUrlsForEntity(entity);
+    if (matchingDownloadUrls.length >= 2) {
+      return _buildMatchingActionButtons(context, state, matchingDownloadUrls);
+    }
+
     final liveStillUrl = isLivePhoto ? _catalogLiveStillUrl(entity) : null;
     final downloadUrl = entity.fullUrl;
     final setWallpaperUrl =
@@ -1045,6 +1067,38 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: _sheetHPad),
         child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: actions),
+      ),
+    );
+  }
+
+  Widget _buildMatchingActionButtons(BuildContext context, WallpaperDetailLoaded state, List<String> matchingUrls) {
+    final entity = state.entity;
+    final sideUrls = matchingUrls.take(4).toList(growable: false);
+    final actions = <Widget>[
+      for (var index = 0; index < sideUrls.length; index++)
+        _SheetActionTapScale(
+          child: _MatchingSideDownloadButton(
+            label: _matchingDownloadLabel(index, sideUrls.length),
+            url: sideUrls[index],
+            sourceContext: _getSourceContext(state),
+          ),
+        ),
+      _SheetActionTapScale(child: FavouriteWallpaperButton(wall: _toFavouriteWall(entity), trash: false)),
+      _SheetActionTapScale(
+        child: ShareButton(id: entity.id, source: entity.source, url: sideUrls.first, thumbUrl: entity.thumbnailUrl),
+      ),
+    ];
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: _sheetHPad),
+        child: Wrap(
+          alignment: WrapAlignment.spaceEvenly,
+          crossAxisAlignment: WrapCrossAlignment.end,
+          spacing: 18,
+          runSpacing: 12,
+          children: actions,
+        ),
       ),
     );
   }
@@ -1158,7 +1212,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
                         child: ClockOverlay(
                           colorChanged: state.colorChanged,
                           accent: state.accent,
-                          link: entity.fullUrl,
+                          link: _catalogDisplayImageUrl(entity),
                           file: false,
                         ),
                       );
@@ -1202,28 +1256,33 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
 
     Widget imageLayer;
     if (pairedImageUrls.length >= 2) {
+      final sides = pairedImageUrls.take(2).toList(growable: false);
+      Widget pairedSide(String url) {
+        return CachedNetworkImage(
+          imageUrl: url,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          imageBuilder: (context, imageProvider) {
+            onWallpaperDisplayReady?.call();
+            return SizedBox.expand(child: Image(image: imageProvider, fit: BoxFit.cover));
+          },
+          placeholder: (context, url) => Container(color: Theme.of(context).primaryColor),
+          errorWidget: (context, url, error) {
+            onWallpaperDisplayReady?.call();
+            return Center(
+              child: Icon(JamIcons.close_circle_f, color: _wallpaperErrorIconColor(context, paletteLoading, state)),
+            );
+          },
+        );
+      }
+
       imageLayer = Row(
-        children: pairedImageUrls.take(2).map((url) {
-          return Expanded(
-            child: CachedNetworkImage(
-              imageUrl: url,
-              fit: BoxFit.cover,
-              width: double.infinity,
-              height: double.infinity,
-              imageBuilder: (context, imageProvider) {
-                onWallpaperDisplayReady?.call();
-                return SizedBox.expand(child: Image(image: imageProvider, fit: BoxFit.cover));
-              },
-              placeholder: (context, url) => Container(color: Theme.of(context).primaryColor),
-              errorWidget: (context, url, error) {
-                onWallpaperDisplayReady?.call();
-                return Center(
-                  child: Icon(JamIcons.close_circle_f, color: _wallpaperErrorIconColor(context, paletteLoading, state)),
-                );
-              },
-            ),
-          );
-        }).toList(growable: false),
+        children: <Widget>[
+          Expanded(child: pairedSide(sides[0])),
+          const SizedBox(width: 3, child: ColoredBox(color: Colors.black)),
+          Expanded(child: pairedSide(sides[1])),
+        ],
       );
     } else if (useProgressive) {
       imageLayer = Stack(
@@ -1351,6 +1410,40 @@ class _SheetActionTapScale extends StatefulWidget {
 
   @override
   State<_SheetActionTapScale> createState() => _SheetActionTapScaleState();
+}
+
+class _MatchingSideDownloadButton extends StatelessWidget {
+  const _MatchingSideDownloadButton({required this.label, required this.url, required this.sourceContext});
+
+  final String label;
+  final String url;
+  final String sourceContext;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Download $label matching wallpaper',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          DownloadButton(colorChanged: false, link: url, sourceContext: sourceContext),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.secondary,
+              fontFamily: 'Satoshi',
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _ChargingAnimationSelectButton extends StatelessWidget {

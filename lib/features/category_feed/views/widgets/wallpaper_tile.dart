@@ -106,17 +106,27 @@ class WallpaperTile extends StatelessWidget {
     required int cacheHeight,
   }) {
     final halfCacheWidth = (cacheWidth / 2).ceil();
+    final sides = urls.take(2).toList(growable: false);
     return Row(
-      children: urls.take(2).map((url) {
-        return Expanded(
+      children: <Widget>[
+        Expanded(
           child: _cachedTileImage(
             context,
-            url,
+            sides[0],
             cacheWidth: halfCacheWidth,
             cacheHeight: cacheHeight,
           ),
-        );
-      }).toList(growable: false),
+        ),
+        const SizedBox(width: 2, child: ColoredBox(color: Colors.black)),
+        Expanded(
+          child: _cachedTileImage(
+            context,
+            sides[1],
+            cacheWidth: halfCacheWidth,
+            cacheHeight: cacheHeight,
+          ),
+        ),
+      ],
     );
   }
 
