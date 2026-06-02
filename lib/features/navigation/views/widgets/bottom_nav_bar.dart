@@ -37,7 +37,7 @@ class _BottomBarState extends State<BottomBar> {
       iconWidth: 32,
       iconHeight: 32,
       barDecoration: BoxDecoration(color: Colors.transparent, borderRadius: BorderRadius.circular(500)),
-      child: const Align(heightFactor: 1.0, child: IntrinsicWidth(child: PrismBottomNav())),
+      child: const Align(heightFactor: 1.0, child: PrismBottomNav()),
       body: (context, scrollController) => _BottomBarScrollVisibility(
         controller: _bottomBarController,
         scrollController: scrollController,
@@ -130,18 +130,25 @@ class _BottomBarScrollVisibilityState extends State<_BottomBarScrollVisibility> 
               child: Padding(
                 padding: const EdgeInsets.all(10),
                 child: Align(
-                  alignment: Alignment.bottomCenter,
-                  child: SizedBox(
-                    width: 32,
-                    height: 32,
-                    child: DecoratedBox(
-                      decoration: const BoxDecoration(color: Colors.black, shape: BoxShape.circle),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          customBorder: const CircleBorder(),
-                          onTap: _scrollToTop,
-                          child: const Icon(JamIcons.arrow_up, color: Colors.white, size: 16),
+                  alignment: Alignment.bottomRight,
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 16, bottom: 82),
+                    child: SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.74),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            customBorder: const CircleBorder(),
+                            onTap: _scrollToTop,
+                            child: const Icon(JamIcons.arrow_up, color: Colors.white, size: 24),
+                          ),
                         ),
                       ),
                     ),
