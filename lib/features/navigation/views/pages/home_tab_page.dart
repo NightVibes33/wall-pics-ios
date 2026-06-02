@@ -32,7 +32,7 @@ class _HomeTabPageState extends State<HomeTabPage> {
     _HomeTabSpec(label: 'FOR YOU', title: 'For You', contentType: PrismCatalogDataSource.regularContentType),
     _HomeTabSpec(label: '3D', title: '3D Spatial', contentType: PrismCatalogDataSource.parallaxContentType),
     _HomeTabSpec(label: 'FUNNY ISLAND', title: 'Funny Island', query: 'funny island'),
-    _HomeTabSpec(label: 'NEW', title: 'New', contentType: PrismCatalogDataSource.regularContentType),
+    _HomeTabSpec(label: 'NEW', title: 'New', contentType: PrismCatalogDataSource.regularContentType, slug: 'newest'),
     _HomeTabSpec(label: '4K', title: '4K', query: '4k'),
   ];
   static const List<_HomeShortcut> _shortcuts = <_HomeShortcut>[
@@ -176,6 +176,7 @@ class _HomeTabPageState extends State<HomeTabPage> {
         addCatalog(
           title: tab.title,
           contentType: tab.contentType ?? PrismCatalogDataSource.regularContentType,
+          slug: tab.slug ?? 'for-you',
           kind: _kindFor(tab.contentType),
         );
       }
@@ -1612,11 +1613,12 @@ class _HomeSection {
 }
 
 class _HomeTabSpec {
-  const _HomeTabSpec({required this.label, required this.title, this.contentType, this.query});
+  const _HomeTabSpec({required this.label, required this.title, this.contentType, this.slug, this.query});
 
   final String label;
   final String title;
   final String? contentType;
+  final String? slug;
   final String? query;
 }
 

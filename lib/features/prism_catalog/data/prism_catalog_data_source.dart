@@ -121,6 +121,9 @@ class PrismCatalogDataSource {
     if (slug == 'for-you') {
       return _fetchSequentialPageFeed(contentType: contentType, scope: scope, refresh: refresh);
     }
+    if (slug == 'newest' || slug == 'new') {
+      return _fetchNewestPageFeed(contentType: contentType, scope: scope, refresh: refresh);
+    }
 
     final categoryIds = await _categoryIdsFor(contentType, slug);
     final start = refresh ? 0 : (_offsets[scope] ?? 0);
@@ -141,6 +144,46 @@ class PrismCatalogDataSource {
       contentType: regularContentType,
       scope: _scope(slug: 'for-you', contentType: regularContentType),
       refresh: refresh,
+    );
+  }
+
+  Future<CategoryFeedPage> _fetchNewestPageFeed({
+    required String contentType,
+    required String scope,
+    required bool refresh,
+  }) async {
+    final start = refresh ? 0 : (_offsets[scope] ?? 0);
+    final searchIndex = await _loadSearchIndex();
+    final refs = <_RankedItemReference>[];
+    for (var index = 0; index < searchIndex.length; index++) {
+      final entry = searchIndex[index];
+      if (entry.contentType != contentType ||
+          entry.createdAt == null ||
+          !_catalogPagePrefixesByContentType.containsKey(entry.contentType) ||
+          _hiddenContentTypes.contains(entry.contentType)) {
+        continue;
+      }
+      refs.add(
+        _RankedItemReference(
+          contentType: entry.contentType,
+          id: entry.id,
+          page: entry.page,
+          score: 0,
+          ordinal: index,
+          createdAt: entry.createdAt,
+        ),
+      );
+    }
+    refs.sort(_compareNewestReferences);
+    final deduped = _dedupeReferences(refs);
+    final pageRefs = deduped.skip(start).take(_pageSize).toList(growable: false);
+    final items = await _itemsByReferences(pageRefs);
+    final nextOffset = start + pageRefs.length;
+    _offsets[scope] = nextOffset;
+    return _toFeedPage(
+      items,
+      hasMore: nextOffset < deduped.length,
+      nextOffset: nextOffset,
     );
   }
 
@@ -1449,6 +1492,10 @@ int _compareRankedReferences(_RankedItemReference a, _RankedItemReference b) {
   if (scoreCompare != 0) {
     return scoreCompare;
   }
+  return _compareNewestReferences(a, b);
+}
+
+int _compareNewestReferences(_RankedItemReference a, _RankedItemReference b) {
   final aCreated = a.createdAt?.millisecondsSinceEpoch ?? 0;
   final bCreated = b.createdAt?.millisecondsSinceEpoch ?? 0;
   final createdCompare = bCreated.compareTo(aCreated);
