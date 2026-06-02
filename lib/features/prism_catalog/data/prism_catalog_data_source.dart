@@ -19,9 +19,9 @@ class PrismCatalogDataSource {
 
   static const int _pageSize = 24;
   static const int _catalogShardSize = 100;
-  static const Duration _metadataTimeout = Duration(seconds: 10);
-  static const Duration _pageTimeout = Duration(seconds: 8);
-  static const Duration _searchIndexTimeout = Duration(seconds: 25);
+  static const Duration _metadataTimeout = Duration(seconds: 20);
+  static const Duration _pageTimeout = Duration(seconds: 15);
+  static const Duration _searchIndexTimeout = Duration(seconds: 35);
   static const String regularContentType = 'regular_wallpaper';
   static const String liveContentType = 'live_wallpaper';
   static const String matchingContentType = 'matching_wallpaper';
@@ -968,6 +968,7 @@ class _PrismItem {
     required this.videoUrl,
     required this.thumbnailVideoUrl,
     required this.templateUrl,
+    required this.parallaxFileUrl,
     required this.mediaAssetUrls,
     required this.pairedWallpapers,
     required this.pairedPreviewUrls,
@@ -996,6 +997,7 @@ class _PrismItem {
   final String videoUrl;
   final String thumbnailVideoUrl;
   final String templateUrl;
+  final String parallaxFileUrl;
   final List<String> mediaAssetUrls;
   final List<Map<String, dynamic>> pairedWallpapers;
   final List<String> pairedPreviewUrls;
@@ -1081,8 +1083,15 @@ class _PrismItem {
     }
 
     final isLiveContent = contentType == PrismCatalogDataSource.liveContentType;
+    final isParallaxContent = contentType == PrismCatalogDataSource.parallaxContentType;
     final isMatchingContent = contentType == PrismCatalogDataSource.matchingContentType ||
         contentType == PrismCatalogDataSource.doubleContentType;
+    final parallaxArchive = isParallaxContent
+        ? _firstString(<Object?>[
+            isArchiveUrl(catalogDownload) ? catalogDownload : '',
+            isArchiveUrl(parallaxFile) ? parallaxFile : '',
+          ])
+        : '';
     final imageDownload = catalogDownload.isNotEmpty && !isVideoUrl(catalogDownload) && !isArchiveUrl(catalogDownload)
         ? catalogDownload
         : '';
@@ -1194,6 +1203,7 @@ class _PrismItem {
       videoUrl: video,
       thumbnailVideoUrl: url(json['thumbnail_video']),
       templateUrl: template.isNotEmpty ? template : catalogDownload,
+      parallaxFileUrl: parallaxArchive,
       mediaAssetUrls: mediaAssetUrls,
       pairedWallpapers: pairedWallpapers,
       pairedPreviewUrls: pairedDisplayUrls,
@@ -1219,10 +1229,12 @@ class _PrismItem {
         ? _firstString(<Object?>[staticThumbnailUrl, firstFrameThumbnailUrl, thumbnailUrl, previewUrl])
         : (contentType == PrismCatalogDataSource.matchingContentType ||
                 contentType == PrismCatalogDataSource.doubleContentType)
-            ? _firstString(<Object?>[...pairedPreviewUrls, thumbnailUrl, previewUrl, ...pairedDownloadUrls, full])
-            : displayOnlyContent
-                ? _firstString(<Object?>[thumbnailUrl, staticThumbnailUrl, previewUrl, full])
-                : _firstString(<Object?>[thumbnailUrl, staticThumbnailUrl, previewUrl, full]);
+            ? _firstString(<Object?>[...pairedDownloadUrls, ...pairedPreviewUrls, thumbnailUrl, previewUrl, full])
+            : contentType == PrismCatalogDataSource.profilePictureContentType
+                ? _firstString(<Object?>[full, previewUrl, thumbnailUrl, staticThumbnailUrl])
+                : displayOnlyContent
+                    ? _firstString(<Object?>[thumbnailUrl, staticThumbnailUrl, previewUrl, full])
+                    : _firstString(<Object?>[full, thumbnailUrl, staticThumbnailUrl, previewUrl]);
     return PrismWallpaper(
       core: WallpaperCore(
         id: id,
@@ -1252,6 +1264,7 @@ class _PrismItem {
         'catalogVideoUrl': videoUrl,
         'catalogThumbnailVideoUrl': thumbnailVideoUrl,
         'catalogTemplateUrl': templateUrl,
+        'catalogParallaxFileUrl': parallaxFileUrl,
         'catalogMediaAssetUrls': mediaAssetUrls,
         'catalogPairedWallpapers': pairedWallpapers,
         'catalogPairedPreviewUrls': pairedPreviewUrls,

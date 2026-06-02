@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:Prism/analytics/analytics_service.dart';
 import 'package:Prism/core/analytics/events/events.dart';
 import 'package:Prism/core/analytics/trackers/content_load_tracker.dart';
@@ -10,6 +11,7 @@ import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:Prism/core/utils/edge_to_edge_overlay_style.dart';
 import 'package:Prism/core/utils/status.dart';
 import 'package:Prism/core/widgets/common/autoplay_video_preview.dart';
+import 'package:Prism/core/widgets/common/parallax_archive_image.dart';
 import 'package:Prism/core/wallpaper/wallpaper_source.dart';
 import 'package:Prism/core/wallpaper/wallpaper_variants.dart';
 import 'package:Prism/core/widgets/menuButton/editButton.dart';
@@ -83,6 +85,8 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
   int _galleryIndex = 0;
   double _activeDragDx = 0;
   double _activeDragDy = 0;
+  String? _parallaxCompositeIdentity;
+  String? _parallaxCompositePath;
 
   /// Identity for the wallpaper currently shown; resets capture readiness when it changes.
   String? _wallpaperLoadIdentity;
@@ -136,7 +140,8 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     final current = bloc.state;
     if (current is! WallpaperDetailLoaded) return;
 
-    final capture = current.colorChanged
+    final shouldCapture = current.colorChanged || (_isPrismParallax(current.entity) && _parallaxCompositePath == null);
+    final capture = shouldCapture
         ? screenshotController.capture(pixelRatio: 3, delay: const Duration(milliseconds: 10))
         : Future<Uint8List?>.value();
 
@@ -151,13 +156,36 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     }
   }
 
+  String _imageIdentity(WallpaperDetailEntity entity) => '${entity.id}|${entity.fullUrl}|${entity.thumbnailUrl}';
+
   void _syncWallpaperIdentity(WallpaperDetailEntity entity) {
-    final key = '${entity.id}|${entity.fullUrl}|${entity.thumbnailUrl}';
+    final key = _imageIdentity(entity);
     if (_wallpaperLoadIdentity != key) {
       _wallpaperLoadIdentity = key;
       _wallpaperCaptureGeneration++;
       _wallpaperReadyForCapture = false;
+      _parallaxCompositeIdentity = null;
+      _parallaxCompositePath = null;
     }
+  }
+
+  void _handleParallaxCompositeReady(WallpaperDetailEntity entity, String path) {
+    final identity = _imageIdentity(entity);
+    final cleanPath = path.trim();
+    if (!mounted || cleanPath.isEmpty || _wallpaperLoadIdentity != identity) return;
+    if (_parallaxCompositeIdentity == identity && _parallaxCompositePath == cleanPath) return;
+    setState(() {
+      _parallaxCompositeIdentity = identity;
+      _parallaxCompositePath = cleanPath;
+    });
+  }
+
+  String? _parallaxCompositePathFor(WallpaperDetailEntity entity) {
+    final identity = _imageIdentity(entity);
+    if (_parallaxCompositeIdentity == identity && (_parallaxCompositePath?.trim().isNotEmpty ?? false)) {
+      return _parallaxCompositePath;
+    }
+    return null;
   }
 
   void _hydrateGalleryContext() {
@@ -178,15 +206,12 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
   }
 
   void _showGalleryOffset(BuildContext context, int offset) {
-    if (_galleryItems.length < 2) return;
-    final nextIndex = _galleryIndex + offset;
-    if (nextIndex < 0 || nextIndex >= _galleryItems.length) {
-      HapticFeedback.selectionClick();
-      return;
-    }
-    final nextEntity = _galleryItems[nextIndex];
+    if (_galleryItems.length < 2 || offset == 0) return;
+    final nextIndex = (_galleryIndex + offset) % _galleryItems.length;
+    final wrappedIndex = nextIndex < 0 ? nextIndex + _galleryItems.length : nextIndex;
+    final nextEntity = _galleryItems[wrappedIndex];
     setState(() {
-      _galleryIndex = nextIndex;
+      _galleryIndex = wrappedIndex;
       _wallpaperReadyForCapture = false;
     });
     _contentLoadTracker.start();
@@ -344,6 +369,10 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
         _isPrismContentType(entity, PrismCatalogDataSource.liveDiyTemplateContentType);
   }
 
+  bool _isPrismParallax(WallpaperDetailEntity entity) {
+    return _isPrismContentType(entity, PrismCatalogDataSource.parallaxContentType);
+  }
+
   bool _isPrismMatchingSet(WallpaperDetailEntity entity) {
     return _isPrismContentType(entity, PrismCatalogDataSource.matchingContentType) ||
         _isPrismContentType(entity, PrismCatalogDataSource.doubleContentType);
@@ -374,6 +403,11 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     return path.endsWith('.mp4') || path.endsWith('.mov');
   }
 
+  bool _isArchiveUrl(String url) {
+    final path = Uri.tryParse(url)?.path.toLowerCase() ?? url.toLowerCase();
+    return path.endsWith('.zip');
+  }
+
   Future<void> _selectChargingAnimation(WallpaperDetailEntity entity) async {
     final videoUrl = entity.fullUrl.trim();
     if (videoUrl.isEmpty) {
@@ -398,14 +432,23 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     if (pairedImageUrls.isNotEmpty) return pairedImageUrls.first;
 
     final full = entity.fullUrl.trim();
-    if (full.isNotEmpty && !_isVideoUrl(full)) return full;
+    if (full.isNotEmpty && !_isVideoUrl(full) && !_isArchiveUrl(full)) return full;
     final firstFrameStill = _prismMetadataValue(entity, 'catalogFirstFrameThumbnailUrl');
     if (firstFrameStill.isNotEmpty) return firstFrameStill;
     final staticStill = _prismMetadataValue(entity, 'catalogStaticThumbnailUrl');
     if (staticStill.isNotEmpty) return staticStill;
     final thumb = entity.thumbnailUrl.trim();
-    if (thumb.isNotEmpty && !_isVideoUrl(thumb)) return thumb;
+    if (thumb.isNotEmpty && !_isVideoUrl(thumb) && !_isArchiveUrl(thumb)) return thumb;
     return thumb;
+  }
+
+  String _catalogParallaxFileUrl(WallpaperDetailEntity entity) {
+    if (!_isPrismParallax(entity)) return '';
+    final explicit = _prismMetadataValue(entity, 'catalogParallaxFileUrl');
+    if (explicit.isNotEmpty && _isArchiveUrl(explicit)) return explicit;
+    final full = entity.fullUrl.trim();
+    if (_isArchiveUrl(full)) return full;
+    return '';
   }
 
   String? _catalogLiveStillUrl(WallpaperDetailEntity entity) {
@@ -560,17 +603,30 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
           topRight: Radius.circular(_panelTopRadius),
         ),
         boxShadow: const [],
-        minHeight: MediaQuery.of(context).size.height / 20,
+        minHeight: _panelMinHeight(context),
         parallaxEnabled: true,
         parallaxOffset: 0,
         color: Colors.transparent,
-        maxHeight: MediaQuery.of(context).size.height * 0.43,
+        maxHeight: _panelMaxHeight(context),
         controller: panelController,
         backdropOpacity: 0,
         panel: _buildInfoPanel(context, state),
         body: _buildImageBody(context, _offsetAnimation, paletteLoading, state),
       ),
     );
+  }
+
+  double _panelMinHeight(BuildContext context) {
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    return math.max(84.0, bottomInset + 64.0);
+  }
+
+  double _panelMaxHeight(BuildContext context) {
+    return MediaQuery.sizeOf(context).height * 0.43;
+  }
+
+  double _panelBottomMargin(BuildContext context) {
+    return math.max(_panelSideInset, MediaQuery.paddingOf(context).bottom + 8.0);
   }
 
   Widget _buildInfoPanel(BuildContext context, WallpaperDetailLoaded state) {
@@ -580,7 +636,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     final size = Size(w - _panelSideInset * 2, h * 0.43);
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(_panelSideInset, 0, _panelSideInset, _panelSideInset),
+      margin: EdgeInsets.fromLTRB(_panelSideInset, 0, _panelSideInset, _panelBottomMargin(context)),
       height: size.height,
       width: size.width,
       child: LiquidGlassLayer(
@@ -888,7 +944,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
   }
 
   List<String> _catalogPairedImageUrls(PrismWallpaper wallpaper) {
-    return _metadataStringList(wallpaper.aiMetadata?['catalogPairedDownloadUrls']).take(4).toList(growable: false);
+    return _metadataStringList(wallpaper.aiMetadata?['catalogPairedDownloadUrls']);
   }
 
   List<String> _metadataStringList(Object? rawUrls) {
@@ -1006,8 +1062,10 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
       return _buildMatchingActionButtons(context, state, matchingDownloadUrls);
     }
 
+    final isParallax = _isPrismParallax(entity);
     final liveStillUrl = isLivePhoto ? _catalogLiveStillUrl(entity) : null;
-    final downloadUrl = entity.fullUrl;
+    final parallaxCompositePath = isParallax ? _parallaxCompositePathFor(entity) : null;
+    final downloadUrl = parallaxCompositePath ?? (isParallax ? _catalogDisplayImageUrl(entity) : entity.fullUrl);
     final setWallpaperUrl =
         !isLivePhoto && state.colorChanged && state.screenshotTaken && state.imageFile != null
             ? state.imageFile!.path
@@ -1075,7 +1133,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
 
   Widget _buildMatchingActionButtons(BuildContext context, WallpaperDetailLoaded state, List<String> matchingUrls) {
     final entity = state.entity;
-    final sideUrls = matchingUrls.take(4).toList(growable: false);
+    final sideUrls = matchingUrls;
     final actions = <Widget>[
       for (var index = 0; index < sideUrls.length; index++)
         _SheetActionTapScale(
@@ -1131,10 +1189,13 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
                   _activeDragDy += details.delta.dy;
                   if (details.delta.dy < -10 && _activeDragDy.abs() > _activeDragDx.abs()) panelController.open();
                 },
-                onPanEnd: (_) {
-                  final horizontal = _activeDragDx.abs() > 64 && _activeDragDx.abs() > _activeDragDy.abs() * 1.25;
+                onPanEnd: (details) {
+                  final velocityX = details.velocity.pixelsPerSecond.dx;
+                  final horizontal = (_activeDragDx.abs() > 42 && _activeDragDx.abs() > _activeDragDy.abs() * 0.9) ||
+                      velocityX.abs() > 360;
                   if (horizontal) {
-                    _showGalleryOffset(context, _activeDragDx < 0 ? 1 : -1);
+                    final direction = velocityX.abs() > 360 ? (velocityX < 0 ? 1 : -1) : (_activeDragDx < 0 ? 1 : -1);
+                    _showGalleryOffset(context, direction);
                   }
                   _resetActiveDrag();
                 },
@@ -1254,11 +1315,20 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     final String thumb = entity.thumbnailUrl.trim();
     final String entityFull = entity.fullUrl.trim();
     final String full = previewOnly && !_isVideoUrl(entityFull) ? _catalogDisplayImageUrl(entity) : entityFull;
-    final bool useProgressive = thumb.isNotEmpty && full.isNotEmpty && full != thumb && !_isVideoUrl(full);
+    final bool useProgressive = thumb.isNotEmpty && full.isNotEmpty && full != thumb && !_isVideoUrl(full) && !_isArchiveUrl(full);
     final pairedImageUrls = _catalogPairedImageUrlsForEntity(entity);
+    final parallaxArchiveUrl = _catalogParallaxFileUrl(entity);
 
     Widget imageLayer;
-    if (pairedImageUrls.length < 2 && full.isNotEmpty && _isVideoUrl(full)) {
+    if (parallaxArchiveUrl.isNotEmpty) {
+      imageLayer = ParallaxArchiveImage(
+        archiveUrl: parallaxArchiveUrl,
+        fallbackUrl: thumb.isNotEmpty ? thumb : _catalogDisplayImageUrl(entity),
+        fit: BoxFit.contain,
+        onReady: onWallpaperDisplayReady,
+        onCompositeReady: (path) => _handleParallaxCompositeReady(entity, path),
+      );
+    } else if (pairedImageUrls.length < 2 && full.isNotEmpty && _isVideoUrl(full)) {
       imageLayer = AutoplayVideoPreview(
         videoUrl: full,
         posterUrl: _catalogLiveStillUrl(entity),
@@ -1266,7 +1336,6 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
         onReady: onWallpaperDisplayReady,
       );
     } else if (pairedImageUrls.length >= 2) {
-      final sides = pairedImageUrls.take(2).toList(growable: false);
       Widget pairedSide(String url) {
         return CachedNetworkImage(
           imageUrl: url,
@@ -1287,13 +1356,28 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
         );
       }
 
-      imageLayer = Row(
-        children: <Widget>[
-          Expanded(child: pairedSide(sides[0])),
-          const SizedBox(width: 3, child: ColoredBox(color: Colors.black)),
-          Expanded(child: pairedSide(sides[1])),
-        ],
-      );
+      final rows = <Widget>[];
+      for (var index = 0; index < pairedImageUrls.length; index += 2) {
+        rows.add(
+          Expanded(
+            child: Row(
+              children: <Widget>[
+                Expanded(child: pairedSide(pairedImageUrls[index])),
+                const SizedBox(width: 3, child: ColoredBox(color: Colors.black)),
+                if (index + 1 < pairedImageUrls.length)
+                  Expanded(child: pairedSide(pairedImageUrls[index + 1]))
+                else
+                  const Spacer(),
+              ],
+            ),
+          ),
+        );
+        if (index + 2 < pairedImageUrls.length) {
+          rows.add(const SizedBox(height: 3, child: ColoredBox(color: Colors.black)));
+        }
+      }
+
+      imageLayer = Column(children: rows);
     } else if (useProgressive) {
       imageLayer = Stack(
         fit: StackFit.expand,

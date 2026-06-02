@@ -73,8 +73,9 @@ class WallpaperTile extends StatelessWidget {
     return item.when(
       prism: (_, wallpaper) {
         if (!isMatchingSetItem(item)) return const <String>[];
-        final previews = _stringList(wallpaper.aiMetadata?['catalogPairedPreviewUrls']);
-        return previews.isNotEmpty ? previews : pairedImageUrlsForItem(item);
+        final downloads = pairedImageUrlsForItem(item);
+        if (downloads.isNotEmpty) return downloads;
+        return _stringList(wallpaper.aiMetadata?['catalogPairedPreviewUrls']);
       },
       wallhaven: (_, _) => const <String>[],
       pexels: (_, _) => const <String>[],
@@ -137,14 +138,16 @@ class WallpaperTile extends StatelessWidget {
       ..['catalogContentType'] = PrismCatalogDataSource.regularContentType
       ..['catalogParentContentType'] = PrismCatalogDataSource.matchingContentType
       ..['catalogMatchingSetId'] = parentId
-      ..['catalogMatchingSideIndex'] = index
-      ..['catalogPreviewUrl'] = previewUrl;
-    final thumb = previewUrl.trim().isNotEmpty ? previewUrl.trim() : fullUrl.trim();
+      ..['catalogMatchingSideIndex'] = index;
+    final cleanFullUrl = fullUrl.trim();
+    final cleanPreviewUrl = previewUrl.trim();
+    final thumb = cleanFullUrl.isNotEmpty ? cleanFullUrl : cleanPreviewUrl;
+    metadata['catalogPreviewUrl'] = thumb;
     final sideWallpaper = PrismWallpaper(
       core: WallpaperCore(
         id: sideId,
         source: WallpaperSource.prism,
-        fullUrl: fullUrl.trim(),
+        fullUrl: cleanFullUrl,
         thumbnailUrl: thumb,
         resolution: wallpaper.core.resolution,
         sizeBytes: wallpaper.core.sizeBytes,
@@ -258,29 +261,28 @@ class WallpaperTile extends StatelessWidget {
     required int cacheWidth,
     required int cacheHeight,
   }) {
-    final halfCacheWidth = (cacheWidth / 2).ceil();
-    final sides = urls.take(2).toList(growable: false);
-    return Row(
-      children: <Widget>[
+    final rowCount = (urls.length / 2).ceil();
+    final sideCacheWidth = (cacheWidth / 2).ceil();
+    final sideCacheHeight = (cacheHeight / rowCount).ceil();
+    final rows = <Widget>[];
+    for (var index = 0; index < urls.length; index += 2) {
+      rows.add(
         Expanded(
-          child: _cachedTileImage(
-            context,
-            sides[0],
-            cacheWidth: halfCacheWidth,
-            cacheHeight: cacheHeight,
+          child: Row(
+            children: <Widget>[
+              Expanded(child: _cachedTileImage(context, urls[index], cacheWidth: sideCacheWidth, cacheHeight: sideCacheHeight)),
+              const SizedBox(width: 2, child: ColoredBox(color: Colors.black)),
+              if (index + 1 < urls.length)
+                Expanded(child: _cachedTileImage(context, urls[index + 1], cacheWidth: sideCacheWidth, cacheHeight: sideCacheHeight))
+              else
+                const Spacer(),
+            ],
           ),
         ),
-        const SizedBox(width: 2, child: ColoredBox(color: Colors.black)),
-        Expanded(
-          child: _cachedTileImage(
-            context,
-            sides[1],
-            cacheWidth: halfCacheWidth,
-            cacheHeight: cacheHeight,
-          ),
-        ),
-      ],
-    );
+      );
+      if (index + 2 < urls.length) rows.add(const SizedBox(height: 2, child: ColoredBox(color: Colors.black)));
+    }
+    return Column(children: rows);
   }
 
   @override

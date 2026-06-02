@@ -805,14 +805,25 @@ class _HomeWallpaperCard extends StatelessWidget {
   }
 
   Widget _pairedImage(BuildContext context, List<String> urls) {
-    final sides = urls.take(2).toList(growable: false);
-    return Row(
-      children: <Widget>[
-        Expanded(child: _image(context, sides[0])),
-        const SizedBox(width: 3, child: ColoredBox(color: Colors.black)),
-        Expanded(child: _image(context, sides[1])),
-      ],
-    );
+    final rows = <Widget>[];
+    for (var index = 0; index < urls.length; index += 2) {
+      rows.add(
+        Expanded(
+          child: Row(
+            children: <Widget>[
+              Expanded(child: _image(context, urls[index])),
+              const SizedBox(width: 3, child: ColoredBox(color: Colors.black)),
+              if (index + 1 < urls.length)
+                Expanded(child: _image(context, urls[index + 1]))
+              else
+                const Spacer(),
+            ],
+          ),
+        ),
+      );
+      if (index + 2 < urls.length) rows.add(const SizedBox(height: 3, child: ColoredBox(color: Colors.black)));
+    }
+    return Column(children: rows);
   }
 
   Widget _image(BuildContext context, String rawUrl) {
@@ -1134,10 +1145,10 @@ class _MatchingCatalogScreenState extends State<_MatchingCatalogScreen> {
 
   void _precacheVisiblePairs() {
     final urls = _items
-        .take(10)
+        .take(12)
         .expand(WallpaperTile.pairedPreviewUrlsForItem)
         .where((url) => url.trim().isNotEmpty)
-        .take(20)
+        .take(48)
         .toList(growable: false);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -1350,26 +1361,42 @@ class _MatchingPairListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sideItems = WallpaperTile.matchingSideItemsForItem(item).take(2).toList(growable: false);
+    final sideItems = WallpaperTile.matchingSideItemsForItem(item);
     if (sideItems.length < 2) {
       return const SizedBox.shrink();
     }
     final width = MediaQuery.sizeOf(context).width - 36;
-    final height = ((width - 3) / 2) * 1.78;
+    final sideWidth = (width - 3) / 2;
+    final rowHeight = sideWidth * 1.78;
+    final rowCount = (sideItems.length / 2).ceil();
+    final height = rowHeight * rowCount + (rowCount - 1) * 3;
     final pixelRatio = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 3.0);
-    final cacheWidth = (((width - 3) / 2) * pixelRatio).ceil();
-    final cacheHeight = (height * pixelRatio).ceil();
+    final cacheWidth = (sideWidth * pixelRatio).ceil();
+    final cacheHeight = (rowHeight * pixelRatio).ceil();
+    final rows = <Widget>[];
+    for (var sideIndex = 0; sideIndex < sideItems.length; sideIndex += 2) {
+      rows.add(
+        SizedBox(
+          height: rowHeight,
+          child: Row(
+            children: <Widget>[
+              Expanded(child: _MatchingCatalogSide(item: sideItems[sideIndex], galleryItems: galleryItems, cacheWidth: cacheWidth, cacheHeight: cacheHeight)),
+              const SizedBox(width: 3),
+              if (sideIndex + 1 < sideItems.length)
+                Expanded(child: _MatchingCatalogSide(item: sideItems[sideIndex + 1], galleryItems: galleryItems, cacheWidth: cacheWidth, cacheHeight: cacheHeight))
+              else
+                const Spacer(),
+            ],
+          ),
+        ),
+      );
+      if (sideIndex + 2 < sideItems.length) rows.add(const SizedBox(height: 3));
+    }
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 18),
       child: SizedBox(
         height: height,
-        child: Row(
-          children: <Widget>[
-            Expanded(child: _MatchingCatalogSide(item: sideItems[0], galleryItems: galleryItems, cacheWidth: cacheWidth, cacheHeight: cacheHeight)),
-            const SizedBox(width: 3),
-            Expanded(child: _MatchingCatalogSide(item: sideItems[1], galleryItems: galleryItems, cacheWidth: cacheWidth, cacheHeight: cacheHeight)),
-          ],
-        ),
+        child: Column(children: rows),
       ),
     );
   }

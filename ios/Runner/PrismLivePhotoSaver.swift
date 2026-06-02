@@ -250,6 +250,9 @@ final class PrismLivePhotoSaver: NSObject {
 
   private func contentIdentifierMetadataItem(assetId: String) -> AVMetadataItem {
     let item = AVMutableMetadataItem()
+    if #available(iOS 10.0, *) {
+      item.identifier = .quickTimeMetadataContentIdentifier
+    }
     item.keySpace = .quickTimeMetadata
     item.key = "com.apple.quicktime.content.identifier" as NSString
     item.value = assetId as NSString
@@ -280,7 +283,7 @@ final class PrismLivePhotoSaver: NSObject {
     let stillTime = AVMutableMetadataItem()
     stillTime.keySpace = .quickTimeMetadata
     stillTime.key = "com.apple.quicktime.still-image-time" as NSString
-    stillTime.value = NSNumber(value: 0)
+    stillTime.value = NSNumber(value: Int8(0))
     stillTime.dataType = kCMMetadataBaseDataType_SInt8 as String
 
     let group = AVTimedMetadataGroup(
@@ -297,8 +300,17 @@ final class PrismLivePhotoSaver: NSObject {
     PHPhotoLibrary.shared().performChanges(
       {
         let request = PHAssetCreationRequest.forAsset()
-        request.addResource(with: .photo, fileURL: photo, options: nil)
-        request.addResource(with: .pairedVideo, fileURL: video, options: nil)
+        let photoOptions = PHAssetResourceCreationOptions()
+        let videoOptions = PHAssetResourceCreationOptions()
+        if #available(iOS 14.0, *) {
+          photoOptions.uniformTypeIdentifier = UTType.jpeg.identifier
+          videoOptions.uniformTypeIdentifier = UTType.quickTimeMovie.identifier
+        } else {
+          photoOptions.uniformTypeIdentifier = kUTTypeJPEG as String
+          videoOptions.uniformTypeIdentifier = kUTTypeQuickTimeMovie as String
+        }
+        request.addResource(with: .photo, fileURL: photo, options: photoOptions)
+        request.addResource(with: .pairedVideo, fileURL: video, options: videoOptions)
       },
       completionHandler: { success, error in
         if !success { saveError = error ?? LivePhotoError.photoSaveFailed }

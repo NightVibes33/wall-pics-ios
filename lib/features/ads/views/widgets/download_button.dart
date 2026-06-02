@@ -84,6 +84,10 @@ class _DownloadButtonState extends State<DownloadButton> {
     return path.endsWith('.mp4') || path.endsWith('.mov');
   }
 
+  bool _isLocalMediaPath(String link) {
+    return link.startsWith('/') || link.startsWith('file://') || link.contains('com.hash.prism');
+  }
+
   String _filenameBaseFromUrl(String link) {
     final uri = Uri.tryParse(link);
     final rawName = uri != null && uri.pathSegments.isNotEmpty ? uri.pathSegments.last : link.split('/').last;
@@ -116,12 +120,12 @@ class _DownloadButtonState extends State<DownloadButton> {
           return false;
         }
         savedLivePhoto = true;
-      } else if (hideSetWallpaperUi || link.contains('com.hash.prism')) {
+      } else if (hideSetWallpaperUi || _isLocalMediaPath(link)) {
         final OperationResult result = await PrismMediaHostApi()
             .saveMedia(
               SaveMediaRequest(
                 link: link,
-                isLocalFile: link.contains('com.hash.prism'),
+                isLocalFile: _isLocalMediaPath(link),
                 kind: SaveMediaKind.wallpaper,
               ),
             )
