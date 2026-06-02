@@ -303,15 +303,18 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     );
   }
 
+  bool _isVideoUrl(String url) {
+    final path = Uri.tryParse(url)?.path.toLowerCase() ?? url.toLowerCase();
+    return path.endsWith('.mp4') || path.endsWith('.mov');
+  }
+
   Future<void> _selectChargingAnimation(WallpaperDetailEntity entity) async {
     final videoUrl = entity.fullUrl.trim();
     if (videoUrl.isEmpty) {
       toasts.error('Charging animation is missing its video.');
       return;
     }
-    final previewUrl = _prismMetadataValue(entity, 'catalogPreviewUrl').isNotEmpty
-        ? _prismMetadataValue(entity, 'catalogPreviewUrl')
-        : entity.thumbnailUrl;
+    final previewUrl = _catalogDisplayImageUrl(entity);
     final name = _prismMetadataValue(entity, 'catalogName').isNotEmpty
         ? _prismMetadataValue(entity, 'catalogName')
         : 'Charging animation';
@@ -325,23 +328,43 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
   }
 
   String _catalogDisplayImageUrl(WallpaperDetailEntity entity) {
-    final preview = _prismMetadataValue(entity, 'catalogPreviewUrl');
-    if (preview.isNotEmpty) return preview;
-    final staticStill = _prismMetadataValue(entity, 'catalogStaticThumbnailUrl');
-    if (staticStill.isNotEmpty) return staticStill;
+    final pairedImageUrls = _catalogPairedImageUrlsForEntity(entity);
+    if (pairedImageUrls.isNotEmpty) return pairedImageUrls.first;
+
     final firstFrameStill = _prismMetadataValue(entity, 'catalogFirstFrameThumbnailUrl');
     if (firstFrameStill.isNotEmpty) return firstFrameStill;
-    return entity.thumbnailUrl.trim();
+    final full = entity.fullUrl.trim();
+    if (full.isNotEmpty && !_isVideoUrl(full)) return full;
+    final staticStill = _prismMetadataValue(entity, 'catalogStaticThumbnailUrl');
+    if (staticStill.isNotEmpty) return staticStill;
+    final thumb = entity.thumbnailUrl.trim();
+    if (thumb.isNotEmpty && !_isVideoUrl(thumb)) return thumb;
+    return thumb;
   }
 
   String? _catalogLiveStillUrl(WallpaperDetailEntity entity) {
     return entity.when(
       prism: (wallpaper) {
-        final firstFrameStill = wallpaper.aiMetadata?['catalogFirstFrameThumbnailUrl']?.toString().trim() ?? '';
-        return firstFrameStill.isEmpty ? null : firstFrameStill;
+        final candidates = <String>[
+          wallpaper.aiMetadata?['catalogFirstFrameThumbnailUrl']?.toString().trim() ?? '',
+          wallpaper.aiMetadata?['catalogStaticThumbnailUrl']?.toString().trim() ?? '',
+          wallpaper.thumbnailUrl.trim(),
+        ];
+        for (final candidate in candidates) {
+          if (candidate.isNotEmpty && !_isVideoUrl(candidate)) return candidate;
+        }
+        return null;
       },
       wallhaven: (_) => null,
       pexels: (_) => null,
+    );
+  }
+
+  List<String> _catalogPairedImageUrlsForEntity(WallpaperDetailEntity entity) {
+    return entity.when(
+      prism: _catalogPairedImageUrls,
+      wallhaven: (_) => const <String>[],
+      pexels: (_) => const <String>[],
     );
   }
 
@@ -691,7 +714,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
   }
 
   Widget _buildPrismMetadata(BuildContext context, PrismWallpaper wallpaper, WallpaperDetailLoaded state) {
-    final pairedPreviewUrls = _catalogPairedPreviewUrls(wallpaper);
+    final pairedImageUrls = _catalogPairedImageUrls(wallpaper);
     return Padding(
       padding: const EdgeInsets.fromLTRB(_sheetHPad, 4, _sheetHPad, 12),
       child: Row(
@@ -760,8 +783,8 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
                   _buildInfoRow(context, JamIcons.unordered_list, wallpaper.core.category!),
                   const SizedBox(height: 4),
                 ],
-                if (pairedPreviewUrls.isNotEmpty) ...[
-                  _buildPrismPairedPreviewRow(context, pairedPreviewUrls),
+                if (pairedImageUrls.isNotEmpty) ...[
+                  _buildPrismPairedPreviewRow(context, pairedImageUrls),
                   const SizedBox(height: 8),
                 ],
                 if (wallpaper.core.resolution != null) ...[
@@ -797,16 +820,16 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     );
   }
 
-  List<String> _catalogPairedPreviewUrls(PrismWallpaper wallpaper) {
-    final rawUrls = wallpaper.aiMetadata?['catalogPairedPreviewUrls'];
-    if (rawUrls is! List) {
-      return const <String>[];
-    }
+  List<String> _catalogPairedImageUrls(PrismWallpaper wallpaper) {
+    return _metadataStringList(wallpaper.aiMetadata?['catalogPairedDownloadUrls']).take(4).toList(growable: false);
+  }
+
+  List<String> _metadataStringList(Object? rawUrls) {
+    if (rawUrls is! List) return const <String>[];
     final seen = <String>{};
     return rawUrls
         .map((url) => url.toString().trim())
         .where((url) => url.isNotEmpty && seen.add(url))
-        .take(4)
         .toList(growable: false);
   }
 
@@ -1116,9 +1139,34 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     final String thumb = entity.thumbnailUrl.trim();
     final String full = previewOnly ? _catalogDisplayImageUrl(entity) : entity.fullUrl.trim();
     final bool useProgressive = thumb.isNotEmpty && full.isNotEmpty && full != thumb;
+    final pairedImageUrls = _catalogPairedImageUrlsForEntity(entity);
 
     Widget imageLayer;
-    if (useProgressive) {
+    if (pairedImageUrls.length >= 2) {
+      imageLayer = Row(
+        children: pairedImageUrls.take(2).map((url) {
+          return Expanded(
+            child: CachedNetworkImage(
+              imageUrl: url,
+              fit: BoxFit.cover,
+              width: double.infinity,
+              height: double.infinity,
+              imageBuilder: (context, imageProvider) {
+                onWallpaperDisplayReady?.call();
+                return SizedBox.expand(child: Image(image: imageProvider, fit: BoxFit.cover));
+              },
+              placeholder: (context, url) => Container(color: Theme.of(context).primaryColor),
+              errorWidget: (context, url, error) {
+                onWallpaperDisplayReady?.call();
+                return Center(
+                  child: Icon(JamIcons.close_circle_f, color: _wallpaperErrorIconColor(context, paletteLoading, state)),
+                );
+              },
+            ),
+          );
+        }).toList(growable: false),
+      );
+    } else if (useProgressive) {
       imageLayer = Stack(
         fit: StackFit.expand,
         children: [

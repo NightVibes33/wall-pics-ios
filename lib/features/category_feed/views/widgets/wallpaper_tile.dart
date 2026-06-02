@@ -33,21 +33,50 @@ class WallpaperTile extends StatelessWidget {
     );
   }
 
+  static bool isMatchingSetItem(FeedItemEntity item) {
+    return item.when(
+      prism: (_, wallpaper) {
+        final contentType = wallpaper.aiMetadata?['catalogContentType'];
+        return contentType == PrismCatalogDataSource.matchingContentType ||
+            contentType == PrismCatalogDataSource.doubleContentType;
+      },
+      wallhaven: (_, _) => false,
+      pexels: (_, _) => false,
+    );
+  }
+
+  static List<String> pairedImageUrlsForItem(FeedItemEntity item) {
+    return item.when(
+      prism: (_, wallpaper) {
+        if (!isMatchingSetItem(item)) return const <String>[];
+        return _stringList(wallpaper.aiMetadata?['catalogPairedDownloadUrls']);
+      },
+      wallhaven: (_, _) => const <String>[],
+      pexels: (_, _) => const <String>[],
+    );
+  }
+
+  static List<String> _stringList(Object? raw) {
+    if (raw is! List) return const <String>[];
+    final seen = <String>{};
+    return raw
+        .map((value) => value.toString().trim())
+        .where((value) => value.isNotEmpty && seen.add(value))
+        .toList(growable: false);
+  }
+
   static double aspectRatioForItem(FeedItemEntity item) {
     return isProfilePictureItem(item) ? 1.0 : 0.5;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final columns = crossAxisCount ?? (MediaQuery.orientationOf(context) == Orientation.portrait ? 3 : 5);
-    final width = (MediaQuery.sizeOf(context).width / columns).toInt();
-    final aspectRatio = aspectRatioForItem(item);
-    final height = memCacheHeight ?? (width / aspectRatio).ceil();
-    final pixelRatio = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 3.0);
-    final cacheWidth = (width * pixelRatio).ceil();
-    final cacheHeight = (height * pixelRatio).ceil();
-    final image = CachedNetworkImage(
-      imageUrl: item.thumbnailUrl,
+  Widget _cachedTileImage(
+    BuildContext context,
+    String url, {
+    required int cacheWidth,
+    required int cacheHeight,
+  }) {
+    return CachedNetworkImage(
+      imageUrl: url,
       fit: BoxFit.cover,
       fadeInDuration: Duration.zero,
       fadeOutDuration: Duration.zero,
@@ -59,6 +88,42 @@ class WallpaperTile extends StatelessWidget {
       placeholder: (ctx, _) => ColoredBox(color: Theme.of(ctx).colorScheme.surfaceContainerHighest),
       errorWidget: (ctx, _, _) => ColoredBox(color: Theme.of(ctx).colorScheme.surfaceContainerHighest),
     );
+  }
+
+  Widget _matchingSetTile(
+    BuildContext context,
+    List<String> urls, {
+    required int cacheWidth,
+    required int cacheHeight,
+  }) {
+    final halfCacheWidth = (cacheWidth / 2).ceil();
+    return Row(
+      children: urls.take(2).map((url) {
+        return Expanded(
+          child: _cachedTileImage(
+            context,
+            url,
+            cacheWidth: halfCacheWidth,
+            cacheHeight: cacheHeight,
+          ),
+        );
+      }).toList(growable: false),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final columns = crossAxisCount ?? (MediaQuery.orientationOf(context) == Orientation.portrait ? 3 : 5);
+    final width = (MediaQuery.sizeOf(context).width / columns).toInt();
+    final aspectRatio = aspectRatioForItem(item);
+    final height = memCacheHeight ?? (width / aspectRatio).ceil();
+    final pixelRatio = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 3.0);
+    final cacheWidth = (width * pixelRatio).ceil();
+    final cacheHeight = (height * pixelRatio).ceil();
+    final pairedImageUrls = pairedImageUrlsForItem(item);
+    final image = pairedImageUrls.length >= 2
+        ? _matchingSetTile(context, pairedImageUrls, cacheWidth: cacheWidth, cacheHeight: cacheHeight)
+        : _cachedTileImage(context, item.thumbnailUrl, cacheWidth: cacheWidth, cacheHeight: cacheHeight);
     return Material(
       color: Colors.transparent,
       child: InkWell(
