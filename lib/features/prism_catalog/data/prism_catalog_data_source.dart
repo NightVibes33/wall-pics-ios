@@ -20,11 +20,15 @@ class PrismCatalogDataSource {
 
   static final PrismCatalogDataSource instance = PrismCatalogDataSource._();
 
-  static String fastImageTileUrl(String url, {int width = 1080, int quality = 90}) {
+  static String fastImageTileUrl(String url, {int width = 1440, int quality = 92}) {
     return _fastTileImageUrl(url, width: width, quality: quality);
   }
 
-  static const int _pageSize = 72;
+  static String fastImageFullUrl(String url, {int width = 3840, int quality = 98}) {
+    return _fastTileImageUrl(url, width: width, quality: quality);
+  }
+
+  static const int _pageSize = 144;
   static const int _catalogShardSize = 100;
   static const Duration _metadataTimeout = Duration(seconds: 20);
   static const Duration _pageTimeout = Duration(seconds: 15);
@@ -199,18 +203,21 @@ class PrismCatalogDataSource {
     for (final rawUrl in bootstrap.prefetchUrls) {
       addPrefetchUrl(_fastTileImageUrl(rawUrl));
     }
-    const batchSize = 10;
+    const batchSize = 8;
     for (var index = 0; index < urls.length; index += batchSize) {
       final batch = urls.skip(index).take(batchSize);
-      await Future.wait<void>(
-        batch.map((url) async {
-          try {
-            await DefaultCacheManager().downloadFile(url).timeout(const Duration(seconds: 8));
-          } catch (_) {
-            // Prefetch failures should not block startup or catalog rendering.
-          }
-        }),
+      unawaited(
+        Future.wait<void>(
+          batch.map((url) async {
+            try {
+              await DefaultCacheManager().downloadFile(url).timeout(const Duration(seconds: 6));
+            } catch (_) {
+              // Prefetch failures should not block startup or catalog rendering.
+            }
+          }),
+        ),
       );
+      await Future<void>.delayed(const Duration(milliseconds: 16));
     }
   }
 
@@ -442,6 +449,9 @@ class PrismCatalogDataSource {
 
     final locationsByContentType = await _loadItemLocations();
     for (final contentType in _catalogPagePrefixesByContentType.keys) {
+      if (_hiddenContentTypes.contains(contentType)) {
+        continue;
+      }
       final page = locationsByContentType[contentType]?[trimmed];
       if (page == null) {
         continue;
@@ -674,6 +684,9 @@ class PrismCatalogDataSource {
     await Future.wait<void>([
       for (final contentType in _catalogPagePrefixesByContentType.keys)
         () async {
+          if (_hiddenContentTypes.contains(contentType)) {
+            return;
+          }
           final items = await _loadCompactCatalog(contentType);
           final bySlug = result.putIfAbsent(contentType, () => <String, List<String>>{});
           for (final item in items) {
@@ -698,6 +711,9 @@ class PrismCatalogDataSource {
     await Future.wait<void>([
       for (final contentType in _catalogPagePrefixesByContentType.keys)
         () async {
+          if (_hiddenContentTypes.contains(contentType)) {
+            return;
+          }
           final items = await _loadCompactCatalog(contentType);
           final locations = result.putIfAbsent(contentType, () => <String, int>{});
           for (var index = 0; index < items.length; index++) {
@@ -717,6 +733,9 @@ class PrismCatalogDataSource {
     await Future.wait<void>([
       for (final contentType in _catalogPagePrefixesByContentType.keys)
         () async {
+          if (_hiddenContentTypes.contains(contentType)) {
+            return;
+          }
           final items = await _loadCompactCatalog(contentType);
           for (var index = 0; index < items.length; index++) {
             final item = items[index];
@@ -1375,10 +1394,11 @@ class _PrismItem {
     ]);
     final parallaxLayerPreview = firstParallaxLayerImage();
     final fastFullImage = _fastTileOrOriginal(fullImage);
+    final fastFullSizeImage = _fastTileOrOriginal(fullImage, width: 3840, quality: 98);
     final fastLivePoster = _fastTileOrOriginal(livePoster);
     final parallaxTileImage = _firstString(<Object?>[
-      _fastTileOrOriginal(parallaxLayerPreview),
-      fastFullImage,
+      _fastTileOrOriginal(parallaxLayerPreview, width: 3840, quality: 98),
+      fastFullSizeImage,
     ]);
     final tileImage = _firstString(<Object?>[
       isMatchingContent ? _firstString(<Object?>[...pairedDisplayUrls]) : '',
@@ -1573,7 +1593,7 @@ String _resolveCatalogUrl(Object? value, {required String sourceBase}) {
 }
 
 
-String _fastTileImageUrl(String rawUrl, {int width = 1080, int quality = 90}) {
+String _fastTileImageUrl(String rawUrl, {int width = 1440, int quality = 92}) {
   final source = rawUrl.trim();
   if (!_isProxyableCatalogImageUrl(source)) {
     return '';
@@ -1595,7 +1615,7 @@ String _fastTileImageUrl(String rawUrl, {int width = 1080, int quality = 90}) {
       .toString();
 }
 
-String _fastTileOrOriginal(String rawUrl, {int width = 1080, int quality = 90}) {
+String _fastTileOrOriginal(String rawUrl, {int width = 1440, int quality = 92}) {
   final fastUrl = _fastTileImageUrl(rawUrl, width: width, quality: quality);
   return fastUrl.isNotEmpty ? fastUrl : rawUrl.trim();
 }

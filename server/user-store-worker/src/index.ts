@@ -134,8 +134,8 @@ async function catalogResponse(fileName: string, request: Request, env: Env): Pr
 async function mediaImageResponse(request: Request, env: Env): Promise<Response> {
   const requestUrl = new URL(request.url);
   const source = mediaImageSource(requestUrl.searchParams.get('src'));
-  const width = clampNumber(numberValue(requestUrl.searchParams.get('w') || 1080), 120, 2400);
-  const quality = clampNumber(numberValue(requestUrl.searchParams.get('q') || 90), 60, 95);
+  const width = clampNumber(numberValue(requestUrl.searchParams.get('w') || 1440), 120, 3840);
+  const quality = clampNumber(numberValue(requestUrl.searchParams.get('q') || 92), 60, 98);
   const ttl = Math.max(3600, numberValue(env.CATALOG_CACHE_TTL_SECONDS || 86400));
   const cacheKey = new Request(mediaImageCacheUrl(requestUrl, source, width, quality), { method: 'GET' });
   const cached = await caches.default.match(cacheKey);

@@ -63,7 +63,7 @@ class _SearchScreenState extends State<SearchScreen> {
       add(query);
     }
     final categories = await PrismCatalogDataSource.instance.loadCategories();
-    for (final category in categories.take(80)) {
+    for (final category in categories) {
       add(category.name);
     }
     return suggestions;
@@ -232,7 +232,7 @@ class _SearchSuggestions extends StatelessWidget {
     return FutureBuilder<List<String>>(
       future: future,
       builder: (context, snapshot) {
-        final suggestions = (snapshot.data ?? const <String>[]).take(64).toList(growable: false);
+        final suggestions = snapshot.data ?? const <String>[];
         if (snapshot.connectionState == ConnectionState.waiting && suggestions.isEmpty) {
           return const Center(child: CircularProgressIndicator(color: Colors.white));
         }

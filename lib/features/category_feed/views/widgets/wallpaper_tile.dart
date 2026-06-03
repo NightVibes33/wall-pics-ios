@@ -80,8 +80,6 @@ class WallpaperTile extends StatelessWidget {
     return item.when(
       prism: (_, wallpaper) {
         if (!isMatchingSetItem(item)) return const <String>[];
-        final previews = _stringList(wallpaper.aiMetadata?['catalogPairedPreviewUrls']);
-        if (previews.isNotEmpty) return previews;
         return pairedImageUrlsForItem(item);
       },
       wallhaven: (_, _) => const <String>[],
@@ -112,9 +110,9 @@ class WallpaperTile extends StatelessWidget {
         final preferred = _firstStringValue(
           <Object?>[
             wallpaper.core.fullUrl,
-            metadata['catalogPreviewUrl'],
             metadata['catalogStaticThumbnailUrl'],
             metadata['catalogFirstFrameThumbnailUrl'],
+            metadata['catalogPreviewUrl'],
             wallpaper.core.thumbnailUrl,
           ],
           imageOnly: true,
@@ -305,36 +303,6 @@ class WallpaperTile extends StatelessWidget {
     );
   }
 
-  Widget _matchingSetTile(
-    BuildContext context,
-    List<String> urls, {
-    required int cacheWidth,
-    required int cacheHeight,
-  }) {
-    final rowCount = (urls.length / 2).ceil();
-    final sideCacheWidth = (cacheWidth / 2).ceil();
-    final sideCacheHeight = (cacheHeight / rowCount).ceil();
-    final rows = <Widget>[];
-    for (var index = 0; index < urls.length; index += 2) {
-      rows.add(
-        Expanded(
-          child: Row(
-            children: <Widget>[
-              Expanded(child: _cachedTileImage(context, urls[index], cacheWidth: sideCacheWidth, cacheHeight: sideCacheHeight)),
-              const SizedBox(width: 2, child: ColoredBox(color: Colors.black)),
-              if (index + 1 < urls.length)
-                Expanded(child: _cachedTileImage(context, urls[index + 1], cacheWidth: sideCacheWidth, cacheHeight: sideCacheHeight))
-              else
-                const Spacer(),
-            ],
-          ),
-        ),
-      );
-      if (index + 2 < urls.length) rows.add(const SizedBox(height: 2, child: ColoredBox(color: Colors.black)));
-    }
-    return Column(children: rows);
-  }
-
   @override
   Widget build(BuildContext context) {
     final columns = crossAxisCount ?? (MediaQuery.orientationOf(context) == Orientation.portrait ? 3 : 5);
@@ -344,15 +312,13 @@ class WallpaperTile extends StatelessWidget {
     final pixelRatio = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 3.0);
     final cacheWidth = (width * pixelRatio).ceil();
     final cacheHeight = (height * pixelRatio).ceil();
-    final pairedImageUrls = pairedPreviewUrlsForItem(item);
     final videoUrl = videoUrlForItem(item);
+    final shouldPlayVideo = videoUrl.isNotEmpty || playVideoPreview;
     final posterUrl = posterUrlForItem(item);
     final tileImageUrl = posterUrl.isNotEmpty ? posterUrl : item.thumbnailUrl;
-    final image = pairedImageUrls.length >= 2
-        ? _matchingSetTile(context, pairedImageUrls, cacheWidth: cacheWidth, cacheHeight: cacheHeight)
-        : (playVideoPreview || videoUrl.isNotEmpty) && videoUrl.isNotEmpty
-            ? AutoplayVideoPreview(videoUrl: videoUrl, posterUrl: tileImageUrl, playing: true)
-            : _cachedTileImage(context, tileImageUrl, cacheWidth: cacheWidth, cacheHeight: cacheHeight);
+    final image = shouldPlayVideo && videoUrl.isNotEmpty
+        ? AutoplayVideoPreview(videoUrl: videoUrl, posterUrl: tileImageUrl, playing: true)
+        : _cachedTileImage(context, tileImageUrl, cacheWidth: cacheWidth, cacheHeight: cacheHeight);
     return Material(
       color: Colors.transparent,
       child: InkWell(

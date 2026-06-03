@@ -1020,7 +1020,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     }
 
     final isParallax = _isPrismParallax(entity);
-    final String? liveStillUrl = null;
+    final String? liveStillUrl = isLivePhoto ? _catalogDisplayImageUrl(entity) : null;
     final parallaxCompositePath = isParallax ? _parallaxCompositePathFor(entity) : null;
     final downloadUrl = parallaxCompositePath ?? (isParallax ? _catalogDisplayImageUrl(entity) : entity.fullUrl);
     final setWallpaperUrl =

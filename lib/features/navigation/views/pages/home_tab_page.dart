@@ -73,10 +73,6 @@ class _HomeTabPageState extends State<HomeTabPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final Set<String> _precachedUrls = <String>{};
-  final Map<String, GlobalKey> _sectionKeys = <String, GlobalKey>{};
-
-  List<_HomeSection> _latestSections = const <_HomeSection>[];
-  String? _activeVideoSectionKey;
 
   late Future<_HomeDashboardData> _dashboardFuture;
   bool _hasConnection = true;
@@ -88,14 +84,12 @@ class _HomeTabPageState extends State<HomeTabPage> {
     super.initState();
     _dashboardFuture = _loadDashboard();
     _searchController.addListener(_onSearchTextChanged);
-    _scrollController.addListener(_updateActiveVideoSection);
     _checkConnection();
   }
 
   @override
   void dispose() {
     _searchController.removeListener(_onSearchTextChanged);
-    _scrollController.removeListener(_updateActiveVideoSection);
     _searchController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -150,56 +144,6 @@ class _HomeTabPageState extends State<HomeTabPage> {
       _searchController.clear();
       _dashboardFuture = _loadDashboard();
     });
-  }
-
-  GlobalKey _sectionKeyFor(_HomeSection section) {
-    return _sectionKeys.putIfAbsent(section.playbackKey, () => GlobalKey());
-  }
-
-  void _captureDashboardData(_HomeDashboardData? data) {
-    final sections = data?.sections ?? const <_HomeSection>[];
-    _latestSections = sections;
-    final liveKeys = sections.map((section) => section.playbackKey).toSet();
-    _sectionKeys.removeWhere((key, _) => !liveKeys.contains(key));
-    WidgetsBinding.instance.addPostFrameCallback((_) => _updateActiveVideoSection());
-  }
-
-  void _updateActiveVideoSection() {
-    if (!mounted || _latestSections.isEmpty) {
-      return;
-    }
-    final mediaQuery = MediaQuery.of(context);
-    final viewportTop = mediaQuery.padding.top + 4;
-    final viewportBottom = mediaQuery.size.height - mediaQuery.padding.bottom - 112;
-    var bestScore = 0.0;
-    String? bestKey;
-    for (final section in _latestSections) {
-      if (section.kind != _SectionKind.live) {
-        continue;
-      }
-      final renderObject = _sectionKeys[section.playbackKey]?.currentContext?.findRenderObject();
-      if (renderObject is! RenderBox || !renderObject.attached) {
-        continue;
-      }
-      final top = renderObject.localToGlobal(Offset.zero).dy;
-      final height = renderObject.size.height;
-      if (height <= 0) {
-        continue;
-      }
-      final bottom = top + height;
-      final visible = math.min(bottom, viewportBottom) - math.max(top, viewportTop);
-      final score = math.max(0.0, visible) / height;
-      if (score > bestScore) {
-        bestScore = score;
-        bestKey = section.playbackKey;
-      }
-    }
-    if (bestScore < 0.28) {
-      bestKey = null;
-    }
-    if (bestKey != _activeVideoSectionKey) {
-      setState(() => _activeVideoSectionKey = bestKey);
-    }
   }
 
   Future<_HomeDashboardData> _loadDashboard() async {
@@ -272,7 +216,7 @@ class _HomeTabPageState extends State<HomeTabPage> {
 
     final sections = <_HomeSection>[];
     for (final section in bootstrap.sections) {
-      final items = _uniqueItems(section.items).take(18).toList(growable: false);
+      final items = _uniqueItems(section.items).toList(growable: false);
       if (items.isEmpty) {
         continue;
       }
@@ -334,7 +278,7 @@ class _HomeTabPageState extends State<HomeTabPage> {
         contentType: contentType,
         slug: slug,
         kind: kind,
-        items: _uniqueItems(page?.items ?? const <FeedItemEntity>[]).take(12).toList(growable: false),
+        items: _uniqueItems(page?.items ?? const <FeedItemEntity>[]).toList(growable: false),
       );
     } catch (_) {
       return _HomeSection.empty(title: title, contentType: contentType, slug: slug, kind: kind);
@@ -343,13 +287,13 @@ class _HomeTabPageState extends State<HomeTabPage> {
 
   Future<_HomeSection> _loadSearchSection({required String title, required String query}) async {
     try {
-      final page = await PrismCatalogDataSource.instance.search(query: query, refresh: true, scanFullIndex: false);
+      final page = await PrismCatalogDataSource.instance.search(query: query, refresh: true);
       return _HomeSection(
         title: title,
         contentType: PrismCatalogDataSource.regularContentType,
         slug: 'for-you',
         kind: _SectionKind.wallpaper,
-        items: _uniqueItems(page.items).take(12).toList(growable: false),
+        items: _uniqueItems(page.items).toList(growable: false),
       );
     } catch (_) {
       return _HomeSection.empty(
@@ -397,9 +341,8 @@ class _HomeTabPageState extends State<HomeTabPage> {
     final urls = data.sections
         .expand((section) => section.items)
         .expand((item) {
-          final paired = WallpaperTile.pairedPreviewUrlsForItem(item);
-          if (paired.isNotEmpty) return paired;
-          final thumbnailUrl = item.thumbnailUrl.trim();
+          final displayItems = WallpaperTile.expandMatchingItemsForDisplay(<FeedItemEntity>[item]);
+          final thumbnailUrl = (displayItems.isNotEmpty ? displayItems.first : item).thumbnailUrl.trim();
           final thumbnailPath = Uri.tryParse(thumbnailUrl)?.path.toLowerCase() ?? thumbnailUrl.toLowerCase();
           if (thumbnailUrl.isEmpty || thumbnailPath.endsWith('.zip')) {
             return const <String>[];
@@ -407,7 +350,7 @@ class _HomeTabPageState extends State<HomeTabPage> {
           return <String>[thumbnailUrl];
         })
         .where((url) => url.isNotEmpty)
-        .take(36)
+        .take(96)
         .where(_precachedUrls.add)
         .toList(growable: false);
     if (urls.isEmpty) {
@@ -435,7 +378,6 @@ class _HomeTabPageState extends State<HomeTabPage> {
               future: _dashboardFuture,
               builder: (context, snapshot) {
                 final data = snapshot.data;
-                _captureDashboardData(data);
                 if (data != null) {
                   _precacheDashboardImages(data);
                 }
@@ -474,8 +416,6 @@ class _HomeTabPageState extends State<HomeTabPage> {
                           loading: snapshot.connectionState == ConnectionState.waiting && data == null,
                           sections: data?.sections ?? const <_HomeSection>[],
                           onTabSelected: _selectTab,
-                          activeVideoSectionKey: _activeVideoSectionKey,
-                          sectionKeyFor: _sectionKeyFor,
                           onMore: (section) => _openCatalog(
                             title: section.title,
                             contentType: section.contentType,
@@ -728,8 +668,6 @@ class _CatalogPanel extends StatelessWidget {
     required this.activeTabIndex,
     required this.loading,
     required this.sections,
-    required this.activeVideoSectionKey,
-    required this.sectionKeyFor,
     required this.onTabSelected,
     required this.onMore,
   });
@@ -738,8 +676,6 @@ class _CatalogPanel extends StatelessWidget {
   final int activeTabIndex;
   final bool loading;
   final List<_HomeSection> sections;
-  final String? activeVideoSectionKey;
-  final GlobalKey Function(_HomeSection section) sectionKeyFor;
   final ValueChanged<int> onTabSelected;
   final ValueChanged<_HomeSection> onMore;
 
@@ -762,13 +698,9 @@ class _CatalogPanel extends StatelessWidget {
             const _EmptyDashboard()
           else
             for (final section in sections)
-              KeyedSubtree(
-                key: sectionKeyFor(section),
-                child: _WallpaperSection(
-                  section: section,
-                  playVideo: section.kind == _SectionKind.live || activeVideoSectionKey == section.playbackKey,
-                  onMore: () => onMore(section),
-                ),
+              _WallpaperSection(
+                section: section,
+                onMore: () => onMore(section),
               ),
           const SizedBox(height: 220),
         ],
@@ -830,10 +762,9 @@ class _TopTabs extends StatelessWidget {
 }
 
 class _WallpaperSection extends StatelessWidget {
-  const _WallpaperSection({required this.section, required this.playVideo, required this.onMore});
+  const _WallpaperSection({required this.section, required this.onMore});
 
   final _HomeSection section;
-  final bool playVideo;
   final VoidCallback onMore;
 
   @override
@@ -845,7 +776,7 @@ class _WallpaperSection extends StatelessWidget {
         ? WallpaperTile.matchingSideItemsForItems(section.items)
         : WallpaperTile.expandMatchingItemsForDisplay(section.items);
     final galleryItems = sourceItems.toList(growable: false);
-    final visibleItems = galleryItems.take(section.kind == _SectionKind.matching ? 12 : 9).toList(growable: false);
+    final visibleItems = galleryItems;
     final titleFontSize = section.title.length > 14 ? 23.0 : 27.0;
 
     return Padding(
@@ -889,7 +820,6 @@ class _WallpaperSection extends StatelessWidget {
                     index: index,
                     section: section,
                     galleryItems: galleryItems,
-                    playVideo: playVideo,
                   ),
                 );
               },
@@ -909,27 +839,22 @@ class _HomeWallpaperCard extends StatelessWidget {
     required this.index,
     required this.section,
     required this.galleryItems,
-    required this.playVideo,
   });
 
   final FeedItemEntity item;
   final int index;
   final _HomeSection section;
   final List<FeedItemEntity> galleryItems;
-  final bool playVideo;
 
   @override
   Widget build(BuildContext context) {
     final isProfile = section.kind == _SectionKind.profile || WallpaperTile.isProfilePictureItem(item);
-    final paired = WallpaperTile.pairedPreviewUrlsForItem(item);
     final videoUrl = WallpaperTile.videoUrlForItem(item);
     final posterUrl = WallpaperTile.posterUrlForItem(item);
     final imageUrl = posterUrl.isNotEmpty ? posterUrl : item.thumbnailUrl;
-    final image = paired.length >= 2
-        ? _pairedImage(context, paired)
-        : section.kind == _SectionKind.live && playVideo && videoUrl.isNotEmpty
-            ? AutoplayVideoPreview(videoUrl: videoUrl, posterUrl: imageUrl, playing: true)
-            : _image(context, imageUrl, isProfile: isProfile);
+    final image = videoUrl.isNotEmpty
+        ? AutoplayVideoPreview(videoUrl: videoUrl, posterUrl: imageUrl, playing: true)
+        : _image(context, imageUrl, isProfile: isProfile);
     final shape = isProfile ? const CircleBorder() : RoundedRectangleBorder(borderRadius: BorderRadius.circular(8));
     return Material(
       color: Colors.transparent,
@@ -967,28 +892,6 @@ class _HomeWallpaperCard extends StatelessWidget {
   bool _isArchiveUrl(String url) {
     final path = Uri.tryParse(url)?.path.toLowerCase() ?? url.toLowerCase();
     return path.endsWith('.zip');
-  }
-
-  Widget _pairedImage(BuildContext context, List<String> urls) {
-    final rows = <Widget>[];
-    for (var index = 0; index < urls.length; index += 2) {
-      rows.add(
-        Expanded(
-          child: Row(
-            children: <Widget>[
-              Expanded(child: _image(context, urls[index])),
-              const SizedBox(width: 3, child: ColoredBox(color: Colors.black)),
-              if (index + 1 < urls.length)
-                Expanded(child: _image(context, urls[index + 1]))
-              else
-                const Spacer(),
-            ],
-          ),
-        ),
-      );
-      if (index + 2 < urls.length) rows.add(const SizedBox(height: 3, child: ColoredBox(color: Colors.black)));
-    }
-    return Column(children: rows);
   }
 
   Widget _image(BuildContext context, String rawUrl, {bool isProfile = false}) {
@@ -1319,8 +1222,8 @@ class _MatchingCatalogScreenState extends State<_MatchingCatalogScreen> {
 
   void _precacheVisiblePairs() {
     final urls = _items
-        .take(12)
-        .expand(WallpaperTile.pairedPreviewUrlsForItem)
+        .take(36)
+        .expand((item) => WallpaperTile.matchingSideItemsForItem(item).map((side) => side.thumbnailUrl))
         .where((url) => url.trim().isNotEmpty)
         .take(24)
         .toList(growable: false);
