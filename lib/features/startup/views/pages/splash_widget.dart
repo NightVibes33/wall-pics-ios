@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:Prism/core/di/injection.dart';
 import 'package:Prism/core/persistence/data_sources/settings_local_data_source.dart';
 import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
+import 'package:Prism/core/state/auth_runtime.dart';
 import 'package:Prism/core/utils/status.dart';
 import 'package:Prism/features/onboarding_v2/src/utils/onboarding_v2_config.dart';
 import 'package:Prism/features/startup/biz/bloc/startup_bloc.j.dart';
@@ -39,7 +42,7 @@ class _SplashWidgetState extends State<SplashWidget> {
       if (!mounted) return;
       final s = context.read<StartupBloc>().state;
       if (s.status == LoadStatus.success && !s.isObsoleteVersion) {
-        _navigatePostBootstrap(context);
+        unawaited(_navigatePostBootstrap(context));
       }
     });
   }
@@ -56,11 +59,15 @@ class _SplashWidgetState extends State<SplashWidget> {
     logger.d('Notch Height = $height');
   }
 
-  void _navigatePostBootstrap(BuildContext context) {
+  Future<void> _navigatePostBootstrap(BuildContext context) async {
     if (_navigated) {
       return;
     }
     _navigated = true;
+    await waitForAuthBootstrap();
+    if (!mounted) {
+      return;
+    }
     final effectiveDebugForce = OnboardingV2Config.debugForceOnboarding && !_debugOnboardingShownThisSession;
     final isOnboarded = !effectiveDebugForce && _settingsLocal.get<bool>('onboarded_v2_new', defaultValue: false);
     final v2Enabled = effectiveDebugForce || (context.read<StartupBloc>().state.config?.onboardingV2Enabled ?? false);
@@ -85,7 +92,7 @@ class _SplashWidgetState extends State<SplashWidget> {
     return BlocConsumer<StartupBloc, StartupState>(
       listener: (context, state) {
         if (state.status == LoadStatus.success && !state.isObsoleteVersion) {
-          _navigatePostBootstrap(context);
+          unawaited(_navigatePostBootstrap(context));
         }
       },
       builder: (context, state) {

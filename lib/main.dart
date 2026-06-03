@@ -26,6 +26,7 @@ import 'package:Prism/core/router/deep_link_navigation.dart';
 import 'package:Prism/core/router/deep_link_parser.dart';
 import 'package:Prism/core/router/notification_route_mapper.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
+import 'package:Prism/core/state/auth_runtime.dart';
 import 'package:Prism/core/utils/edge_to_edge_overlay_style.dart';
 import 'package:Prism/core/utils/status.dart';
 import 'package:Prism/core/utils/url_launcher_compat.dart' as launcher_compat;
@@ -487,7 +488,8 @@ class _MyAppState extends State<_MyApp> with WidgetsBindingObserver {
     await _syncAnalyticsIdentityFromAppState(sourceTag: 'startup_login_status');
     if (value) {
     }
-    app_state.persistPrismUser();
+    await app_state.persistPrismUser();
+    completeAuthBootstrap();
     await syncSentryUserScope(
       loggedIn: app_state.prismUser.loggedIn,
       id: app_state.prismUser.id,
@@ -816,7 +818,7 @@ class _MyAppState extends State<_MyApp> with WidgetsBindingObserver {
     _appRouter = AppRouter(/* navigatorKey: _sentryFeedbackNavigatorKey */);
     _analyticsIdentitySync = AnalyticsIdentitySync(analytics: AnalyticsRuntime.instance);
     unawaited(_configureLocalNotificationChannels());
-    unawaited(getLoginStatus());
+    unawaited(getLoginStatus().whenComplete(completeAuthBootstrap));
     unawaited(localNotification.fetchNotificationData(context));
     unawaited(_listenForPushMessages());
   }

@@ -49,6 +49,8 @@ class PurchasesService {
   Completer<bool>? _pendingPurchaseCompleter;
   bool _configured = false;
   bool _available = false;
+  String? _availabilityMessage;
+  String? _productQueryMessage;
 
   Future<void> configureEarly() => ensureConfigured(app_state.prismUser.id);
 
@@ -57,11 +59,22 @@ class PurchasesService {
       return;
     }
     _configured = true;
-    if (Env.sideloadBuild || !Platform.isIOS) {
+    if (!Platform.isIOS) {
       _available = false;
+      _availabilityMessage = 'Apple in-app purchases only run on iPhone builds.';
+      return;
+    }
+    if (Env.sideloadBuild) {
+      _available = false;
+      _availabilityMessage = 'Apple payments require a TestFlight or App Store signed build. Unsigned IPAs cannot open the Apple purchase sheet.';
       return;
     }
     _available = await _iap.isAvailable();
+    if (!_available) {
+      _availabilityMessage = 'Apple in-app purchases are not available on this device or build.';
+      return;
+    }
+    _availabilityMessage = null;
     _purchaseSubscription = _iap.purchaseStream.listen(
       _handlePurchaseUpdates,
       onError: (Object error, StackTrace stackTrace) {
@@ -73,6 +86,10 @@ class PurchasesService {
 
   bool get isAvailable => _available;
 
+  String? get availabilityMessage => _availabilityMessage;
+
+  String? get productQueryMessage => _productQueryMessage;
+
   Future<List<ProductDetails>> loadProducts({bool refresh = false}) async {
     await ensureConfigured(app_state.prismUser.id);
     if (!_available) {
@@ -82,12 +99,18 @@ class PurchasesService {
       return _sortedProducts(_productsById.values.toList(growable: false));
     }
 
+    _productQueryMessage = null;
     final response = await _iap.queryProductDetails(PurchaseConstants.appleProductIds.toSet());
     if (response.error != null) {
+      _productQueryMessage = 'Apple product lookup failed: ${response.error!.message}';
       logger.w('Apple product query failed: ${response.error}');
     }
     if (response.notFoundIDs.isNotEmpty) {
+      _productQueryMessage = 'Missing App Store Connect products: ${response.notFoundIDs.join(', ')}';
       logger.w('Apple products missing in App Store Connect: ${response.notFoundIDs.join(', ')}');
+    }
+    if (response.productDetails.isEmpty && _productQueryMessage == null) {
+      _productQueryMessage = 'No App Store Connect products were returned for this app bundle.';
     }
     _productsById
       ..clear()
@@ -98,10 +121,13 @@ class PurchasesService {
   Future<bool> purchaseProduct(String productId, {required String source}) async {
     await ensureConfigured(app_state.prismUser.id);
     if (!_available) {
+      logger.w('Apple purchase unavailable: ${_availabilityMessage ?? 'unknown reason'}');
       return false;
     }
     final product = await _productById(productId);
     if (product == null) {
+      _productQueryMessage = _productQueryMessage ?? 'Product $productId was not returned by App Store Connect.';
+      logger.w('Apple product unavailable: $productId');
       return false;
     }
 
@@ -121,6 +147,7 @@ class PurchasesService {
   Future<bool> restore({required String source}) async {
     await ensureConfigured(app_state.prismUser.id);
     if (!_available) {
+      logger.w('Apple restore unavailable: ${_availabilityMessage ?? 'unknown reason'}');
       return false;
     }
     _pendingPurchaseCompleter = Completer<bool>();

@@ -10,6 +10,7 @@ import 'package:Prism/core/remote_store/remote_store_error.dart';
 import 'package:Prism/core/network/connectivity_service.dart';
 import 'package:Prism/core/platform/pigeon/prism_media_api.g.dart';
 import 'package:Prism/core/platform/wallpaper_capability.dart';
+import 'package:Prism/core/purchases/download_access_service.dart';
 import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:Prism/core/wallpaper/wallpaper_source.dart';
@@ -513,6 +514,14 @@ class _AiWallpaperTabPageState extends State<AiWallpaperTabPage> {
   }
 
   Future<void> _save(AiGenerationRecord record) async {
+    final canDownload = await DownloadAccessService.instance.ensureCanDownload(
+      context,
+      contentId: record.id,
+      sourceContext: 'ai_wallpaper_save',
+    );
+    if (!canDownload) {
+      return;
+    }
     final link = record.displayUrl(isPremium: app_state.prismUser.premium);
     try {
       final request = DownloadRequest(

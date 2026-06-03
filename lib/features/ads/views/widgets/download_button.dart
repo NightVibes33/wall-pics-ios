@@ -110,8 +110,9 @@ class _DownloadButtonState extends State<DownloadButton> {
     try {
       final sourceContext = widget.sourceContext ?? 'download_button';
       final contentId = widget.contentId ?? _filenameBaseFromUrl(link);
-      final canDownload = await DownloadAccessService.instance.ensureCanStartDownload(
+      final canDownload = await DownloadAccessService.instance.ensureCanDownload(
         context,
+        contentId: contentId,
         sourceContext: sourceContext,
       );
       if (!canDownload) {
@@ -157,10 +158,6 @@ class _DownloadButtonState extends State<DownloadButton> {
         }
       }
 
-      await DownloadAccessService.instance.claimSuccessfulFreeDownload(
-        contentId: contentId,
-        sourceContext: sourceContext,
-      );
       analytics.track(
         DownloadWallpaperEvent(
           link: link,

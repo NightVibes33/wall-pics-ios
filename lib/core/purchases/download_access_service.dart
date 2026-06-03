@@ -52,25 +52,31 @@ class DownloadAccessService {
     }
   }
 
-  Future<void> claimSuccessfulFreeDownload({
+  Future<bool> claimSuccessfulFreeDownload({
     String? contentId,
     String? sourceContext,
   }) async {
     await PurchasesService.instance.checkAndPersistPremium();
     if (app_state.prismUser.premium) {
-      return;
+      return true;
     }
     if (!app_state.prismUser.loggedIn || app_state.prismUser.id.trim().isEmpty) {
-      return;
+      return false;
     }
 
     try {
       final claim = await _userStore.claimFreeDownload(contentId: contentId, sourceContext: sourceContext);
-      if (claim.allowed && claim.quota.remaining > 0) {
+      if (!claim.allowed) {
+        toasts.error('Free download limit reached for today.');
+        return false;
+      }
+      if (claim.quota.remaining > 0) {
         toasts.codeSend('${claim.quota.remaining} free downloads left today.');
       }
+      return true;
     } catch (_) {
-      toasts.error('Saved, but download quota could not be updated.');
+      toasts.error('Could not update download quota. Sign in again or unlock Pro.');
+      return false;
     }
   }
 
@@ -83,7 +89,17 @@ class DownloadAccessService {
     if (!canStart) {
       return false;
     }
-    await claimSuccessfulFreeDownload(contentId: contentId, sourceContext: sourceContext);
-    return true;
+    final claimed = await claimSuccessfulFreeDownload(contentId: contentId, sourceContext: sourceContext);
+    if (claimed) {
+      return true;
+    }
+    if (context.mounted) {
+      await PaywallOrchestrator.instance.present(
+        context,
+        placement: PaywallPlacement.freeDownloadLimit,
+        source: sourceContext ?? 'download_claim_denied',
+      );
+    }
+    return app_state.prismUser.premium;
   }
 }

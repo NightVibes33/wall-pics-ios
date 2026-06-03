@@ -6,6 +6,7 @@ import 'package:Prism/core/analytics/events/events.dart';
 import 'package:Prism/core/platform/pigeon/prism_media_api.g.dart';
 import 'package:Prism/core/platform/wallpaper_capability.dart';
 import 'package:Prism/core/platform/wallpaper_service.dart';
+import 'package:Prism/core/purchases/download_access_service.dart';
 import 'package:Prism/core/widgets/animated/loader.dart';
 import 'package:Prism/core/widgets/menuButton/setWallpaperButton.dart';
 import 'package:Prism/features/palette/views/pages/custom_filters.dart';
@@ -204,6 +205,14 @@ class _WallpaperFilterScreenState extends State<WallpaperFilterScreen> {
     if (isLoading || loading) {
       return;
     }
+    final canDownload = await DownloadAccessService.instance.ensureCanDownload(
+      context,
+      contentId: widget.finalFilename ?? widget.filename ?? 'filtered-wallpaper',
+      sourceContext: 'wallpaper_filter_download',
+    );
+    if (!canDownload) {
+      return;
+    }
     toasts.codeSend("Processing Wallpaper");
     final imageFile = await saveFilteredImage();
     if (!mounted) {
@@ -242,6 +251,14 @@ class _WallpaperFilterScreenState extends State<WallpaperFilterScreen> {
 
   Future<void> _handleSetAction() async {
     if (loading) {
+      return;
+    }
+    final canDownload = await DownloadAccessService.instance.ensureCanDownload(
+      context,
+      contentId: widget.finalFilename ?? widget.filename ?? 'filtered-wallpaper',
+      sourceContext: 'wallpaper_filter_download',
+    );
+    if (!canDownload) {
       return;
     }
     toasts.codeSend("Processing Wallpaper");

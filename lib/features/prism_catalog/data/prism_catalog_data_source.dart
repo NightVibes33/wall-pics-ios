@@ -420,7 +420,8 @@ class PrismCatalogDataSource {
     }
 
     String previewFromItem(_PrismItem item) {
-      return _firstString(<Object?>[item.firstFrameThumbnailUrl, item.thumbnailUrl, item.staticThumbnailUrl, item.previewUrl]);
+      final candidate = _firstString(<Object?>[item.thumbnailUrl, item.staticThumbnailUrl, item.firstFrameThumbnailUrl]);
+      return _isCatalogPreviewAssetUrl(candidate) ? '' : candidate;
     }
 
     try {
@@ -1482,7 +1483,6 @@ class _PrismItem {
     final template = url(json['template']);
     final sticker = url(json['sticker']);
     final parallaxFile = url(json['parallax_file']);
-    final previewImage = url(json['preview_image']);
     final catalogDownload = url(json['download_url']);
     final appDisplayUrl = url(json['app_display_url']);
     final appDownloadUrl = url(json['app_download_url']);
@@ -1505,7 +1505,7 @@ class _PrismItem {
     final pairedDownloadUrls = _uniqueStrings(<String>[
       ...explicitPairedDownloadUrls,
       ...derivedPairedDownloadUrls,
-    ]);
+    ].where(_isActualCatalogImageUrl));
     final derivedPairedPreviewUrls = pairedWallpapers
         .map((wallpaper) => _firstString(<Object?>[
               url(wallpaper['wallpaper']),
@@ -1518,17 +1518,21 @@ class _PrismItem {
         .toList(growable: false);
     final pairedDownloadDisplayUrls = _uniqueStrings(pairedDownloadUrls.map(_fastTileOrOriginal));
     final pairedFallbackPreviewUrls = _uniqueStrings(<String>[
-      ...derivedPairedPreviewUrls.map(_fastTileOrOriginal),
+      ...derivedPairedPreviewUrls.where(_isActualCatalogImageUrl).map(_fastTileOrOriginal),
     ]);
     final pairedDisplayUrls = pairedDownloadDisplayUrls.isNotEmpty ? pairedDownloadDisplayUrls : pairedFallbackPreviewUrls;
     final normalizedMatchingSides = <Map<String, dynamic>>[
       for (var index = 0; index < appMatchingSides.length; index++)
         <String, dynamic>{
           ...appMatchingSides[index],
-          'download_url': url(appMatchingSides[index]['download_url']),
+          'download_url': _isActualCatalogImageUrl(url(appMatchingSides[index]['download_url']))
+              ? url(appMatchingSides[index]['download_url'])
+              : '',
           'preview_url': index < pairedDisplayUrls.length
               ? pairedDisplayUrls[index]
-              : _fastTileOrOriginal(url(appMatchingSides[index]['download_url'])),
+              : _isActualCatalogImageUrl(url(appMatchingSides[index]['download_url']))
+                  ? _fastTileOrOriginal(url(appMatchingSides[index]['download_url']))
+                  : '',
         },
     ];
     final mediaAssetUrls = _strings(json['media_assets'])
@@ -1567,6 +1571,8 @@ class _PrismItem {
           path.endsWith('.gif');
     }
 
+    bool isActualImageUrl(String value) => isImageUrl(value) && _isActualCatalogImageUrl(value);
+
     final fastVideo = _fastVideoOrOriginal(video);
     final fastThumbnailVideo = _fastVideoOrOriginal(url(json['thumbnail_video']));
     final fastAppDownloadVideo = isVideoUrl(appDownloadUrl) ? _fastVideoOrOriginal(appDownloadUrl) : '';
@@ -1577,7 +1583,7 @@ class _PrismItem {
       final thumbnailConfig = _asMap(json['thumbnail_config']);
       for (final layer in _maps(thumbnailConfig['layers'])) {
         final candidate = url(layer['url']);
-        if (isImageUrl(candidate)) {
+        if (isActualImageUrl(candidate)) {
           return candidate;
         }
       }
@@ -1598,19 +1604,15 @@ class _PrismItem {
           ])
         : '';
     final imageDownload = _firstString(<Object?>[
-      isImageUrl(appDownloadUrl) ? appDownloadUrl : '',
-      isImageUrl(appDisplayUrl) ? appDisplayUrl : '',
-      isImageUrl(catalogDownload) ? catalogDownload : '',
+      isActualImageUrl(appDownloadUrl) ? appDownloadUrl : '',
+      isActualImageUrl(appDisplayUrl) ? appDisplayUrl : '',
+      isActualImageUrl(catalogDownload) ? catalogDownload : '',
     ]);
     final fullImage = _firstString(<Object?>[
       imageDownload,
-      isImageUrl(wallpaper) ? wallpaper : '',
-      isImageUrl(image) ? image : '',
-      isImageUrl(sticker) ? sticker : '',
-      isImageUrl(hqThumbnail) ? hqThumbnail : '',
-      isImageUrl(staticThumbnail) ? staticThumbnail : '',
-      isImageUrl(firstFrameThumbnail) ? firstFrameThumbnail : '',
-      isImageUrl(thumbnail) ? thumbnail : '',
+      isActualImageUrl(wallpaper) ? wallpaper : '',
+      isActualImageUrl(image) ? image : '',
+      isActualImageUrl(sticker) ? sticker : '',
     ]);
     final fullMedia = _firstString(<Object?>[
       appDownloadUrl,
@@ -1623,12 +1625,12 @@ class _PrismItem {
       parallaxFile,
     ]);
     final livePoster = _firstString(<Object?>[
-      isImageUrl(fullImage) ? fullImage : '',
-      isImageUrl(firstFrameThumbnail) ? firstFrameThumbnail : '',
-      isImageUrl(staticThumbnail) ? staticThumbnail : '',
-      isImageUrl(hqThumbnail) ? hqThumbnail : '',
-      isImageUrl(thumbnail) ? thumbnail : '',
-      isImageUrl(previewImage) ? previewImage : '',
+      isActualImageUrl(fullImage) ? fullImage : '',
+      isActualImageUrl(appDisplayUrl) ? appDisplayUrl : '',
+      isActualImageUrl(appDownloadUrl) ? appDownloadUrl : '',
+      isActualImageUrl(catalogDownload) ? catalogDownload : '',
+      isActualImageUrl(wallpaper) ? wallpaper : '',
+      isActualImageUrl(image) ? image : '',
     ]);
     final parallaxLayerPreview = firstParallaxLayerImage();
     final fastFullImage = _fastTileOrOriginal(fullImage);
@@ -1651,15 +1653,15 @@ class _PrismItem {
     final staticThumb = isLiveContent
         ? _firstString(<Object?>[fastLivePoster, thumb])
         : _firstString(<Object?>[
-            isImageUrl(staticThumbnail) ? _fastTileOrOriginal(staticThumbnail) : '',
-            isImageUrl(hqThumbnail) ? _fastTileOrOriginal(hqThumbnail) : '',
+            isActualImageUrl(staticThumbnail) ? _fastTileOrOriginal(staticThumbnail) : '',
+            isActualImageUrl(hqThumbnail) ? _fastTileOrOriginal(hqThumbnail) : '',
             thumb,
             fastFullImage,
           ]);
     final preview = isMatchingContent
         ? _firstString(<Object?>[...pairedDisplayUrls, fullImage, thumb])
         : isLiveContent
-            ? _firstString(<Object?>[fastVideo, fastAppDownloadVideo, fastCatalogDownloadVideo, fullImage, livePoster, appDisplayUrl])
+            ? _firstString(<Object?>[fastVideo, fastAppDownloadVideo, fastCatalogDownloadVideo, fastWallpaperVideo, fullImage, livePoster])
             : isParallaxContent
                 ? _firstString(<Object?>[parallaxArchive, fullImage, thumb])
                 : _firstString(<Object?>[fullImage, thumb]);
@@ -1669,19 +1671,19 @@ class _PrismItem {
     final download = displayOnlyContent
         ? _firstString(<Object?>[parallaxArchive, appDownloadUrl, fullImage, preview, thumb, template, fullMedia])
         : isMatchingContent
-            ? _firstString(<Object?>[appDownloadUrl, catalogDownload, ...pairedDownloadUrls, wallpaper, image, ...pairedDisplayUrls])
+            ? _firstString(<Object?>[...pairedDownloadUrls, imageDownload, fullImage, ...pairedDisplayUrls])
             : isLiveContent
                 ? _firstString(<Object?>[
                     fastVideo,
                     fastAppDownloadVideo,
                     fastCatalogDownloadVideo,
                     fastWallpaperVideo,
-                    appDownloadUrl,
-                    catalogDownload,
+                    isVideoUrl(appDownloadUrl) ? appDownloadUrl : '',
+                    isVideoUrl(catalogDownload) ? catalogDownload : '',
                     video,
-                    wallpaper,
+                    isVideoUrl(wallpaper) ? wallpaper : '',
                   ])
-                : _firstString(<Object?>[appDownloadUrl, fullMedia]);
+                : _firstString(<Object?>[imageDownload, fullImage]);
     final rawWidth = _int(json['width']);
     final rawHeight = _int(json['height']);
     final normalizedSize = _normalizedCatalogSize(
@@ -1701,7 +1703,11 @@ class _PrismItem {
       previewUrl: preview,
       thumbnailUrl: thumb,
       staticThumbnailUrl: staticThumb,
-      firstFrameThumbnailUrl: firstFrameThumbnail,
+      firstFrameThumbnailUrl: isLiveContent
+          ? fastLivePoster
+          : isActualImageUrl(firstFrameThumbnail)
+              ? _fastTileOrOriginal(firstFrameThumbnail)
+              : '',
       videoUrl: fastVideo,
       thumbnailVideoUrl: fastThumbnailVideo,
       templateUrl: template.isNotEmpty ? template : catalogDownload,
@@ -1729,7 +1735,7 @@ class _PrismItem {
         contentType == PrismCatalogDataSource.liveDiyTemplateContentType ||
         contentType == PrismCatalogDataSource.chargingAnimationContentType;
     final String thumb = contentType == PrismCatalogDataSource.liveContentType
-        ? _firstString(<Object?>[firstFrameThumbnailUrl, thumbnailUrl, staticThumbnailUrl, previewUrl])
+        ? _firstString(<Object?>[thumbnailUrl, staticThumbnailUrl, firstFrameThumbnailUrl])
         : (contentType == PrismCatalogDataSource.matchingContentType ||
                 contentType == PrismCatalogDataSource.doubleContentType)
             ? _firstString(<Object?>[...pairedPreviewUrls, ...pairedDownloadUrls, thumbnailUrl, previewUrl, full])
@@ -1917,6 +1923,40 @@ bool _isProxyableCatalogImageUrl(String value) {
   return path.endsWith('.jpg') || path.endsWith('.jpeg') || path.endsWith('.png') || path.endsWith('.webp');
 }
 
+bool _isCatalogImageAssetUrl(String value) {
+  final raw = value.trim();
+  if (raw.isEmpty) return false;
+  final uri = Uri.tryParse(raw);
+  final src = uri?.queryParameters['src'];
+  final path = src != null && src.trim().isNotEmpty
+      ? (Uri.tryParse(src.trim())?.path.toLowerCase() ?? src.toLowerCase())
+      : (uri?.path.toLowerCase() ?? raw.toLowerCase());
+  return path.endsWith('.jpg') ||
+      path.endsWith('.jpeg') ||
+      path.endsWith('.png') ||
+      path.endsWith('.webp') ||
+      path.endsWith('.gif');
+}
+
+bool _isActualCatalogImageUrl(String value) => _isCatalogImageAssetUrl(value) && !_isCatalogPreviewAssetUrl(value);
+
+bool _isCatalogPreviewAssetUrl(String value) {
+  final raw = value.trim();
+  if (raw.isEmpty) return false;
+  final uri = Uri.tryParse(raw);
+  final decoded = Uri.decodeComponent(<String>[
+    uri?.path ?? raw,
+    uri?.query ?? '',
+  ].join('?')).toLowerCase();
+  return decoded.contains('/preview') ||
+      decoded.contains('/previews') ||
+      decoded.contains('/thumbnail') ||
+      decoded.contains('/thumb') ||
+      decoded.contains('first_frame') ||
+      decoded.contains('poster') ||
+      decoded.contains('watermark');
+}
+
 bool _isProxyableCatalogVideoUrl(String value) {
   final uri = Uri.tryParse(value.trim());
   if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
@@ -1933,7 +1973,11 @@ String _catalogVideoExtension(String value) {
 
 bool _isFastPrefetchableUrl(String value) {
   final path = Uri.tryParse(value.trim())?.path.toLowerCase() ?? value.toLowerCase();
-  return value.trim().isNotEmpty && !path.endsWith('.mp4') && !path.endsWith('.mov') && !path.endsWith('.zip');
+  return value.trim().isNotEmpty &&
+      !path.endsWith('.mp4') &&
+      !path.endsWith('.mov') &&
+      !path.endsWith('.zip') &&
+      !_isCatalogPreviewAssetUrl(value);
 }
 
 const Set<String> _blockedCatalogTerms = <String>{

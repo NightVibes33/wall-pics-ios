@@ -6,6 +6,7 @@ import 'package:Prism/core/di/injection.dart';
 import 'package:Prism/core/persistence/data_sources/favorites_local_data_source.dart';
 import 'package:Prism/core/platform/pigeon/prism_media_api.g.dart';
 import 'package:Prism/core/platform/wallpaper_capability.dart';
+import 'package:Prism/core/purchases/download_access_service.dart';
 import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:Prism/core/utils/url_launcher_compat.dart';
@@ -32,7 +33,6 @@ import 'package:Prism/theme/jam_icons_icons.dart';
 import 'package:Prism/theme/toasts.dart' as toasts;
 import 'package:auto_route/auto_route.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -671,10 +671,15 @@ class _ProfileSetupViewScreenState extends State<ProfileSetupViewScreen> with Si
                   onPressed: () async {
                     final link = _setup.image;
                     logger.d(link);
+                    final canDownload = await DownloadAccessService.instance.ensureCanDownload(
+                      context,
+                      contentId: _setup.id,
+                      sourceContext: 'profile_setup_download',
+                    );
+                    if (!canDownload) {
+                      return;
+                    }
 
-                    final androidInfo = await DeviceInfoPlugin().androidInfo;
-                    final sdkInt = androidInfo.version.sdkInt;
-                    logger.d('(SDK $sdkInt)');
                     toasts.codeSend("Starting Download");
 
                     final request = SaveMediaRequest(link: link, isLocalFile: false, kind: SaveMediaKind.setup);

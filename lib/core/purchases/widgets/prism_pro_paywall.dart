@@ -49,7 +49,7 @@ class _PrismProPaywallState extends State<PrismProPaywall> {
         toasts.codeSend('Přism Pro unlocked.');
         Navigator.of(context).pop(true);
       } else {
-        toasts.error('Purchase was not completed.');
+        toasts.error(_purchaseFailureMessage());
       }
     } catch (_) {
       if (mounted) {
@@ -74,7 +74,7 @@ class _PrismProPaywallState extends State<PrismProPaywall> {
         toasts.codeSend('Purchases restored.');
         Navigator.of(context).pop(true);
       } else {
-        toasts.error('No active Pro purchase found.');
+        toasts.error(_restoreFailureMessage());
       }
     } catch (_) {
       if (mounted) {
@@ -136,7 +136,10 @@ class _PrismProPaywallState extends State<PrismProPaywall> {
                   child: Center(child: CircularProgressIndicator(color: Colors.white)),
                 )
               else if (products.isEmpty)
-                _UnavailableProducts(onRetry: () => setState(() => _productsFuture = PurchasesService.instance.loadProducts(refresh: true)))
+                _UnavailableProducts(
+                  message: _productUnavailableMessage(snapshot.hasError),
+                  onRetry: () => setState(() => _productsFuture = PurchasesService.instance.loadProducts(refresh: true)),
+                )
               else
                 ...products.map(_productRow),
               const SizedBox(height: 10),
@@ -220,6 +223,25 @@ class _PrismProPaywallState extends State<PrismProPaywall> {
     );
   }
 
+  String _purchaseFailureMessage() {
+    return PurchasesService.instance.productQueryMessage ??
+        PurchasesService.instance.availabilityMessage ??
+        'Purchase was not completed.';
+  }
+
+  String _restoreFailureMessage() {
+    return PurchasesService.instance.availabilityMessage ?? 'No active Pro purchase found.';
+  }
+
+  String _productUnavailableMessage(bool hadLookupError) {
+    if (hadLookupError) {
+      return 'Apple product lookup failed. Please retry from a signed iPhone build.';
+    }
+    return PurchasesService.instance.productQueryMessage ??
+        PurchasesService.instance.availabilityMessage ??
+        'Apple products are not available yet.';
+  }
+
   String _titleForProduct(String productId) {
     switch (productId) {
       case PurchaseConstants.productYearly:
@@ -248,8 +270,9 @@ class _PrismProPaywallState extends State<PrismProPaywall> {
 }
 
 class _UnavailableProducts extends StatelessWidget {
-  const _UnavailableProducts({required this.onRetry});
+  const _UnavailableProducts({required this.message, required this.onRetry});
 
+  final String message;
   final VoidCallback onRetry;
 
   @override
@@ -259,14 +282,14 @@ class _UnavailableProducts extends StatelessWidget {
       decoration: BoxDecoration(color: const Color(0xFF18181C), borderRadius: BorderRadius.circular(18)),
       child: Column(
         children: <Widget>[
-          const Text(
-            'Apple products are not available yet.',
+          Text(
+            message,
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white, fontFamily: 'Satoshi', fontSize: 17, fontWeight: FontWeight.w800),
+            style: const TextStyle(color: Colors.white, fontFamily: 'Satoshi', fontSize: 17, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 6),
           Text(
-            'Create prism_pro_monthly, prism_pro_yearly, and prism_pro_lifetime in App Store Connect, then retry.',
+            'Apple payments only work in TestFlight or App Store signed builds with active App Store Connect products.',
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.white.withValues(alpha: 0.62), fontFamily: 'Satoshi', fontSize: 13, height: 1.28),
           ),
