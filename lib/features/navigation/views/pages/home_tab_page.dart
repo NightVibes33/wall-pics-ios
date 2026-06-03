@@ -830,7 +830,7 @@ class _WallpaperSection extends StatelessWidget {
         : WallpaperTile.expandMatchingItemsForDisplay(section.items);
     final galleryItems = sourceItems.toList(growable: false);
     final visibleItems = galleryItems.take(section.kind == _SectionKind.matching ? 12 : 9).toList(growable: false);
-    final titleFontSize = section.title.length > 17 ? 23.0 : 27.0;
+    final titleFontSize = section.title.length > 14 ? 23.0 : 27.0;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 24, 0, 0),
@@ -903,6 +903,7 @@ class _HomeWallpaperCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isProfile = section.kind == _SectionKind.profile;
     final paired = WallpaperTile.pairedPreviewUrlsForItem(item);
     final videoUrl = WallpaperTile.videoUrlForItem(item);
     final posterUrl = WallpaperTile.posterUrlForItem(item);
@@ -911,8 +912,7 @@ class _HomeWallpaperCard extends StatelessWidget {
         ? _pairedImage(context, paired)
         : section.kind == _SectionKind.live && playVideo && videoUrl.isNotEmpty
             ? AutoplayVideoPreview(videoUrl: videoUrl, posterUrl: imageUrl)
-            : _image(context, imageUrl);
-    final isProfile = section.kind == _SectionKind.profile;
+            : _image(context, imageUrl, isProfile: isProfile);
     final shape = isProfile ? const CircleBorder() : RoundedRectangleBorder(borderRadius: BorderRadius.circular(8));
     return Material(
       color: Colors.transparent,
@@ -974,7 +974,7 @@ class _HomeWallpaperCard extends StatelessWidget {
     return Column(children: rows);
   }
 
-  Widget _image(BuildContext context, String rawUrl) {
+  Widget _image(BuildContext context, String rawUrl, {bool isProfile = false}) {
     final url = rawUrl.trim();
     if (url.isEmpty) {
       return const ColoredBox(color: Color(0xFF111114));
@@ -985,7 +985,7 @@ class _HomeWallpaperCard extends StatelessWidget {
     final size = MediaQuery.sizeOf(context);
     final pixelRatio = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 3.0);
     final cacheWidth = ((size.width / 3) * pixelRatio).ceil();
-    final cacheHeight = (cacheWidth * 2).ceil();
+    final cacheHeight = isProfile ? cacheWidth : (cacheWidth * 2).ceil();
     return CachedNetworkImage(
       imageUrl: url,
       fit: BoxFit.cover,

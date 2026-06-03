@@ -19,6 +19,9 @@ class SearchScreen extends StatefulWidget {
 }
 
 class _SearchScreenState extends State<SearchScreen> {
+  static const _screenColor = Color(0xFF050506);
+  static const _fieldColor = Color(0xFF111114);
+
   final TextEditingController _searchController = TextEditingController();
   late final Future<List<String>> _suggestionsFuture;
   String _submittedQuery = '';
@@ -108,58 +111,112 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final canPop = Navigator.of(context).canPop();
     return Scaffold(
-      backgroundColor: Theme.of(context).primaryColor,
+      backgroundColor: _screenColor,
       appBar: AppBar(
-        backgroundColor: Theme.of(context).primaryColor,
+        toolbarHeight: 78,
+        backgroundColor: _screenColor,
         elevation: 0,
-        surfaceTintColor: Theme.of(context).primaryColor,
+        surfaceTintColor: _screenColor,
         automaticallyImplyLeading: false,
-        leading: Navigator.of(context).canPop()
-            ? IconButton(
-                tooltip: 'Back',
-                icon: Icon(Icons.arrow_back_ios_new, color: Theme.of(context).colorScheme.secondary),
-                onPressed: () => Navigator.of(context).pop(),
+        leadingWidth: canPop ? 64 : 0,
+        leading: canPop
+            ? Padding(
+                padding: const EdgeInsets.only(left: 14, top: 8, bottom: 8),
+                child: Material(
+                  color: _fieldColor,
+                  borderRadius: BorderRadius.circular(18),
+                  child: IconButton(
+                    tooltip: 'Back',
+                    icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ),
               )
             : null,
-        titleSpacing: 0,
+        titleSpacing: canPop ? 0 : 16,
         title: Padding(
-          padding: const EdgeInsets.only(left: 8, right: 8, top: 6),
-          child: TextField(
-            cursorColor: Theme.of(context).colorScheme.error,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontFamily: 'Satoshi',
-                  color: Theme.of(context).colorScheme.secondary,
-                ),
+          padding: const EdgeInsets.only(left: 8, right: 16, top: 4),
+          child: _SearchField(
             controller: _searchController,
+            isSubmitted: _isSubmitted,
             onChanged: (text) {
               if (text.trim().isEmpty && _isSubmitted) {
                 _clearSearch();
               }
             },
-            decoration: InputDecoration(
-              contentPadding: const EdgeInsets.only(left: 24, top: 12),
-              border: InputBorder.none,
-              disabledBorder: InputBorder.none,
-              enabledBorder: InputBorder.none,
-              focusedBorder: InputBorder.none,
-              hintText: 'Search Prism',
-              hintStyle: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontFamily: 'Satoshi',
-                    color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.68),
-                  ),
-              suffixIcon: IconButton(
-                tooltip: _isSubmitted ? 'Clear search' : 'Search',
-                icon: Icon(_isSubmitted ? Icons.close : JamIcons.search, color: Theme.of(context).colorScheme.secondary),
-                onPressed: _isSubmitted ? _clearSearch : () => _submitSearch(_searchController.text, fromSuggestion: false, sourceContext: 'search_icon'),
-              ),
-            ),
-            textInputAction: TextInputAction.search,
-            onSubmitted: (text) => _submitSearch(text, fromSuggestion: false, sourceContext: 'search_textfield'),
+            onClear: _clearSearch,
+            onSubmit: (text, sourceContext) => _submitSearch(text, fromSuggestion: false, sourceContext: sourceContext),
           ),
         ),
       ),
       body: _isSubmitted ? SearchGrid(query: _submittedQuery) : _SearchSuggestions(future: _suggestionsFuture, onSelected: _submitSearch),
+    );
+  }
+}
+
+class _SearchField extends StatelessWidget {
+  const _SearchField({
+    required this.controller,
+    required this.isSubmitted,
+    required this.onChanged,
+    required this.onClear,
+    required this.onSubmit,
+  });
+
+  final TextEditingController controller;
+  final bool isSubmitted;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onClear;
+  final void Function(String text, String sourceContext) onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 54,
+      decoration: BoxDecoration(
+        color: const Color(0xFF111114),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+      ),
+      child: TextField(
+        controller: controller,
+        autocorrect: false,
+        enableSuggestions: false,
+        keyboardAppearance: Brightness.dark,
+        cursorColor: Colors.white,
+        style: const TextStyle(
+          fontFamily: 'Satoshi',
+          fontSize: 21,
+          fontWeight: FontWeight.w700,
+          color: Colors.white,
+        ),
+        onChanged: onChanged,
+        textInputAction: TextInputAction.search,
+        onSubmitted: (text) => onSubmit(text, 'search_textfield'),
+        decoration: InputDecoration(
+          isDense: true,
+          contentPadding: const EdgeInsets.only(top: 15, bottom: 14),
+          border: InputBorder.none,
+          disabledBorder: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          prefixIcon: const Icon(JamIcons.search, color: Colors.white, size: 25),
+          hintText: 'Search Prism',
+          hintStyle: TextStyle(
+            fontFamily: 'Satoshi',
+            fontSize: 21,
+            fontWeight: FontWeight.w700,
+            color: Colors.white.withValues(alpha: 0.38),
+          ),
+          suffixIcon: IconButton(
+            tooltip: isSubmitted ? 'Clear search' : 'Search',
+            icon: Icon(isSubmitted ? Icons.close : JamIcons.search, color: Colors.white, size: isSubmitted ? 22 : 24),
+            onPressed: isSubmitted ? onClear : () => onSubmit(controller.text, 'search_icon'),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -175,23 +232,45 @@ class _SearchSuggestions extends StatelessWidget {
     return FutureBuilder<List<String>>(
       future: future,
       builder: (context, snapshot) {
-        final suggestions = snapshot.data ?? const <String>[];
+        final suggestions = (snapshot.data ?? const <String>[]).take(64).toList(growable: false);
         if (snapshot.connectionState == ConnectionState.waiting && suggestions.isEmpty) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: CircularProgressIndicator(color: Colors.white));
         }
         return CustomScrollView(
           slivers: [
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 120),
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 120),
               sliver: SliverToBoxAdapter(
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    for (final suggestion in suggestions)
-                      ActionChip(
-                        label: Text(suggestion, maxLines: 1, overflow: TextOverflow.ellipsis),
-                        onPressed: () => onSelected(suggestion, fromSuggestion: true, sourceContext: 'search_suggestion'),
+                    const Text(
+                      'Popular',
+                      style: TextStyle(
+                        fontFamily: 'Satoshi',
+                        fontSize: 34,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        for (final suggestion in suggestions)
+                          _SearchSuggestionChip(
+                            label: suggestion,
+                            onPressed: () => onSelected(suggestion, fromSuggestion: true, sourceContext: 'search_suggestion'),
+                          ),
+                      ],
+                    ),
+                    if (suggestions.isEmpty)
+                      const SizedBox(
+                        height: 160,
+                        child: Center(
+                          child: CircularProgressIndicator(color: Colors.white),
+                        ),
                       ),
                   ],
                 ),
@@ -200,6 +279,49 @@ class _SearchSuggestions extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _SearchSuggestionChip extends StatelessWidget {
+  const _SearchSuggestionChip({required this.label, required this.onPressed});
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFF111114),
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onPressed,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(JamIcons.search, color: Colors.white.withValues(alpha: 0.64), size: 16),
+              const SizedBox(width: 8),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 220),
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: 'Satoshi',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

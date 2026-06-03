@@ -386,7 +386,7 @@ class WallpaperTile extends StatelessWidget {
             ? Center(
                 child: AspectRatio(
                   aspectRatio: 1,
-                  child: Padding(padding: const EdgeInsets.all(6), child: ClipOval(child: image)),
+                  child: Padding(padding: const EdgeInsets.all(2), child: ClipOval(child: image)),
                 ),
               )
             : image,

@@ -1385,9 +1385,8 @@ class _PrismItem {
     ]);
     final tileImage = _firstString(<Object?>[
       isMatchingContent ? _firstString(<Object?>[...pairedDisplayUrls]) : '',
-      fastFullImage,
-      isProfilePictureContent && isImageUrl(appTileUrl) ? fastAppTileUrl : '',
       !isLiveContent && !isParallaxContent && isImageUrl(appTileUrl) ? fastAppTileUrl : '',
+      fastFullImage,
       fastLivePoster,
     ]);
     final thumb = isLiveContent
