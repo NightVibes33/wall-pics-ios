@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Prism</string>
+	<string>Přism</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Prism</string>
+	<string>Přism</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -92,10 +92,10 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Prism needs access to your photo library when you choose an image to save or share.</string>
+	<string>Přism needs access to your photo library when you choose an image to save or share.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Prism needs permission to save wallpapers to your photo library.</string>
+	<string>Přism needs permission to save wallpapers to your photo library.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Prism needs camera access only when you choose to capture an image.</string>
+	<string>Přism needs camera access only when you choose to capture an image.</string>
 </dict>
 </plist>

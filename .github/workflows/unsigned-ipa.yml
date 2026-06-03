@@ -66,7 +66,7 @@ jobs:
           fi
 
           DISPLAY_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP_PATH/Info.plist")"
-          if [ "$DISPLAY_NAME" != "Prism" ]; then
+          if [ "$DISPLAY_NAME" != "Přism" ]; then
             echo "Unexpected display name: $DISPLAY_NAME"
             exit 1
           fi

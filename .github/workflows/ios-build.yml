@@ -65,11 +65,11 @@ jobs:
           test -d "$APP_PATH"
           DISPLAY_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP_PATH/Info.plist")"
           BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
-          if [ "$DISPLAY_NAME" != "Prism" ]; then
+          if [ "$DISPLAY_NAME" != "Přism" ]; then
             echo "Unexpected display name: $DISPLAY_NAME"
             exit 1
           fi
-          if [ "$BUNDLE_ID" != "com.nightvibes.prism" ]; then
+          if [ "$BUNDLE_ID" != "com.nightvibes.prism.39A8Q3T3TR" ]; then
             echo "Unexpected bundle id: $BUNDLE_ID"
             exit 1
           fi
