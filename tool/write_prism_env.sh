@@ -5,7 +5,7 @@ set -eu
 : > .env
 
 if [ -n "${PRISM_ENV:-}" ]; then
-  printf '%s\n' "$PRISM_ENV" | awk -F= '$1 !~ /^(GH_TOKEN|RC_API_KEY|RC_ANDROID_API_KEY|RC_IOS_API_KEY|PEXELS_API_KEY|AI_CLIENT_TOKEN)$/ { print }' > .env
+  printf '%s\n' "$PRISM_ENV" | awk -F= '$1 !~ /^(GH_.*|GITHUB_.*|CATALOG_.*|SESSION_SECRET|APPLE_BUNDLE_ID|APP_STORE_CONNECT_.*|ASC_.*|APPLE_TEAM_ID|ALLOWED_MEDIA_HOSTS|MEDIA_CACHE_TTL_SECONDS|RC_.*|PEXELS_API_KEY|AI_CLIENT_TOKEN)$/ { print }' > .env
 fi
 
 if ! grep -q '^USER_STORE_API_BASE_URL=' .env && [ -n "${USER_STORE_API_BASE_URL:-}" ]; then

@@ -2,15 +2,14 @@ import 'dart:async';
 
 import 'package:Prism/analytics/analytics_service.dart';
 import 'package:Prism/core/analytics/events/events.dart';
-import 'package:Prism/core/widgets/animated/loader.dart';
 import 'package:Prism/core/widgets/home/wallpapers/loading.dart';
 import 'package:Prism/features/category_feed/domain/entities/feed_item_entity.dart';
 import 'package:Prism/features/category_feed/views/widgets/wallpaper_tile.dart';
 import 'package:Prism/features/prism_catalog/data/prism_catalog_data_source.dart';
-import 'package:Prism/logger/logger.dart';
 import 'package:Prism/theme/jam_icons_icons.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
 class SearchGrid extends StatefulWidget {
   const SearchGrid({super.key, required this.query});
@@ -34,6 +33,8 @@ class _SearchFilterSpec {
 class _SearchGridState extends State<SearchGrid> {
   final GlobalKey<RefreshIndicatorState> _refreshKey = GlobalKey<RefreshIndicatorState>();
   static const Duration _thumbnailPrecacheTimeout = Duration(seconds: 5);
+  static const int _maxWarmImages = 420;
+  static const int _maxWarmVideos = 96;
   static const List<_SearchFilterSpec> _filters = <_SearchFilterSpec>[
     _SearchFilterSpec(filter: _SearchResultFilter.all, label: 'All', icon: JamIcons.grid_f),
     _SearchFilterSpec(filter: _SearchResultFilter.wallpapers, label: 'Wallpapers', icon: JamIcons.picture_f),
@@ -45,18 +46,16 @@ class _SearchGridState extends State<SearchGrid> {
 
   final List<PrismFeedItem> _items = <PrismFeedItem>[];
   final Set<String> _prefetchedThumbnailUrls = <String>{};
+  final Set<String> _prefetchedVideoUrls = <String>{};
   late Future<void> _initialLoad;
   _SearchResultFilter _activeFilter = _SearchResultFilter.all;
-  bool _hasMore = false;
-  bool _loadingMore = false;
-  int _currentPage = 1;
 
   int get _queryLength => widget.query.trim().length;
 
   @override
   void initState() {
     super.initState();
-    _initialLoad = _load(refresh: true);
+    _initialLoad = _load();
   }
 
   @override
@@ -64,41 +63,61 @@ class _SearchGridState extends State<SearchGrid> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.query != widget.query) {
       _items.clear();
-      _hasMore = false;
-      _currentPage = 1;
       _activeFilter = _SearchResultFilter.all;
-      _initialLoad = _load(refresh: true);
+      _initialLoad = _load();
     }
   }
 
-  Future<void> _load({required bool refresh}) async {
-    final page = await PrismCatalogDataSource.instance.search(query: widget.query, refresh: refresh);
-    final incoming = page.items.whereType<PrismFeedItem>().toList(growable: false);
-    if (!mounted) {
+  Future<void> _load() async {
+    final query = widget.query;
+    try {
+      final firstPage = await PrismCatalogDataSource.instance.search(query: query, refresh: true, scanFullIndex: false);
+      final firstItems = firstPage.items.whereType<PrismFeedItem>().toList(growable: false);
+      _replaceResults(query: query, incoming: firstItems, trackPage: 1);
+      unawaited(_loadCompleteResults(query));
+    } catch (_) {
+      await _loadCompleteResults(query, trackPage: 1, allowRethrow: true);
+    }
+  }
+
+  Future<void> _loadCompleteResults(String query, {int trackPage = 2, bool allowRethrow = false}) async {
+    try {
+      final page = await PrismCatalogDataSource.instance.searchAll(query: query);
+      final incoming = page.items.whereType<PrismFeedItem>().toList(growable: false);
+      if (_sameResultIds(incoming)) {
+        return;
+      }
+      _replaceResults(query: query, incoming: incoming, trackPage: trackPage);
+    } catch (_) {
+      if (allowRethrow && _items.isEmpty) {
+        rethrow;
+      }
+    }
+  }
+
+  bool _sameResultIds(List<PrismFeedItem> incoming) {
+    if (_items.length != incoming.length) {
+      return false;
+    }
+    for (var index = 0; index < incoming.length; index++) {
+      if (_items[index].id != incoming[index].id) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  void _replaceResults({required String query, required List<PrismFeedItem> incoming, required int trackPage}) {
+    if (!mounted || widget.query != query) {
       return;
     }
     setState(() {
-      if (refresh) {
-        _items
-          ..clear()
-          ..addAll(incoming);
-        _currentPage = 1;
-      } else {
-        final byKey = <String, PrismFeedItem>{
-          for (final item in _items) _resultKey(item): item,
-        };
-        for (final item in incoming) {
-          byKey[_resultKey(item)] = item;
-        }
-        _items
-          ..clear()
-          ..addAll(byKey.values);
-        _currentPage += 1;
-      }
-      _hasMore = page.hasMore;
+      _items
+        ..clear()
+        ..addAll(incoming);
     });
-    unawaited(_precacheThumbnails(incoming));
-    _trackResultsLoaded(page: _currentPage, result: _items.isEmpty ? EventResultValue.empty : EventResultValue.success);
+    unawaited(_precacheMedia(incoming));
+    _trackResultsLoaded(page: trackPage, result: _items.isEmpty ? EventResultValue.empty : EventResultValue.success);
   }
 
   void _trackResultsLoaded({required int page, required EventResultValue result}) {
@@ -113,45 +132,9 @@ class _SearchGridState extends State<SearchGrid> {
     );
   }
 
-  String _resultKey(PrismFeedItem item) {
-    final fullUrl = item.wallpaper.fullUrl.trim();
-    final thumbnailUrl = item.thumbnailUrl.trim();
-    if (fullUrl.isNotEmpty) {
-      return fullUrl.toLowerCase();
-    }
-    if (thumbnailUrl.isNotEmpty) {
-      return thumbnailUrl.toLowerCase();
-    }
-    return item.id;
-  }
-
   Future<void> _refresh() async {
     _refreshKey.currentState?.show();
-    await _load(refresh: true);
-  }
-
-  Future<void> _requestNextPage() async {
-    if (_loadingMore || !_hasMore) {
-      return;
-    }
-    setState(() => _loadingMore = true);
-    analytics.track(
-      SearchPaginationRequestedEvent(
-        provider: SearchProviderValue.prismCatalog,
-        queryLength: _queryLength,
-        page: _currentPage + 1,
-      ),
-    );
-    try {
-      await _load(refresh: false);
-    } catch (error, stackTrace) {
-      logger.e('Failed to load Prism search results page.', error: error, stackTrace: stackTrace);
-      _trackResultsLoaded(page: _currentPage + 1, result: EventResultValue.failure);
-    } finally {
-      if (mounted) {
-        setState(() => _loadingMore = false);
-      }
-    }
+    await _load();
   }
 
   String _catalogContentType(FeedItemEntity item) {
@@ -206,17 +189,50 @@ class _SearchGridState extends State<SearchGrid> {
     return profileCount * 2 >= sample.length ? 1.0 : 0.5;
   }
 
-  Future<void> _precacheThumbnails(Iterable<PrismFeedItem> items) async {
+  Future<void> _precacheMedia(Iterable<PrismFeedItem> items) async {
+    final expandedItems = WallpaperTile.expandMatchingItemsForDisplay(items).toList(growable: false);
+    await Future.wait<void>(<Future<void>>[
+      _precacheThumbnails(expandedItems),
+      _warmVideos(expandedItems),
+    ]);
+  }
+
+  Future<void> _precacheThumbnails(Iterable<FeedItemEntity> items) async {
     final futures = <Future<void>>[];
-    for (final item in WallpaperTile.expandMatchingItemsForDisplay(items)) {
-      final url = item.thumbnailUrl.trim();
+    var scheduled = 0;
+    for (final item in items) {
+      if (scheduled >= _maxWarmImages) {
+        break;
+      }
+      final poster = WallpaperTile.posterUrlForItem(item).trim();
+      final url = poster.isNotEmpty ? poster : item.thumbnailUrl.trim();
       if (url.isEmpty || !_prefetchedThumbnailUrls.add(url)) {
         continue;
       }
+      scheduled += 1;
       futures.add(
         precacheImage(CachedNetworkImageProvider(url), context)
             .timeout(_thumbnailPrecacheTimeout)
             .catchError((Object _) {}),
+      );
+    }
+    await Future.wait<void>(futures);
+  }
+
+  Future<void> _warmVideos(Iterable<FeedItemEntity> items) async {
+    final futures = <Future<void>>[];
+    var scheduled = 0;
+    for (final item in items) {
+      if (scheduled >= _maxWarmVideos) {
+        break;
+      }
+      final videoUrl = WallpaperTile.videoUrlForItem(item).trim();
+      if (videoUrl.isEmpty || !_prefetchedVideoUrls.add(videoUrl)) {
+        continue;
+      }
+      scheduled += 1;
+      futures.add(
+        DefaultCacheManager().downloadFile(videoUrl).timeout(const Duration(seconds: 24)).then((_) {}).catchError((Object _) {}),
       );
     }
     await Future.wait<void>(futures);
@@ -264,33 +280,27 @@ class _SearchGridState extends State<SearchGrid> {
                 key: _refreshKey,
                 backgroundColor: Theme.of(context).primaryColor,
                 onRefresh: _refresh,
-                child: NotificationListener<ScrollNotification>(
-                  onNotification: (scrollInfo) {
-                    if (scrollInfo.metrics.pixels >= scrollInfo.metrics.maxScrollExtent - 240) {
-                      unawaited(_requestNextPage());
-                    }
-                    return false;
-                  },
-                  child: displayItems.isEmpty
-                      ? _EmptyFilteredResults(filter: _activeFilter)
-                      : GridView.builder(
-                          padding: const EdgeInsets.fromLTRB(5, 6, 5, 120),
-                          cacheExtent: 12000,
-                          itemCount: displayItems.length + (_hasMore ? 1 : 0),
-                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: MediaQuery.of(context).orientation == Orientation.portrait ? 3 : 5,
-                            childAspectRatio: _gridAspectRatio(displayItems),
-                            mainAxisSpacing: 0,
-                            crossAxisSpacing: 0,
-                          ),
-                          itemBuilder: (context, index) {
-                            if (index >= displayItems.length) {
-                              return _SearchMoreTile(loading: _loadingMore, onPressed: _requestNextPage);
-                            }
-                            return WallpaperTile(item: displayItems[index], index: index, galleryItems: displayItems);
-                          },
+                child: displayItems.isEmpty
+                    ? _EmptyFilteredResults(filter: _activeFilter)
+                    : GridView.builder(
+                        padding: const EdgeInsets.fromLTRB(5, 6, 5, 120),
+                        cacheExtent: 16000,
+                        itemCount: displayItems.length,
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: MediaQuery.of(context).orientation == Orientation.portrait ? 3 : 5,
+                          childAspectRatio: _gridAspectRatio(displayItems),
+                          mainAxisSpacing: 0,
+                          crossAxisSpacing: 0,
                         ),
-                ),
+                        itemBuilder: (context, index) {
+                          return WallpaperTile(
+                            item: displayItems[index],
+                            index: index,
+                            galleryItems: displayItems,
+                            playVideoPreview: true,
+                          );
+                        },
+                      ),
               ),
             ),
           ],
@@ -425,29 +435,6 @@ class _SearchFilterChip extends StatelessWidget {
             ],
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _SearchMoreTile extends StatelessWidget {
-  const _SearchMoreTile({required this.loading, required this.onPressed});
-
-  final bool loading;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(8),
-      child: OutlinedButton(
-        onPressed: loading ? null : onPressed,
-        style: OutlinedButton.styleFrom(
-          side: BorderSide(color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.28)),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-          padding: EdgeInsets.zero,
-        ),
-        child: loading ? Loader() : const Icon(JamIcons.chevrons_down, size: 26),
       ),
     );
   }

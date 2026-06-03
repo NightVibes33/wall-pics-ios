@@ -20,7 +20,7 @@ class PrismCatalogDataSource {
 
   static final PrismCatalogDataSource instance = PrismCatalogDataSource._();
 
-  static String fastImageTileUrl(String url, {int width = 1440, int quality = 92}) {
+  static String fastImageTileUrl(String url, {int width = 1080, int quality = 90}) {
     return _fastTileImageUrl(url, width: width, quality: quality);
   }
 
@@ -28,14 +28,18 @@ class PrismCatalogDataSource {
     return _fastTileImageUrl(url, width: width, quality: quality);
   }
 
+  static String fastVideoUrl(String url) {
+    return _fastVideoUrl(url);
+  }
+
   static const int _pageSize = 144;
   static const int _catalogShardSize = 100;
-  static const Duration _metadataTimeout = Duration(seconds: 20);
-  static const Duration _pageTimeout = Duration(seconds: 15);
-  static const Duration _searchIndexTimeout = Duration(seconds: 35);
-  static const Duration _bootstrapTimeout = Duration(seconds: 8);
+  static const Duration _metadataTimeout = Duration(seconds: 10);
+  static const Duration _pageTimeout = Duration(seconds: 8);
+  static const Duration _searchIndexTimeout = Duration(seconds: 20);
+  static const Duration _bootstrapTimeout = Duration(seconds: 4);
   static const String _homeBootstrapFile = 'prism_bootstrap_home.json';
-  static const int _bootstrapPrefetchLimit = 144;
+  static const int _bootstrapPrefetchLimit = 360;
   static const String regularContentType = 'regular_wallpaper';
   static const String liveContentType = 'live_wallpaper';
   static const String matchingContentType = 'matching_wallpaper';
@@ -50,6 +54,7 @@ class PrismCatalogDataSource {
     chargingAnimationContentType,
     diyTemplateContentType,
     liveDiyTemplateContentType,
+    stickerContentType,
   };
   static const Map<String, String> _catalogFilesByContentType = <String, String>{
     regularContentType: 'prism_regular.json',
@@ -110,6 +115,8 @@ class PrismCatalogDataSource {
   final LazyFileCache _catalogCache = LazyFileCache('prism_catalog_cache');
   final Map<String, Future<_PrismCatalogPage>> _pageFutures = <String, Future<_PrismCatalogPage>>{};
   final Map<String, Future<List<_PrismItem>>> _compactCatalogFutures = <String, Future<List<_PrismItem>>>{};
+  final Map<String, Future<CategoryFeedPage?>> _fullCategoryFeedFutures = <String, Future<CategoryFeedPage?>>{};
+  final Map<String, Future<CategoryFeedPage>> _searchAllFutures = <String, Future<CategoryFeedPage>>{};
   final Map<String, int> _offsets = <String, int>{};
   Future<List<Map<String, dynamic>>>? _categoryRowsFuture;
   Future<Map<String, Map<String, List<String>>>>? _categoryIdsFuture;
@@ -154,6 +161,74 @@ class PrismCatalogDataSource {
     );
   }
 
+  Future<CategoryFeedPage?> fetchFullCategoryFeed({required CategoryEntity category}) {
+    if (!supports(category)) return Future<CategoryFeedPage?>.value(null);
+
+    final contentType = category.catalogContentType!.trim();
+    final slug = category.catalogSlug!.trim();
+    final scope = _scope(slug: slug, contentType: contentType);
+    final cached = _fullCategoryFeedFutures[scope];
+    if (cached != null) return cached;
+
+    final future = _fetchFullCategoryFeedInternal(contentType: contentType, slug: slug);
+    _fullCategoryFeedFutures[scope] = future;
+    unawaited(
+      future.catchError((Object _) {
+        _fullCategoryFeedFutures.remove(scope);
+        return null;
+      }),
+    );
+    return future;
+  }
+
+  Future<CategoryFeedPage?> _fetchFullCategoryFeedInternal({required String contentType, required String slug}) async {
+    final items = <_PrismItem>[];
+    if (slug == 'for-you') {
+      var pageNumber = 1;
+      var guard = 0;
+      while (guard < 500) {
+        guard += 1;
+        final catalogPage = await _loadCatalogPage(contentType, pageNumber);
+        if (catalogPage.items.isEmpty) break;
+        items.addAll(catalogPage.items);
+        if (!catalogPage.hasMore || items.length >= catalogPage.itemCount) break;
+        pageNumber += 1;
+      }
+      return _toFeedPage(_dedupeItems(items), hasMore: false, nextOffset: items.length);
+    }
+
+    if (slug == 'newest' || slug == 'new') {
+      final searchIndex = await _loadSearchIndex();
+      final refs = <_RankedItemReference>[];
+      for (var index = 0; index < searchIndex.length; index++) {
+        final entry = searchIndex[index];
+        if (entry.contentType != contentType ||
+            entry.createdAt == null ||
+            !_catalogPagePrefixesByContentType.containsKey(entry.contentType) ||
+            _hiddenContentTypes.contains(entry.contentType)) {
+          continue;
+        }
+        refs.add(
+          _RankedItemReference(
+            contentType: entry.contentType,
+            id: entry.id,
+            page: entry.page,
+            score: 0,
+            ordinal: index,
+            createdAt: entry.createdAt,
+          ),
+        );
+      }
+      refs.sort(_compareNewestReferences);
+      final newestItems = await _itemsByReferences(_dedupeReferences(refs));
+      return _toFeedPage(newestItems, hasMore: false, nextOffset: newestItems.length);
+    }
+
+    final categoryIds = await _categoryIdsFor(contentType, slug);
+    final categoryItems = await _itemsByIds(contentType: contentType, ids: categoryIds);
+    return _toFeedPage(_dedupeItems(categoryItems), hasMore: false, nextOffset: categoryItems.length);
+  }
+
   Future<CategoryFeedPage> fetchHomePage({required bool refresh}) {
     return _fetchSequentialPageFeed(
       contentType: regularContentType,
@@ -175,6 +250,13 @@ class PrismCatalogDataSource {
     } catch (_) {
       return null;
     }
+  }
+
+  Future<void> warmCatalogCache({bool prefetchMedia = true}) async {
+    await Future.wait<void>(<Future<void>>[
+      warmHomeBootstrapCache(prefetchMedia: prefetchMedia),
+      _warmCatalogJsonFiles(),
+    ]);
   }
 
   Future<void> warmHomeBootstrapCache({bool prefetchMedia = true}) async {
@@ -203,7 +285,7 @@ class PrismCatalogDataSource {
     for (final rawUrl in bootstrap.prefetchUrls) {
       addPrefetchUrl(_fastTileImageUrl(rawUrl));
     }
-    const batchSize = 8;
+    const batchSize = 12;
     for (var index = 0; index < urls.length; index += batchSize) {
       final batch = urls.skip(index).take(batchSize);
       unawaited(
@@ -328,6 +410,41 @@ class PrismCatalogDataSource {
     return categories;
   }
 
+  Future<String> categoryPreviewUrl({required String contentType, required String slug}) async {
+    final resolvedContentType = contentType.trim();
+    final resolvedSlug = slug.trim();
+    if (resolvedContentType.isEmpty ||
+        _hiddenContentTypes.contains(resolvedContentType) ||
+        !_catalogPagePrefixesByContentType.containsKey(resolvedContentType)) {
+      return '';
+    }
+
+    String previewFromItem(_PrismItem item) {
+      return _firstString(<Object?>[item.firstFrameThumbnailUrl, item.thumbnailUrl, item.staticThumbnailUrl, item.previewUrl]);
+    }
+
+    try {
+      if (resolvedSlug.isEmpty || resolvedSlug == 'for-you') {
+        final page = await _loadCatalogPage(resolvedContentType, 1);
+        for (final item in page.items) {
+          final preview = previewFromItem(item).trim();
+          if (preview.isNotEmpty) return preview;
+        }
+        return '';
+      }
+
+      final ids = await _categoryIdsFor(resolvedContentType, resolvedSlug);
+      final items = await _itemsByIds(contentType: resolvedContentType, ids: ids.take(6).toList(growable: false));
+      for (final item in items) {
+        final preview = previewFromItem(item).trim();
+        if (preview.isNotEmpty) return preview;
+      }
+    } catch (_) {
+      // Category previews are visual polish; category navigation still works without them.
+    }
+    return '';
+  }
+
   Future<List<String>> popularSearches({int limit = 80}) async {
     final seen = <String>{};
     final searches = <String>[];
@@ -403,34 +520,7 @@ class PrismCatalogDataSource {
 
     final scope = 'search.$normalizedQuery';
     final start = refresh ? 0 : (_offsets[scope] ?? 0);
-    final rankedRefs = await _rankedCategoryReferences(normalizedQuery);
-    if (scanFullIndex || rankedRefs.length < start + _pageSize) {
-      var ordinal = rankedRefs.length;
-      final searchIndex = await _loadSearchIndex();
-      for (final entry in searchIndex) {
-        if (!_catalogPagePrefixesByContentType.containsKey(entry.contentType) ||
-            _hiddenContentTypes.contains(entry.contentType)) {
-          continue;
-        }
-        final score = _scoreSearchEntry(entry, normalizedQuery);
-        if (score <= 0) {
-          continue;
-        }
-        rankedRefs.add(
-          _RankedItemReference(
-            contentType: entry.contentType,
-            id: entry.id,
-            page: entry.page,
-            score: score,
-            ordinal: ordinal++,
-            createdAt: entry.createdAt,
-          ),
-        );
-      }
-      rankedRefs.sort(_compareRankedReferences);
-    }
-
-    final deduped = _dedupeReferences(rankedRefs);
+    final deduped = await _rankedSearchReferences(normalizedQuery, scanFullIndex: scanFullIndex);
     final refs = deduped.skip(start).take(_pageSize).toList(growable: false);
     final items = await _itemsByReferences(refs);
     final nextOffset = start + refs.length;
@@ -441,6 +531,67 @@ class PrismCatalogDataSource {
       hasMore: nextOffset < deduped.length,
       nextOffset: nextOffset,
     );
+  }
+
+  Future<CategoryFeedPage> searchAll({required String query}) {
+    final normalizedQuery = _normalizeForSearch(query);
+    if (normalizedQuery.isEmpty || _isBlockedCatalogSearch(normalizedQuery)) {
+      return Future<CategoryFeedPage>.value(
+        const CategoryFeedPage(items: <FeedItemEntity>[], hasMore: false, nextCursor: null),
+      );
+    }
+    final cached = _searchAllFutures[normalizedQuery];
+    if (cached != null) return cached;
+
+    final future = _searchAllInternal(normalizedQuery);
+    _searchAllFutures[normalizedQuery] = future;
+    unawaited(
+      future.catchError((Object _) {
+        _searchAllFutures.remove(normalizedQuery);
+        return const CategoryFeedPage(items: <FeedItemEntity>[], hasMore: false, nextCursor: null);
+      }),
+    );
+    return future;
+  }
+
+  Future<CategoryFeedPage> _searchAllInternal(String normalizedQuery) async {
+    final refs = await _rankedSearchReferences(normalizedQuery, scanFullIndex: true);
+    final items = await _itemsByReferences(refs);
+    return _toFeedPage(items, hasMore: false, nextOffset: items.length);
+  }
+
+  Future<List<_RankedItemReference>> _rankedSearchReferences(
+    String normalizedQuery, {
+    required bool scanFullIndex,
+  }) async {
+    final rankedRefs = await _rankedCategoryReferences(normalizedQuery);
+    if (!scanFullIndex) {
+      return _dedupeReferences(rankedRefs)..sort(_compareRankedReferences);
+    }
+
+    var ordinal = rankedRefs.length;
+    final searchIndex = await _loadSearchIndex();
+    for (final entry in searchIndex) {
+      if (!_catalogPagePrefixesByContentType.containsKey(entry.contentType) ||
+          _hiddenContentTypes.contains(entry.contentType)) {
+        continue;
+      }
+      final score = _scoreSearchEntry(entry, normalizedQuery);
+      if (score <= 0) {
+        continue;
+      }
+      rankedRefs.add(
+        _RankedItemReference(
+          contentType: entry.contentType,
+          id: entry.id,
+          page: entry.page,
+          score: score,
+          ordinal: ordinal++,
+          createdAt: entry.createdAt,
+        ),
+      );
+    }
+    return _dedupeReferences(rankedRefs)..sort(_compareRankedReferences);
   }
 
   Future<PrismWallpaper?> fetchById(String id) async {
@@ -911,24 +1062,26 @@ class PrismCatalogDataSource {
   }) async {
     final cacheKey = PersistenceKeys.cachePrismCatalog(fileName);
     final cached = await _readCachedCatalogJson(cacheKey);
-    if (preferCache && cached != null && _looksLikeJson(cached)) {
+    if (cached != null && _looksLikeJson(cached) && (preferCache || _shouldServeCachedCatalogFirst(fileName))) {
+      unawaited(_refreshCatalogJsonCache(fileName: fileName, cacheKey: cacheKey, timeout: timeout));
       return cached;
     }
 
-    Object? remoteError;
-    final remoteBase = _remoteCatalogBaseUrl;
-    if (remoteBase.isNotEmpty) {
-      final base = remoteBase.endsWith('/') ? remoteBase.substring(0, remoteBase.length - 1) : remoteBase;
+    if (preferCache && fileName == _homeBootstrapFile) {
       try {
-        final response = await http.get(Uri.parse('$base/$fileName')).timeout(timeout);
-        if (response.statusCode >= 200 && response.statusCode < 300 && _looksLikeJson(response.body)) {
-          unawaited(_writeCachedCatalogJson(cacheKey, response.body));
-          return response.body;
-        }
-        remoteError = StateError('Catalog request failed for $fileName with HTTP ${response.statusCode}');
-      } catch (error) {
-        remoteError = error;
+        final bundled = await rootBundle.loadString('assets/catalog/$fileName');
+        unawaited(_writeCachedCatalogJson(cacheKey, bundled));
+        unawaited(_refreshCatalogJsonCache(fileName: fileName, cacheKey: cacheKey, timeout: timeout));
+        return bundled;
+      } catch (_) {
+        // A missing bundled bootstrap can still fall through to remote/catalog fallback.
       }
+    }
+
+    final remote = await _fetchRemoteCatalogJson(fileName: fileName, timeout: timeout);
+    if (remote != null) {
+      unawaited(_writeCachedCatalogJson(cacheKey, remote));
+      return remote;
     }
 
     try {
@@ -940,7 +1093,7 @@ class PrismCatalogDataSource {
         return cached;
       }
       if (!allowGeneratedFallback) {
-        throw StateError('Missing required catalog asset $fileName: ${remoteError ?? bundleError}');
+        throw StateError('Missing required catalog asset $fileName: $bundleError');
       }
       final contentType = _contentTypeForCatalogFile(fileName);
       if (contentType != null) {
@@ -968,7 +1121,7 @@ class PrismCatalogDataSource {
       if (fileName == 'prism_index.json') {
         return jsonEncode(<String, Object?>{'sections': <Object?>[]});
       }
-      throw StateError('Missing catalog asset $fileName: ${remoteError ?? bundleError}');
+      throw StateError('Missing catalog asset $fileName: $bundleError');
     }
   }
 
@@ -995,6 +1148,85 @@ class PrismCatalogDataSource {
   bool _looksLikeJson(String body) {
     final trimmed = body.trimLeft();
     return trimmed.startsWith('{') || trimmed.startsWith('[');
+  }
+
+  bool _shouldServeCachedCatalogFirst(String fileName) {
+    return fileName != _homeBootstrapFile && fileName.startsWith('prism_') && fileName.endsWith('.json');
+  }
+
+  Future<String?> _fetchRemoteCatalogJson({required String fileName, required Duration timeout}) async {
+    final remoteBase = _remoteCatalogBaseUrl;
+    if (remoteBase.isEmpty) {
+      return null;
+    }
+    final base = remoteBase.endsWith('/') ? remoteBase.substring(0, remoteBase.length - 1) : remoteBase;
+    try {
+      final response = await http.get(Uri.parse('$base/$fileName')).timeout(timeout);
+      if (response.statusCode >= 200 && response.statusCode < 300 && _looksLikeJson(response.body)) {
+        return response.body;
+      }
+    } catch (_) {
+      // Remote catalog refresh failure falls back to bundled or cached data.
+    }
+    return null;
+  }
+
+  Future<void> _refreshCatalogJsonCache({required String fileName, required String cacheKey, required Duration timeout}) async {
+    final remote = await _fetchRemoteCatalogJson(fileName: fileName, timeout: timeout);
+    if (remote == null) {
+      return;
+    }
+    await _writeCachedCatalogJson(cacheKey, remote);
+  }
+
+  Future<void> _warmCatalogJsonFiles() async {
+    const files = <String>[
+      'prism_index.json',
+      'prism_category_lite.json',
+      'prism_category_trees.json',
+      'prism_category_ids.json',
+      'prism_item_locations.json',
+      'prism_popular_searches.json',
+      'prism_search_suggestions.json',
+      'prism_regular_page_001.json',
+      'prism_regular_page_002.json',
+      'prism_regular_page_003.json',
+      'prism_live_page_001.json',
+      'prism_live_page_002.json',
+      'prism_live_page_003.json',
+      'prism_matching_page_001.json',
+      'prism_matching_page_002.json',
+      'prism_matching_page_003.json',
+      'prism_double_page_001.json',
+      'prism_double_page_002.json',
+      'prism_double_page_003.json',
+      'prism_parallax_page_001.json',
+      'prism_parallax_page_002.json',
+      'prism_parallax_page_003.json',
+      'prism_profile_pictures_page_001.json',
+      'prism_profile_pictures_page_002.json',
+      'prism_profile_pictures_page_003.json',
+      'prism_search_index.json',
+    ];
+    const batchSize = 4;
+    for (var index = 0; index < files.length; index += batchSize) {
+      final batch = files.skip(index).take(batchSize);
+      await Future.wait<void>(
+        batch.map((fileName) async {
+          final timeout = fileName == 'prism_search_index.json' ? _searchIndexTimeout : _metadataTimeout;
+          try {
+            await _refreshCatalogJsonCache(
+              fileName: fileName,
+              cacheKey: PersistenceKeys.cachePrismCatalog(fileName),
+              timeout: timeout,
+            );
+          } catch (_) {
+            // Cache warmup is opportunistic and must never block app launch.
+          }
+        }),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    }
   }
 
   String _scope({required String slug, required String contentType}) => '$contentType.$slug';
@@ -1335,6 +1567,12 @@ class _PrismItem {
           path.endsWith('.gif');
     }
 
+    final fastVideo = _fastVideoOrOriginal(video);
+    final fastThumbnailVideo = _fastVideoOrOriginal(url(json['thumbnail_video']));
+    final fastAppDownloadVideo = isVideoUrl(appDownloadUrl) ? _fastVideoOrOriginal(appDownloadUrl) : '';
+    final fastCatalogDownloadVideo = isVideoUrl(catalogDownload) ? _fastVideoOrOriginal(catalogDownload) : '';
+    final fastWallpaperVideo = isVideoUrl(wallpaper) ? _fastVideoOrOriginal(wallpaper) : '';
+
     String firstParallaxLayerImage() {
       final thumbnailConfig = _asMap(json['thumbnail_config']);
       for (final layer in _maps(thumbnailConfig['layers'])) {
@@ -1421,7 +1659,7 @@ class _PrismItem {
     final preview = isMatchingContent
         ? _firstString(<Object?>[...pairedDisplayUrls, fullImage, thumb])
         : isLiveContent
-            ? _firstString(<Object?>[video, appDownloadUrl, catalogDownload, fullImage, livePoster, appDisplayUrl])
+            ? _firstString(<Object?>[fastVideo, fastAppDownloadVideo, fastCatalogDownloadVideo, fullImage, livePoster, appDisplayUrl])
             : isParallaxContent
                 ? _firstString(<Object?>[parallaxArchive, fullImage, thumb])
                 : _firstString(<Object?>[fullImage, thumb]);
@@ -1433,7 +1671,16 @@ class _PrismItem {
         : isMatchingContent
             ? _firstString(<Object?>[appDownloadUrl, catalogDownload, ...pairedDownloadUrls, wallpaper, image, ...pairedDisplayUrls])
             : isLiveContent
-                ? _firstString(<Object?>[appDownloadUrl, catalogDownload, video, wallpaper])
+                ? _firstString(<Object?>[
+                    fastVideo,
+                    fastAppDownloadVideo,
+                    fastCatalogDownloadVideo,
+                    fastWallpaperVideo,
+                    appDownloadUrl,
+                    catalogDownload,
+                    video,
+                    wallpaper,
+                  ])
                 : _firstString(<Object?>[appDownloadUrl, fullMedia]);
     final rawWidth = _int(json['width']);
     final rawHeight = _int(json['height']);
@@ -1455,8 +1702,8 @@ class _PrismItem {
       thumbnailUrl: thumb,
       staticThumbnailUrl: staticThumb,
       firstFrameThumbnailUrl: firstFrameThumbnail,
-      videoUrl: video,
-      thumbnailVideoUrl: url(json['thumbnail_video']),
+      videoUrl: fastVideo,
+      thumbnailVideoUrl: fastThumbnailVideo,
       templateUrl: template.isNotEmpty ? template : catalogDownload,
       parallaxFileUrl: parallaxArchive,
       mediaAssetUrls: mediaAssetUrls,
@@ -1482,7 +1729,7 @@ class _PrismItem {
         contentType == PrismCatalogDataSource.liveDiyTemplateContentType ||
         contentType == PrismCatalogDataSource.chargingAnimationContentType;
     final String thumb = contentType == PrismCatalogDataSource.liveContentType
-        ? _firstString(<Object?>[staticThumbnailUrl, firstFrameThumbnailUrl, thumbnailUrl, previewUrl])
+        ? _firstString(<Object?>[firstFrameThumbnailUrl, thumbnailUrl, staticThumbnailUrl, previewUrl])
         : (contentType == PrismCatalogDataSource.matchingContentType ||
                 contentType == PrismCatalogDataSource.doubleContentType)
             ? _firstString(<Object?>[...pairedPreviewUrls, ...pairedDownloadUrls, thumbnailUrl, previewUrl, full])
@@ -1553,10 +1800,13 @@ List<_PrismItem> _dedupeItems(Iterable<_PrismItem> items) {
   for (final item in items) {
     final idKey = item.id.trim().isEmpty ? '' : '${item.contentType}:${item.id.trim()}';
     final urlKey = _firstString(<Object?>[item.downloadUrl, item.previewUrl, item.thumbnailUrl]).trim().toLowerCase();
+    final allowSharedUrl = item.contentType == PrismCatalogDataSource.matchingContentType ||
+        item.contentType == PrismCatalogDataSource.doubleContentType ||
+        item.contentType == PrismCatalogDataSource.profilePictureContentType;
     if (idKey.isNotEmpty && !seenIds.add(idKey)) {
       continue;
     }
-    if (urlKey.isNotEmpty && !seenUrls.add(urlKey)) {
+    if (!allowSharedUrl && urlKey.isNotEmpty && !seenUrls.add(urlKey)) {
       continue;
     }
     if (item.id.trim().isEmpty && urlKey.isEmpty) {
@@ -1593,7 +1843,7 @@ String _resolveCatalogUrl(Object? value, {required String sourceBase}) {
 }
 
 
-String _fastTileImageUrl(String rawUrl, {int width = 1440, int quality = 92}) {
+String _fastTileImageUrl(String rawUrl, {int width = 1920, int quality = 96}) {
   final source = rawUrl.trim();
   if (!_isProxyableCatalogImageUrl(source)) {
     return '';
@@ -1615,9 +1865,31 @@ String _fastTileImageUrl(String rawUrl, {int width = 1440, int quality = 92}) {
       .toString();
 }
 
-String _fastTileOrOriginal(String rawUrl, {int width = 1440, int quality = 92}) {
+String _fastTileOrOriginal(String rawUrl, {int width = 1080, int quality = 90}) {
   final fastUrl = _fastTileImageUrl(rawUrl, width: width, quality: quality);
   return fastUrl.isNotEmpty ? fastUrl : rawUrl.trim();
+}
+
+String _fastVideoOrOriginal(String rawUrl) {
+  final fastUrl = _fastVideoUrl(rawUrl);
+  return fastUrl.isNotEmpty ? fastUrl : rawUrl.trim();
+}
+
+String _fastVideoUrl(String rawUrl) {
+  final source = rawUrl.trim();
+  if (!_isProxyableCatalogVideoUrl(source)) {
+    return '';
+  }
+  final base = _workerMediaBaseUrl();
+  if (base.isEmpty) {
+    return '';
+  }
+  final extension = _catalogVideoExtension(source);
+  final endpoint = Uri.tryParse('$base/v1/media/video.$extension');
+  if (endpoint == null) {
+    return '';
+  }
+  return endpoint.replace(queryParameters: <String, String>{'src': source}).toString();
 }
 
 String _workerMediaBaseUrl() {
@@ -1638,11 +1910,25 @@ bool _isProxyableCatalogImageUrl(String value) {
   if (uri == null || uri.scheme != 'https') {
     return false;
   }
-  if (uri.host != 'media.wallpics.app' && uri.host != 'backend.wallpics.app') {
+  if (uri.host.isEmpty) {
     return false;
   }
   final path = uri.path.toLowerCase();
   return path.endsWith('.jpg') || path.endsWith('.jpeg') || path.endsWith('.png') || path.endsWith('.webp');
+}
+
+bool _isProxyableCatalogVideoUrl(String value) {
+  final uri = Uri.tryParse(value.trim());
+  if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
+    return false;
+  }
+  final path = uri.path.toLowerCase();
+  return path.endsWith('.mp4') || path.endsWith('.mov');
+}
+
+String _catalogVideoExtension(String value) {
+  final path = Uri.tryParse(value.trim())?.path.toLowerCase() ?? value.toLowerCase();
+  return path.endsWith('.mov') ? 'mov' : 'mp4';
 }
 
 bool _isFastPrefetchableUrl(String value) {
@@ -1661,12 +1947,12 @@ const Set<String> _blockedCatalogTerms = <String>{
 };
 
 const Map<String, List<String>> _searchAliasesByToken = <String, List<String>>{
-  'goku': <String>['son goku', 'kakarot', 'kakarotto', 'dragon ball', 'dragonball', 'dbz', 'dragon ball z', 'dragon ball super'],
-  'vegeta': <String>['dragon ball', 'dragonball', 'dbz', 'dragon ball z', 'dragon ball super'],
+  'goku': <String>['son goku', 'kakarot', 'kakarotto'],
+  'vegeta': <String>['prince vegeta'],
   'spiderman': <String>['spider man', 'spider-man', 'miles morales', 'peter parker'],
   'batman': <String>['bruce wayne', 'dark knight'],
-  'naruto': <String>['uzumaki', 'shippuden'],
-  'luffy': <String>['one piece', 'monkey d luffy'],
+  'naruto': <String>['uzumaki naruto', 'naruto uzumaki'],
+  'luffy': <String>['monkey d luffy', 'monkey luffy'],
 };
 
 bool _isBlockedCatalogLabel(String value) {

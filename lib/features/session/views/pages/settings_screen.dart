@@ -119,20 +119,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // ── Sections ─────────────────────────────────────────────────────────────────
 
-  Widget _appearanceSection() {
-    return _sectionCard(
-      title: 'APPEARANCE',
-      children: [
-        ListTile(
-          leading: const Icon(JamIcons.wrench),
-          title: Text('Themes', style: _titleStyle),
-          subtitle: const Text('Accent colours, light & dark themes', style: TextStyle(fontSize: 12)),
-          trailing: const Icon(Icons.chevron_right_rounded),
-          onTap: () => context.router.push(const ThemeViewRoute()),
-        ),
-      ],
-    );
-  }
 
   Widget _downloadsSection() {
     return _sectionCard(
@@ -585,7 +571,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.only(top: 8, bottom: 32),
         children: [
-          _appearanceSection(),
           _downloadsSection(),
           _notificationsSection(),
           _storageSection(),

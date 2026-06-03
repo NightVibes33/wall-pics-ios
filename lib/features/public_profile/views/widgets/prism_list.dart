@@ -12,7 +12,6 @@ import 'package:Prism/theme/toasts.dart' as toasts;
 import 'package:animations/animations.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_mailer/flutter_mailer.dart';
 
 class PrismList extends StatelessWidget {
@@ -106,106 +105,29 @@ class PrismList extends StatelessWidget {
           },
         ),
         ListTile(
-          leading: const Icon(JamIcons.picture),
+          leading: const Icon(JamIcons.database),
           title: Text(
-            "API",
+            "Catalog",
             style: TextStyle(
               color: Theme.of(context).colorScheme.secondary,
               fontWeight: FontWeight.w500,
               fontFamily: "Proxima Nova",
             ),
           ),
-          subtitle: const Text("Prism uses Wallhaven and Pexels API for wallpapers", style: TextStyle(fontSize: 12)),
+          subtitle: const Text("Prism uses the Prism catalog API for wallpapers.", style: TextStyle(fontSize: 12)),
           onTap: () {
-            _trackAction(AnalyticsActionValue.actionChipTapped, sourceContext: 'profile_prism_list_api');
+            _trackAction(AnalyticsActionValue.actionChipTapped, sourceContext: 'profile_prism_list_catalog');
             showModal(
               context: context,
               builder: (context) => AlertDialog(
                 shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(20))),
-                content: SizedBox(
-                  height: 280,
+                content: const SizedBox(
+                  height: 110,
                   width: 250,
                   child: Center(
-                    child: ListView.builder(
-                      itemCount: 4,
-                      shrinkWrap: true,
-                      itemBuilder: (context, index) {
-                        return ListTile(
-                          leading: Icon(
-                            index == 0
-                                ? JamIcons.picture
-                                : index == 1
-                                ? JamIcons.camera
-                                : index == 2
-                                ? JamIcons.unsplash
-                                : JamIcons.github,
-                            color: Theme.of(context).colorScheme.secondary,
-                          ),
-                          title: Text(
-                            index == 0
-                                ? "WallHaven API"
-                                : index == 1
-                                ? "Pexels API"
-                                : index == 2
-                                ? "Unsplash API"
-                                : "GitHub API",
-                            style: Theme.of(context).textTheme.headlineMedium,
-                          ),
-                          onTap: index == 0
-                              ? () {
-                                  HapticFeedback.vibrate();
-                                  Navigator.of(context).pop();
-                                  unawaited(() async {
-                                    final bool launched = await launchUrl(Uri.parse("https://wallhaven.cc/help/api"));
-                                    _trackExternalLink(
-                                      LinkDestinationValue.external,
-                                      launched: launched,
-                                      sourceContext: 'profile_prism_list_api_wallhaven',
-                                    );
-                                  }());
-                                }
-                              : index == 1
-                              ? () {
-                                  HapticFeedback.vibrate();
-                                  Navigator.of(context).pop();
-                                  unawaited(() async {
-                                    final bool launched = await launchUrl(Uri.parse("https://www.pexels.com/api/"));
-                                    _trackExternalLink(
-                                      LinkDestinationValue.external,
-                                      launched: launched,
-                                      sourceContext: 'profile_prism_list_api_pexels',
-                                    );
-                                  }());
-                                }
-                              : index == 2
-                              ? () {
-                                  HapticFeedback.vibrate();
-                                  Navigator.of(context).pop();
-                                  unawaited(() async {
-                                    final bool launched = await launchUrl(Uri.parse("https://unsplash.com/developers"));
-                                    _trackExternalLink(
-                                      LinkDestinationValue.external,
-                                      launched: launched,
-                                      sourceContext: 'profile_prism_list_api_unsplash',
-                                    );
-                                  }());
-                                }
-                              : () {
-                                  HapticFeedback.vibrate();
-                                  Navigator.of(context).pop();
-                                  unawaited(() async {
-                                    final bool launched = await launchUrl(
-                                      Uri.parse("https://developer.github.com/v3/"),
-                                    );
-                                    _trackExternalLink(
-                                      LinkDestinationValue.github,
-                                      launched: launched,
-                                      sourceContext: 'profile_prism_list_api_github',
-                                    );
-                                  }());
-                                },
-                        );
-                      },
+                    child: Text(
+                      'Prism catalog content is delivered through the Prism API.',
+                      textAlign: TextAlign.center,
                     ),
                   ),
                 ),

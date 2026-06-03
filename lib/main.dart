@@ -33,22 +33,15 @@ import 'package:Prism/data/notifications/notifications.dart';
 import 'package:Prism/env/env.dart';
 import 'package:Prism/features/category_feed/category_feed.dart';
 import 'package:Prism/features/deep_link/domain/entities/deep_link_action_entity.dart';
-import 'package:Prism/features/favourite_setups/favourite_setups.dart';
 import 'package:Prism/features/favourite_walls/favourite_walls.dart';
 import 'package:Prism/features/in_app_notifications/biz/bloc/in_app_notifications_bloc.j.dart';
 import 'package:Prism/features/palette/domain/bloc/wallpaper_detail_bloc.dart';
 import 'package:Prism/features/prism_catalog/data/prism_catalog_data_source.dart';
 import 'package:Prism/features/palette/palette.dart';
-import 'package:Prism/features/profile_setups/profile_setups.dart';
 import 'package:Prism/features/session/domain/entities/session_entity.dart';
 import 'package:Prism/features/session/session.dart';
-import 'package:Prism/features/setups/setups.dart';
 import 'package:Prism/features/startup/startup.dart';
-import 'package:Prism/features/theme_dark/theme_dark.dart';
-import 'package:Prism/features/theme_light/theme_light.dart';
-import 'package:Prism/features/theme_mode/theme_mode.dart';
 import 'package:Prism/features/user_search/user_search.dart';
-import 'package:Prism/features/wall_of_the_day/biz/bloc/wotd_bloc.j.dart';
 import 'package:Prism/logger/logger.dart';
 import 'package:Prism/notifications/localNotification.dart';
 import 'package:Prism/theme/toasts.dart' as toasts;
@@ -231,20 +224,11 @@ Future<void> main() async {
                 BlocProvider<UserSearchBloc>(create: (_) => getIt<UserSearchBloc>()),
                 BlocProvider<CategoryFeedBloc>(create: (_) => getIt<CategoryFeedBloc>()),
                 BlocProvider<FavouriteWallsBloc>(create: (_) => getIt<FavouriteWallsBloc>()),
-                BlocProvider<FavouriteSetupsBloc>(create: (_) => getIt<FavouriteSetupsBloc>()),
-                BlocProvider<ProfileSetupsBloc>(create: (_) => getIt<ProfileSetupsBloc>()),
-                BlocProvider<SetupsBloc>(create: (_) => getIt<SetupsBloc>()),
                 BlocProvider<SessionBloc>(create: (_) => getIt<SessionBloc>()..add(const SessionEvent.started())),
                 BlocProvider<StartupBloc>(
                   create: (_) =>
                       getIt<StartupBloc>()..add(StartupEvent.started(currentVersion: app_state.currentAppVersion)),
                 ),
-                BlocProvider<ThemeLightBloc>(
-                  create: (_) => getIt<ThemeLightBloc>()..add(const ThemeLightEvent.started()),
-                ),
-                BlocProvider<ThemeDarkBloc>(create: (_) => getIt<ThemeDarkBloc>()..add(const ThemeDarkEvent.started())),
-                BlocProvider<ThemeModeBloc>(create: (_) => getIt<ThemeModeBloc>()..add(const ThemeModeEvent.started())),
-                BlocProvider<WotdBloc>(create: (_) => getIt<WotdBloc>()..add(const WotdEvent.started())),
               ],
               child: _MyApp(),
             ),
@@ -592,7 +576,6 @@ class _MyAppState extends State<_MyApp> with WidgetsBindingObserver {
       SetupLinkIntent() => TargetTypeValue.setup,
       ReferLinkIntent() => TargetTypeValue.refer,
       ShortCodeIntent() => TargetTypeValue.shortCode,
-      ChargingAnimationIntent() => TargetTypeValue.unknown,
       UnknownIntent() => TargetTypeValue.unknown,
     };
   }
@@ -663,13 +646,6 @@ class _MyAppState extends State<_MyApp> with WidgetsBindingObserver {
         );
       case ShortCodeIntent():
         await _resolveAndNavigateShortCode(action.code);
-      case ChargingAnimationIntent():
-        _appRouter.push(const ChargingAnimationPlayerRoute());
-        unawaited(
-          analytics.track(
-            const DeepLinkNavigationResultEvent(targetType: TargetTypeValue.unknown, result: EventResultValue.navigated),
-          ),
-        );
       case UnknownIntent():
         _appRouter.push(const NotFoundRoute());
         unawaited(

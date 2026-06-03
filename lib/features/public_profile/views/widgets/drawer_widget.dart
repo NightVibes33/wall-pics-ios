@@ -151,50 +151,6 @@ class ProfileDrawer extends StatelessWidget {
           children: <Widget>[
             _header(context),
 
-            // ── YOUR CONTENT ───────────────────────────────────────────────
-            _sectionHeader('YOUR CONTENT', context),
-            _item(
-              icon: JamIcons.picture,
-              text: 'Favourite Wallpapers',
-              context: context,
-              onTap: () {
-                _trackDrawerAction(
-                  AnalyticsActionValue.drawerFavWallsTapped,
-                  sourceContext: 'profile_drawer_fav_walls',
-                );
-                Navigator.pop(context);
-                context.router.push(const FavouriteWallpaperRoute());
-              },
-            ),
-            _item(
-              icon: JamIcons.instant_picture,
-              text: 'Favourite Setups',
-              context: context,
-              onTap: () {
-                _trackDrawerAction(
-                  AnalyticsActionValue.drawerFavSetupsTapped,
-                  sourceContext: 'profile_drawer_fav_setups',
-                );
-                Navigator.pop(context);
-                context.router.push(const FavouriteSetupRoute());
-              },
-            ),
-            _item(
-              icon: JamIcons.download,
-              text: 'Downloaded Walls',
-              context: context,
-              onTap: () {
-                _trackDrawerAction(
-                  AnalyticsActionValue.drawerDownloadsTapped,
-                  sourceContext: 'profile_drawer_downloads',
-                );
-                Navigator.pop(context);
-                context.router.push(const DownloadRoute());
-              },
-            ),
-
-            const Divider(),
-
             // ── ACCOUNT ────────────────────────────────────────────────────
             _sectionHeader('ACCOUNT', context),
             _item(
@@ -240,7 +196,7 @@ class ProfileDrawer extends StatelessWidget {
             // ── MORE ───────────────────────────────────────────────────────
             _sectionHeader('MORE', context),
             _item(
-              icon: JamIcons.coin,
+              icon: JamIcons.key,
               text: 'Enter Code',
               context: context,
               onTap: () {

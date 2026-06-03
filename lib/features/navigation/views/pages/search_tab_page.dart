@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:Prism/core/wallpaper/wallpaper_source.dart';
 import 'package:Prism/data/categories/category_definition.dart';
 import 'package:Prism/features/category_feed/domain/entities/category_entity.dart';
@@ -16,7 +18,18 @@ class SearchTabPage extends StatefulWidget {
 }
 
 class _SearchTabPageState extends State<SearchTabPage> {
+  static const CategoryEntity _liveCategory = CategoryEntity(
+    name: 'Live Photos',
+    source: WallpaperSource.prism,
+    searchType: CategorySearchType.nonSearch,
+    image: '',
+    image2: '',
+    catalogSlug: 'for-you',
+    catalogContentType: PrismCatalogDataSource.liveContentType,
+  );
+
   late Future<List<FeedItemEntity>> _liveItemsFuture;
+  int _loadGeneration = 0;
 
   @override
   void initState() {
@@ -25,21 +38,32 @@ class _SearchTabPageState extends State<SearchTabPage> {
   }
 
   Future<List<FeedItemEntity>> _loadLiveItems() async {
-    final page = await PrismCatalogDataSource.instance.fetchCategoryFeed(
-      category: const CategoryEntity(
-        name: 'Live Photos',
-        source: WallpaperSource.prism,
-        searchType: CategorySearchType.nonSearch,
-        image: '',
-        image2: '',
-        catalogSlug: 'for-you',
-        catalogContentType: PrismCatalogDataSource.liveContentType,
-      ),
-      refresh: true,
-    );
+    final generation = ++_loadGeneration;
+    final page = await PrismCatalogDataSource.instance.fetchCategoryFeed(category: _liveCategory, refresh: true);
+    final firstItems = _uniqueItems(page?.items ?? const <FeedItemEntity>[]);
+    unawaited(_loadCompleteLiveItems(generation));
+    return firstItems;
+  }
+
+  Future<void> _loadCompleteLiveItems(int generation) async {
+    try {
+      final page = await PrismCatalogDataSource.instance.fetchFullCategoryFeed(category: _liveCategory);
+      final fullItems = _uniqueItems(page?.items ?? const <FeedItemEntity>[]);
+      if (!mounted || generation != _loadGeneration || fullItems.isEmpty) {
+        return;
+      }
+      setState(() {
+        _liveItemsFuture = Future<List<FeedItemEntity>>.value(fullItems);
+      });
+    } catch (_) {
+      // The already-rendered first page remains usable.
+    }
+  }
+
+  List<FeedItemEntity> _uniqueItems(Iterable<FeedItemEntity> items) {
     final seen = <String>{};
     return <FeedItemEntity>[
-      for (final item in page?.items ?? const <FeedItemEntity>[])
+      for (final item in items)
         if (seen.add(item.id)) item,
     ];
   }
@@ -67,6 +91,7 @@ class _SearchTabPageState extends State<SearchTabPage> {
               onRefresh: _refresh,
               child: CustomScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
+                cacheExtent: 16000,
                 slivers: <Widget>[
                   const SliverPadding(
                     padding: EdgeInsets.fromLTRB(18, 22, 18, 18),
@@ -104,7 +129,7 @@ class _SearchTabPageState extends State<SearchTabPage> {
                           crossAxisSpacing: 0,
                         ),
                         delegate: SliverChildBuilderDelegate(
-                          (context, index) => WallpaperTile(item: items[index], index: index, galleryItems: items),
+                          (context, index) => WallpaperTile(item: items[index], index: index, galleryItems: items, playVideoPreview: true),
                           childCount: items.length,
                         ),
                       ),

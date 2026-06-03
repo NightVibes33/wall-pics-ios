@@ -62,8 +62,8 @@ const List<CategoryDefinition> categoryDefinitions = <CategoryDefinition>[
     searchType: CategorySearchType.nonSearch,
     imageUrl: '',
     secondaryImageUrl: '',
-    catalogSlug: '3d-spatial',
-    catalogContentType: 'regular_wallpaper',
+    catalogSlug: 'for-you',
+    catalogContentType: 'parallax_wallpaper',
   ),
   CategoryDefinition(
     name: 'New 🍒',

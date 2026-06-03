@@ -34,7 +34,7 @@ Prism supports a remote catalog endpoint configured at build time with:
 
 Catalog files are served by the Worker at `/v1/catalog` from the private catalog repository. Set `PRISM_CATALOG_BASE_URL` directly, or set `USER_STORE_API_BASE_URL` and the app will use `<USER_STORE_API_BASE_URL>/v1/catalog`. Large catalog files stay outside the IPA and are fetched at runtime.
 
-Expected files include regular, live, matching, double, parallax, profile picture, charging animation, DIY template, live DIY template, sticker, filters, category tree, popular search, and search suggestion JSON.
+Expected files include regular, live, matching, double, parallax, profile picture, category tree, popular search, and search suggestion JSON.
 
 ## Development
 

@@ -1,6 +1,5 @@
 import 'package:Prism/analytics/analytics_service.dart';
 import 'package:Prism/core/analytics/events/events.dart';
-import 'package:Prism/core/coins/coins_service.dart';
 import 'package:Prism/core/di/injection.dart';
 import 'package:Prism/core/persistence/data_sources/settings_local_data_source.dart';
 import 'package:Prism/core/router/app_router.dart';
@@ -919,7 +918,7 @@ class _NotificationSettingsSheetState extends State<NotificationSettingsSheet> {
       secondary: Icon(JamIcons.pictures, color: cs.secondary),
       value: postsSubscriber ?? true,
       title: Text('Posts', style: _listTileTitleStyle),
-      subtitle: Text('Alerts when creators you follow share new work.', style: _listTileSubtitleStyle()),
+      subtitle: Text('Alerts when new wallpapers are available.', style: _listTileSubtitleStyle()),
       onChanged: (followersSubscriber ?? true)
           ? (bool value) async {
               if (app_state.prismUser.loggedIn) {
@@ -1017,10 +1016,6 @@ class _NotificationSettingsSheetState extends State<NotificationSettingsSheet> {
           setState(() => streakReminderSubscriber = value);
           analytics.track(
             NotificationPreferenceChangedEvent(preference: NotificationPreferenceValue.streakReminders, value: value),
-          );
-          await CoinsService.instance.setStreakReminderPreference(
-            value,
-            sourceTag: 'notification.settings.streak_reminders',
           );
         } else {
           analytics.track(

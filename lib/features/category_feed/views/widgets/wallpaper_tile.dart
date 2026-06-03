@@ -110,8 +110,8 @@ class WallpaperTile extends StatelessWidget {
         final preferred = _firstStringValue(
           <Object?>[
             wallpaper.core.fullUrl,
-            metadata['catalogStaticThumbnailUrl'],
             metadata['catalogFirstFrameThumbnailUrl'],
+            metadata['catalogStaticThumbnailUrl'],
             metadata['catalogPreviewUrl'],
             wallpaper.core.thumbnailUrl,
           ],
@@ -145,31 +145,33 @@ class WallpaperTile extends StatelessWidget {
   static List<FeedItemEntity> matchingSideItemsForItem(FeedItemEntity item) {
     return item.when(
       prism: (id, wallpaper) {
-        if (!isMatchingSetItem(item)) return const <FeedItemEntity>[];
-        final sideRows = _mapList(wallpaper.aiMetadata?['catalogMatchingSides']);
-        if (sideRows.length >= 2) {
-          return <FeedItemEntity>[
-            for (var index = 0; index < sideRows.length; index++)
-              if ((sideRows[index]['download_url']?.toString().trim() ?? '').isNotEmpty)
-                _matchingSideItem(
-                  parentId: id,
-                  wallpaper: wallpaper,
-                  fullUrl: sideRows[index]['download_url']?.toString().trim() ?? '',
-                  previewUrl: sideRows[index]['download_url'].toString().trim(),
-                  index: index,
-                ),
-          ];
+        if (!isMatchingSetItem(item) || wallpaper.aiMetadata?['catalogIsMatchingSide'] == true) {
+          return const <FeedItemEntity>[];
         }
-        final fullUrls = _stringList(wallpaper.aiMetadata?['catalogPairedDownloadUrls']);
-        if (fullUrls.length < 2) return const <FeedItemEntity>[];
-        final previewUrls = pairedPreviewUrlsForItem(item);
+        final sideRows = _mapList(wallpaper.aiMetadata?['catalogMatchingSides']);
+        final sideUrls = <String>[];
+        final seenSideUrls = <String>{};
+        void addSideUrl(String url) {
+          final cleanUrl = url.trim();
+          if (cleanUrl.isNotEmpty && seenSideUrls.add(cleanUrl)) {
+            sideUrls.add(cleanUrl);
+          }
+        }
+
+        for (final side in sideRows) {
+          addSideUrl(side['download_url']?.toString() ?? '');
+        }
+        for (final url in _stringList(wallpaper.aiMetadata?['catalogPairedDownloadUrls'])) {
+          addSideUrl(url);
+        }
+        if (sideUrls.length < 2) return const <FeedItemEntity>[];
         return <FeedItemEntity>[
-          for (var index = 0; index < fullUrls.length; index++)
+          for (var index = 0; index < sideUrls.length; index++)
             _matchingSideItem(
               parentId: id,
               wallpaper: wallpaper,
-              fullUrl: fullUrls[index],
-              previewUrl: index < previewUrls.length ? previewUrls[index] : fullUrls[index],
+              fullUrl: sideUrls[index],
+              previewUrl: sideUrls[index],
               index: index,
             ),
         ];
@@ -192,8 +194,10 @@ class WallpaperTile extends StatelessWidget {
       ..remove('catalogPairedWallpapers')
       ..remove('catalogPairedPreviewUrls')
       ..remove('catalogPairedDownloadUrls')
+      ..remove('catalogMatchingSides')
       ..['catalogContentType'] = PrismCatalogDataSource.regularContentType
-      ..['catalogParentContentType'] = PrismCatalogDataSource.matchingContentType
+      ..['catalogParentContentType'] = wallpaper.aiMetadata?['catalogContentType'] ?? PrismCatalogDataSource.matchingContentType
+      ..['catalogIsMatchingSide'] = true
       ..['catalogMatchingSetId'] = parentId
       ..['catalogMatchingSideIndex'] = index;
     final cleanFullUrl = fullUrl.trim();
@@ -295,7 +299,7 @@ class WallpaperTile extends StatelessWidget {
       fadeOutDuration: Duration.zero,
       placeholderFadeInDuration: Duration.zero,
       useOldImageOnUrlChange: true,
-      filterQuality: FilterQuality.medium,
+      filterQuality: FilterQuality.high,
       memCacheWidth: cacheWidth,
       memCacheHeight: cacheHeight,
       placeholder: (ctx, _) => ColoredBox(color: Theme.of(ctx).colorScheme.surfaceContainerHighest),

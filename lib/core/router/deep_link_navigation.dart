@@ -52,7 +52,7 @@ class DeepLinkNavigation {
         }
         return _mapActionToRoute(resolved);
       case ChargingAnimationIntent():
-        return const ChargingAnimationPlayerRoute();
+        return const NotFoundRoute();
       case UnknownIntent():
         return null;
     }

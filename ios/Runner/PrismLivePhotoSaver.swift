@@ -42,16 +42,13 @@ final class PrismLivePhotoSaver: NSObject {
         let assetId = UUID().uuidString
         let workDir = try self.makeWorkDirectory()
         let rawVideo = try self.fetchFile(urlString: videoUrl, fallbackExtension: "mp4", directory: workDir)
-        let rawStill: URL
+        let fetchedStill: URL?
         if let stillUrl = stillUrl?.trimmingCharacters(in: .whitespacesAndNewlines), !stillUrl.isEmpty {
-          do {
-            rawStill = try self.fetchFile(urlString: stillUrl, fallbackExtension: "jpg", directory: workDir)
-          } catch {
-            rawStill = try self.makeStillFrame(from: rawVideo, directory: workDir)
-          }
+          fetchedStill = try? self.fetchFile(urlString: stillUrl, fallbackExtension: "jpg", directory: workDir)
         } else {
-          rawStill = try self.makeStillFrame(from: rawVideo, directory: workDir)
+          fetchedStill = nil
         }
+        let rawStill = try self.compatibleStillImage(fetchedStill, video: rawVideo, directory: workDir)
         let pairedPhoto = workDir.appendingPathComponent("live-photo.jpg")
         let pairedVideo = workDir.appendingPathComponent("live-video.mov")
         try self.writePairedPhoto(input: rawStill, output: pairedPhoto, assetId: assetId)
@@ -127,7 +124,15 @@ final class PrismLivePhotoSaver: NSObject {
     generator.appliesPreferredTrackTransform = true
     generator.requestedTimeToleranceBefore = .zero
     generator.requestedTimeToleranceAfter = CMTime(seconds: 0.2, preferredTimescale: 600)
-    let image = try generator.copyCGImage(at: CMTime(seconds: 0.15, preferredTimescale: 600), actualTime: nil)
+    let durationSeconds: Double
+    if asset.duration.isValid && asset.duration.seconds.isFinite {
+      durationSeconds = max(asset.duration.seconds, 0)
+    } else {
+      durationSeconds = 0
+    }
+    let frameSeconds = durationSeconds > 0.02 ? min(0.15, durationSeconds * 0.5) : 0
+    let frameTime = CMTime(seconds: frameSeconds, preferredTimescale: 600)
+    let image = try generator.copyCGImage(at: frameTime, actualTime: nil)
     let output = directory.appendingPathComponent("generated-live-still.jpg")
     let type: CFString
     if #available(iOS 14.0, *) {
@@ -138,10 +143,56 @@ final class PrismLivePhotoSaver: NSObject {
     guard let destination = CGImageDestinationCreateWithURL(output as CFURL, type, 1, nil) else {
       throw LivePhotoError.imageWriteFailed
     }
-    let options = [kCGImageDestinationLossyCompressionQuality as String: 0.96] as CFDictionary
+    let options = [kCGImageDestinationLossyCompressionQuality as String: 0.98] as CFDictionary
     CGImageDestinationAddImage(destination, image, options)
     guard CGImageDestinationFinalize(destination) else { throw LivePhotoError.imageWriteFailed }
     return output
+  }
+
+  private func compatibleStillImage(_ still: URL?, video: URL, directory: URL) throws -> URL {
+    if let still, isStillImageCompatible(still, video: video) {
+      return still
+    }
+    return try makeStillFrame(from: video, directory: directory)
+  }
+
+  private func isStillImageCompatible(_ still: URL, video: URL) -> Bool {
+    guard let stillSize = imagePixelSize(still),
+          let videoSize = videoDisplaySize(video) else {
+      return false
+    }
+    let stillWidth = max(stillSize.width, 1)
+    let stillHeight = max(stillSize.height, 1)
+    let videoWidth = max(videoSize.width, 1)
+    let videoHeight = max(videoSize.height, 1)
+    let stillRatio = stillWidth / stillHeight
+    let videoRatio = videoWidth / videoHeight
+    let ratioDelta = abs(stillRatio - videoRatio) / max(videoRatio, 0.01)
+    let minStillSide = min(stillWidth, stillHeight)
+    let minVideoSide = min(videoWidth, videoHeight)
+    let minimumSide = min(max(minVideoSide * 0.72, CGFloat(960)), minVideoSide)
+    return minStillSide >= minimumSide && ratioDelta <= 0.08
+  }
+
+  private func imagePixelSize(_ url: URL) -> CGSize? {
+    guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+          let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any] else {
+      return nil
+    }
+    let width = (properties[kCGImagePropertyPixelWidth as String] as? NSNumber)?.doubleValue ?? 0
+    let height = (properties[kCGImagePropertyPixelHeight as String] as? NSNumber)?.doubleValue ?? 0
+    guard width > 0 && height > 0 else { return nil }
+    return CGSize(width: width, height: height)
+  }
+
+  private func videoDisplaySize(_ url: URL) -> CGSize? {
+    let asset = AVURLAsset(url: url)
+    guard let track = asset.tracks(withMediaType: .video).first else { return nil }
+    let transformed = track.naturalSize.applying(track.preferredTransform)
+    let width = abs(transformed.width)
+    let height = abs(transformed.height)
+    guard width > 0 && height > 0 else { return nil }
+    return CGSize(width: width, height: height)
   }
 
   private func writePairedPhoto(input: URL, output: URL, assetId: String) throws {

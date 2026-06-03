@@ -3,6 +3,7 @@ import 'package:Prism/core/utils/status.dart';
 import 'package:Prism/core/widgets/animated/loader.dart';
 import 'package:Prism/features/category_feed/biz/bloc/category_feed_bloc.j.dart';
 import 'package:Prism/features/category_feed/domain/entities/category_entity.dart';
+import 'package:Prism/features/prism_catalog/data/prism_catalog_data_source.dart';
 import 'package:auto_route/auto_route.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -30,6 +31,68 @@ class CollectionScreen extends StatelessWidget {
           );
         }
         return _PrismCategoryGrid(categories: state.categories);
+      },
+    );
+  }
+}
+
+class _CategoryPreviewImage extends StatefulWidget {
+  const _CategoryPreviewImage({required this.category, required this.fallbackImageUrl});
+
+  final CategoryEntity category;
+  final String fallbackImageUrl;
+
+  @override
+  State<_CategoryPreviewImage> createState() => _CategoryPreviewImageState();
+}
+
+class _CategoryPreviewImageState extends State<_CategoryPreviewImage> {
+  late Future<String> _previewFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _previewFuture = _loadPreview();
+  }
+
+  @override
+  void didUpdateWidget(covariant _CategoryPreviewImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.category.catalogContentType != widget.category.catalogContentType ||
+        oldWidget.category.catalogSlug != widget.category.catalogSlug ||
+        oldWidget.fallbackImageUrl != widget.fallbackImageUrl) {
+      _previewFuture = _loadPreview();
+    }
+  }
+
+  Future<String> _loadPreview() async {
+    final fallback = widget.fallbackImageUrl.trim();
+    if (fallback.isNotEmpty) return fallback;
+    return PrismCatalogDataSource.instance.categoryPreviewUrl(
+      contentType: widget.category.catalogContentType?.trim() ?? '',
+      slug: widget.category.catalogSlug?.trim() ?? '',
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final placeholder = ColoredBox(color: Theme.of(context).colorScheme.surfaceContainerHighest);
+    return FutureBuilder<String>(
+      future: _previewFuture,
+      builder: (context, snapshot) {
+        final url = snapshot.data?.trim() ?? '';
+        if (url.isEmpty) return placeholder;
+        return CachedNetworkImage(
+          imageUrl: url,
+          fit: BoxFit.cover,
+          fadeInDuration: Duration.zero,
+          fadeOutDuration: Duration.zero,
+          placeholderFadeInDuration: Duration.zero,
+          useOldImageOnUrlChange: true,
+          filterQuality: FilterQuality.high,
+          placeholder: (context, url) => placeholder,
+          errorWidget: (context, url, error) => placeholder,
+        );
       },
     );
   }
@@ -84,14 +147,7 @@ class _PrismCategoryGrid extends StatelessWidget {
                   ),
                 ),
                 Expanded(
-                  child: imageUrl.isEmpty
-                      ? ColoredBox(color: theme.colorScheme.surfaceContainerHighest)
-                      : CachedNetworkImage(
-                          imageUrl: imageUrl,
-                          fit: BoxFit.cover,
-                          placeholder: (context, url) => ColoredBox(color: theme.colorScheme.surfaceContainerHighest),
-                          errorWidget: (context, url, error) => ColoredBox(color: theme.colorScheme.surfaceContainerHighest),
-                        ),
+                  child: _CategoryPreviewImage(category: category, fallbackImageUrl: imageUrl),
                 ),
               ],
             ),

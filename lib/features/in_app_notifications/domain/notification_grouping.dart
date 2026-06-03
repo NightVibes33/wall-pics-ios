@@ -163,11 +163,11 @@ String collapsedGroupSummaryLine(InAppNotificationTitleGroup group) {
     final String? creator = wallLiveCreatorNameFromBody(firstBody);
     if (creator != null && creator.isNotEmpty) {
       if (n == 2) {
-        return 'From $creator and 1 other creator.';
+        return 'From $creator and 1 other item.';
       }
-      return 'From $creator and ${n - 1} other creators.';
+      return 'From $creator and ${n - 1} other items.';
     }
-    return 'Several creators—expand to see each wall.';
+    return 'Several updates - expand to see each wall.';
   }
   if (notificationGroupLooksLikeWallOfTheDay(group) && notificationGroupHasUniformBody(group)) {
     return 'Each row is a different day; times are on the right.';

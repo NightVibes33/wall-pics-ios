@@ -15,6 +15,8 @@ interface Env {
   GOOGLE_CLIENT_ID?: string;
   APPLE_BUNDLE_ID?: string;
   CORS_ORIGIN?: string;
+  ALLOWED_MEDIA_HOSTS?: string;
+  MEDIA_CACHE_TTL_SECONDS?: string;
 }
 
 type JsonMap = Record<string, unknown>;
@@ -33,8 +35,8 @@ type GitHubFile = {
 };
 
 const defaultProfilePhotoUrl = 'https://raw.githubusercontent.com/Hash-Studios/Prism/master/assets/icon/ios.png';
-const allowedMediaImageHosts = new Set(['media.wallpics.app', 'backend.wallpics.app']);
 const allowedMediaImageExtensions = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+const allowedMediaVideoExtensions = new Set(['.mp4', '.mov']);
 const freeDownloadsPerDay = 3;
 const applePaidProductIds = new Set(['prism_pro_monthly', 'prism_pro_yearly', 'prism_pro_lifetime']);
 
@@ -58,6 +60,10 @@ export default {
 
       if (request.method === 'GET' && url.pathname === '/v1/media/image') {
         return mediaImageResponse(request, env);
+      }
+
+      if (request.method === 'GET' && /^\/v1\/media\/video\.(mp4|mov)$/.test(url.pathname)) {
+        return mediaVideoResponse(request, env);
       }
 
       if (request.method === 'POST' && url.pathname === '/v1/users/sign-in') {
@@ -133,10 +139,10 @@ async function catalogResponse(fileName: string, request: Request, env: Env): Pr
 
 async function mediaImageResponse(request: Request, env: Env): Promise<Response> {
   const requestUrl = new URL(request.url);
-  const source = mediaImageSource(requestUrl.searchParams.get('src'));
+  const source = mediaSource(requestUrl.searchParams.get('src'), env, allowedMediaImageExtensions, 'image');
   const width = clampNumber(numberValue(requestUrl.searchParams.get('w') || 1440), 120, 3840);
   const quality = clampNumber(numberValue(requestUrl.searchParams.get('q') || 92), 60, 98);
-  const ttl = Math.max(3600, numberValue(env.CATALOG_CACHE_TTL_SECONDS || 86400));
+  const ttl = mediaCacheTtl(env);
   const cacheKey = new Request(mediaImageCacheUrl(requestUrl, source, width, quality), { method: 'GET' });
   const cached = await caches.default.match(cacheKey);
   if (cached) {
@@ -161,26 +167,49 @@ async function mediaImageResponse(request: Request, env: Env): Promise<Response>
     return jsonResponse({ error: 'Media image not found' }, env, upstream.status === 404 ? 404 : 502);
   }
 
-  const headers = new Headers(upstream.headers);
-  for (const [key, value] of Object.entries(corsHeaders(env))) {
-    headers.set(key, value);
-  }
-  headers.set('Cache-Control', `public, max-age=${ttl}, stale-while-revalidate=${ttl * 7}`);
-  headers.set('Content-Type', headers.get('Content-Type') || 'image/webp');
+  const headers = mediaHeaders(upstream.headers, env, ttl, 'image/webp');
   const response = new Response(upstream.body, { status: 200, headers });
   await caches.default.put(cacheKey, response.clone());
   return response;
 }
 
-function mediaImageSource(value: unknown): URL {
+async function mediaVideoResponse(request: Request, env: Env): Promise<Response> {
+  const requestUrl = new URL(request.url);
+  const source = mediaSource(requestUrl.searchParams.get('src'), env, allowedMediaVideoExtensions, 'video');
+  const ttl = mediaCacheTtl(env);
+  const cacheKey = new Request(mediaVideoCacheUrl(requestUrl, source), { method: 'GET' });
+  const cached = await caches.default.match(cacheKey);
+  if (cached) {
+    return withCors(cached, env);
+  }
+
+  const upstream = await fetch(source.toString(), {
+    cf: {
+      cacheEverything: true,
+      cacheTtl: ttl,
+    },
+  });
+  if (!upstream.ok) {
+    return jsonResponse({ error: 'Media video not found' }, env, upstream.status === 404 ? 404 : 502);
+  }
+
+  const fallbackType = source.pathname.toLowerCase().endsWith('.mov') ? 'video/quicktime' : 'video/mp4';
+  const headers = mediaHeaders(upstream.headers, env, ttl, fallbackType);
+  headers.set('Accept-Ranges', headers.get('Accept-Ranges') || 'bytes');
+  const response = new Response(upstream.body, { status: 200, headers });
+  await caches.default.put(cacheKey, response.clone());
+  return response;
+}
+
+function mediaSource(value: unknown, env: Env, extensions: Set<string>, kind: string): URL {
   const raw = stringValue(value);
   const source = new URL(raw);
-  if (source.protocol !== 'https:' || !allowedMediaImageHosts.has(source.hostname)) {
-    throw new Error('Invalid media image source');
+  if (source.protocol !== 'https:' || !isAllowedMediaHost(source.hostname, env)) {
+    throw new Error(`Invalid media ${kind} source`);
   }
   const path = source.pathname.toLowerCase();
-  if (![...allowedMediaImageExtensions].some((extension) => path.endsWith(extension))) {
-    throw new Error('Invalid media image source');
+  if (![...extensions].some((extension) => path.endsWith(extension))) {
+    throw new Error(`Invalid media ${kind} source`);
   }
   return source;
 }
@@ -192,6 +221,58 @@ function mediaImageCacheUrl(requestUrl: URL, source: URL, width: number, quality
   cacheUrl.searchParams.set('w', String(width));
   cacheUrl.searchParams.set('q', String(quality));
   return cacheUrl.toString();
+}
+
+function mediaVideoCacheUrl(requestUrl: URL, source: URL): string {
+  const cacheUrl = new URL(requestUrl.origin);
+  cacheUrl.pathname = requestUrl.pathname;
+  cacheUrl.searchParams.set('src', source.toString());
+  return cacheUrl.toString();
+}
+
+function mediaHeaders(upstreamHeaders: Headers, env: Env, ttl: number, fallbackContentType: string): Headers {
+  const headers = new Headers(upstreamHeaders);
+  for (const [key, value] of Object.entries(corsHeaders(env))) {
+    headers.set(key, value);
+  }
+  headers.set('Cache-Control', `public, max-age=${ttl}, stale-while-revalidate=${ttl * 7}`);
+  headers.set('Content-Type', headers.get('Content-Type') || fallbackContentType);
+  return headers;
+}
+
+function mediaCacheTtl(env: Env): number {
+  return Math.max(3600, numberValue(env.MEDIA_CACHE_TTL_SECONDS || env.CATALOG_CACHE_TTL_SECONDS || 86400));
+}
+
+function isAllowedMediaHost(hostname: string, env: Env): boolean {
+  const host = hostname.trim().toLowerCase();
+  const configuredHosts = configuredMediaHosts(env);
+  if (configuredHosts.size > 0) {
+    return configuredHosts.has(host);
+  }
+  return isPublicHostname(host);
+}
+
+function configuredMediaHosts(env: Env): Set<string> {
+  return new Set(
+    stringValue(env.ALLOWED_MEDIA_HOSTS)
+      .split(',')
+      .map((host) => host.trim().toLowerCase())
+      .filter((host) => host.length > 0),
+  );
+}
+
+function isPublicHostname(host: string): boolean {
+  if (host.length === 0 || host === 'localhost' || host.endsWith('.local') || host.includes(':')) {
+    return false;
+  }
+  const octets = host.split('.').map((part) => Number(part));
+  const isIpv4 = octets.length === 4 && octets.every((part) => Number.isInteger(part) && part >= 0 && part <= 255);
+  if (!isIpv4) {
+    return true;
+  }
+  const [a, b] = octets;
+  return !(a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || a >= 224);
 }
 
 async function catalogStorageResponse(fileName: string, env: Env): Promise<Response | null> {

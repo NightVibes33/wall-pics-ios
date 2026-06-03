@@ -25,13 +25,15 @@ class WallpaperGrid extends StatefulWidget {
 }
 
 class _WallpaperGridState extends State<WallpaperGrid> {
-  static const int _lookAheadPrecacheCount = 96;
+  static const int _lookAheadPrecacheCount = 144;
+  static const int _lookAheadVideoPrecacheCount = 72;
   static const Duration _thumbnailPrecacheTimeout = Duration(seconds: 5);
 
   final GlobalKey<RefreshIndicatorState> refreshHomeKey = GlobalKey<RefreshIndicatorState>();
   final ScrollMilestoneTracker _scrollMilestoneTracker = ScrollMilestoneTracker();
   final ContentLoadTracker _contentLoadTracker = ContentLoadTracker();
   final Set<String> _prefetchedThumbnailUrls = <String>{};
+  final Set<String> _prefetchedVideoUrls = <String>{};
 
   bool seeMoreLoader = false;
   int _lastLoggedSubWallsCount = -1;
@@ -83,11 +85,13 @@ class _WallpaperGridState extends State<WallpaperGrid> {
     }
     _lastLookAheadBatchKey = key;
     final urls = _thumbnailUrls(items.take(_lookAheadPrecacheCount));
+    final videoUrls = _videoUrls(items.take(_lookAheadVideoPrecacheCount));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
       unawaited(_precacheThumbnailUrls(context, urls, timeout: _thumbnailPrecacheTimeout));
+      unawaited(_precacheVideoUrls(videoUrls));
     });
   }
 
@@ -106,21 +110,51 @@ class _WallpaperGridState extends State<WallpaperGrid> {
     await Future.wait<void>(futures);
   }
 
+  Future<void> _precacheVideoUrls(Iterable<String> urls) async {
+    final futures = <Future<void>>[];
+    for (final url in urls) {
+      if (!_prefetchedVideoUrls.add(url)) {
+        continue;
+      }
+      futures.add(
+        DefaultCacheManager().downloadFile(url).timeout(const Duration(seconds: 24)).then((_) {}).catchError((Object _) {}),
+      );
+    }
+    await Future.wait<void>(futures);
+  }
+
   String _batchKey(List<PrismFeedItem> items, int count) {
     return items.take(count).map((item) => item.id).join('|');
   }
 
   List<String> _thumbnailUrls(Iterable<PrismFeedItem> items) {
     return items
-        .map((item) => item.thumbnailUrl.trim())
+        .map((item) {
+          final poster = WallpaperTile.posterUrlForItem(item).trim();
+          return poster.isNotEmpty ? poster : item.thumbnailUrl.trim();
+        })
         .where((url) => url.isNotEmpty)
         .toList(growable: false);
   }
 
-  double _gridAspectRatio(CategoryFeedState state) {
-    return state.selectedCategory?.catalogContentType == PrismCatalogDataSource.profilePictureContentType
-        ? 1.0
-        : 0.5;
+  List<String> _videoUrls(Iterable<PrismFeedItem> items) {
+    return items
+        .map(WallpaperTile.videoUrlForItem)
+        .map((url) => url.trim())
+        .where((url) => url.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  double _gridAspectRatio(CategoryFeedState state, List<FeedItemEntity> displayItems) {
+    if (state.selectedCategory?.catalogContentType == PrismCatalogDataSource.profilePictureContentType) {
+      return 1.0;
+    }
+    final sample = displayItems.take(18).toList(growable: false);
+    if (sample.isEmpty) {
+      return 0.5;
+    }
+    final profileCount = sample.where(WallpaperTile.isProfilePictureItem).length;
+    return profileCount * 2 >= sample.length ? 1.0 : 0.5;
   }
 
   bool _isLiveCategory(CategoryFeedState state) {
@@ -143,7 +177,7 @@ class _WallpaperGridState extends State<WallpaperGrid> {
     }
     final showSkeletonTiles = subWalls.isEmpty;
     final columns = MediaQuery.of(context).orientation == Orientation.portrait ? 3 : 5;
-    final aspectRatio = _gridAspectRatio(state);
+    final aspectRatio = _gridAspectRatio(state, subWalls);
     final playLiveVideos = _isLiveCategory(state);
 
     if (subWalls.isNotEmpty) {
@@ -207,7 +241,7 @@ class _WallpaperGridState extends State<WallpaperGrid> {
           },
           child: GridView.builder(
             physics: const ScrollPhysics(),
-            cacheExtent: 12000,
+            cacheExtent: 16000,
             padding: EdgeInsets.zero,
             itemCount: showSkeletonTiles ? 20 : subWalls.length + (state.hasMore ? 1 : 0),
             shrinkWrap: true,

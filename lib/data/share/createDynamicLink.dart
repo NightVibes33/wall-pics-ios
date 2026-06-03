@@ -184,7 +184,7 @@ Future<void> createUserDynamicLink(
       payload: <String, dynamic>{'username': userIdentifier},
       preview: <String, dynamic>{
         'title': '$name (@$userIdentifier)',
-        'description': bio.isNotEmpty ? bio : 'Check out this creator profile on Prism.',
+        'description': bio.isNotEmpty ? bio : 'Check out this profile on Prism.',
         'image_source_url': userPhoto,
         'username': userIdentifier,
       },

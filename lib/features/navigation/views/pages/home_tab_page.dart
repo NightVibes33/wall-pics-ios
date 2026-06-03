@@ -18,6 +18,7 @@ import 'package:Prism/theme/jam_icons_icons.dart';
 import 'package:auto_route/auto_route.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:internet_connection_checker/internet_connection_checker.dart';
 
 @RoutePage()
@@ -73,6 +74,7 @@ class _HomeTabPageState extends State<HomeTabPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final Set<String> _precachedUrls = <String>{};
+  final Set<String> _precachedVideoUrls = <String>{};
 
   late Future<_HomeDashboardData> _dashboardFuture;
   bool _hasConnection = true;
@@ -287,7 +289,7 @@ class _HomeTabPageState extends State<HomeTabPage> {
 
   Future<_HomeSection> _loadSearchSection({required String title, required String query}) async {
     try {
-      final page = await PrismCatalogDataSource.instance.search(query: query, refresh: true);
+      final page = await PrismCatalogDataSource.instance.search(query: query, refresh: true, scanFullIndex: false);
       return _HomeSection(
         title: title,
         contentType: PrismCatalogDataSource.regularContentType,
@@ -337,31 +339,44 @@ class _HomeTabPageState extends State<HomeTabPage> {
     context.router.push(CollectionViewRoute(collectionName: 'category:$encodedName'));
   }
 
-  void _precacheDashboardImages(_HomeDashboardData data) {
-    final urls = data.sections
+  void _precacheDashboardMedia(_HomeDashboardData data) {
+    final displayItems = data.sections
         .expand((section) => section.items)
-        .expand((item) {
-          final displayItems = WallpaperTile.expandMatchingItemsForDisplay(<FeedItemEntity>[item]);
-          final thumbnailUrl = (displayItems.isNotEmpty ? displayItems.first : item).thumbnailUrl.trim();
+        .expand((item) => WallpaperTile.expandMatchingItemsForDisplay(<FeedItemEntity>[item]))
+        .toList(growable: false);
+    final imageUrls = displayItems
+        .map((item) {
+          final posterUrl = WallpaperTile.posterUrlForItem(item).trim();
+          final thumbnailUrl = posterUrl.isNotEmpty ? posterUrl : item.thumbnailUrl.trim();
           final thumbnailPath = Uri.tryParse(thumbnailUrl)?.path.toLowerCase() ?? thumbnailUrl.toLowerCase();
           if (thumbnailUrl.isEmpty || thumbnailPath.endsWith('.zip')) {
-            return const <String>[];
+            return '';
           }
-          return <String>[thumbnailUrl];
+          return thumbnailUrl;
         })
         .where((url) => url.isNotEmpty)
-        .take(96)
+        .take(360)
         .where(_precachedUrls.add)
         .toList(growable: false);
-    if (urls.isEmpty) {
+    final videoUrls = displayItems
+        .map(WallpaperTile.videoUrlForItem)
+        .map((url) => url.trim())
+        .where((url) => url.isNotEmpty)
+        .take(72)
+        .where(_precachedVideoUrls.add)
+        .toList(growable: false);
+    if (imageUrls.isEmpty && videoUrls.isEmpty) {
       return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
-      for (final url in urls) {
+      for (final url in imageUrls) {
         unawaited(precacheImage(CachedNetworkImageProvider(url), context).catchError((Object _) {}));
+      }
+      for (final url in videoUrls) {
+        unawaited(DefaultCacheManager().downloadFile(url).timeout(const Duration(seconds: 24)).then((_) {}).catchError((Object _) {}));
       }
     });
   }
@@ -379,7 +394,7 @@ class _HomeTabPageState extends State<HomeTabPage> {
               builder: (context, snapshot) {
                 final data = snapshot.data;
                 if (data != null) {
-                  _precacheDashboardImages(data);
+                  _precacheDashboardMedia(data);
                 }
                 return RefreshIndicator(
                   color: Colors.white,
@@ -771,12 +786,15 @@ class _WallpaperSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     final cardWidth = math.max(98.0, (width - 56) / 3);
-    final cardHeight = section.kind == _SectionKind.profile ? cardWidth : cardWidth * 1.92;
     final sourceItems = section.kind == _SectionKind.matching
         ? WallpaperTile.matchingSideItemsForItems(section.items)
         : WallpaperTile.expandMatchingItemsForDisplay(section.items);
     final galleryItems = sourceItems.toList(growable: false);
     final visibleItems = galleryItems;
+    final profileSection = section.kind == _SectionKind.profile ||
+        section.title.toLowerCase().startsWith('profile') ||
+        (visibleItems.isNotEmpty && visibleItems.every(WallpaperTile.isProfilePictureItem));
+    final cardHeight = profileSection ? cardWidth : cardWidth * 1.92;
     final titleFontSize = section.title.length > 14 ? 23.0 : 27.0;
 
     return Padding(
@@ -811,7 +829,7 @@ class _WallpaperSection extends StatelessWidget {
             child: ListView.separated(
               padding: const EdgeInsets.only(right: 18),
               scrollDirection: Axis.horizontal,
-              cacheExtent: cardWidth * 8,
+              cacheExtent: cardWidth * 14,
               itemBuilder: (context, index) {
                 return SizedBox(
                   width: cardWidth,
@@ -848,15 +866,37 @@ class _HomeWallpaperCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isProfile = section.kind == _SectionKind.profile || WallpaperTile.isProfilePictureItem(item);
+    final isProfile = section.kind == _SectionKind.profile ||
+        section.title.toLowerCase().startsWith('profile') ||
+        WallpaperTile.isProfilePictureItem(item);
     final videoUrl = WallpaperTile.videoUrlForItem(item);
     final posterUrl = WallpaperTile.posterUrlForItem(item);
     final imageUrl = posterUrl.isNotEmpty ? posterUrl : item.thumbnailUrl;
-    final image = videoUrl.isNotEmpty
+    final rawImage = videoUrl.isNotEmpty
         ? AutoplayVideoPreview(videoUrl: videoUrl, posterUrl: imageUrl, playing: true)
         : _image(context, imageUrl, isProfile: isProfile);
+    final image = isProfile ? ClipOval(child: rawImage) : rawImage;
     final shape = isProfile ? const CircleBorder() : RoundedRectangleBorder(borderRadius: BorderRadius.circular(8));
-    return Material(
+    final content = Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        image,
+        DecoratedBox(
+          decoration: isProfile
+              ? BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+                )
+              : BoxDecoration(
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+        ),
+        if (section.kind == _SectionKind.live)
+          Positioned(left: 8, top: 8, child: _MediaBadge(kind: section.kind)),
+      ],
+    );
+    Widget materialCard = Material(
       color: Colors.transparent,
       shape: shape,
       clipBehavior: Clip.antiAlias,
@@ -866,26 +906,17 @@ class _HomeWallpaperCard extends StatelessWidget {
           WallpaperDetailGalleryStore.setFromFeedItems(items: galleryItems, index: index);
           context.router.push(WallpaperDetailRoute(entity: WallpaperDetailEntityX.fromFeedItem(item)));
         },
-        child: Stack(
-          fit: StackFit.expand,
-          children: <Widget>[
-            image,
-            DecoratedBox(
-              decoration: isProfile
-                  ? BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
-                    )
-                  : BoxDecoration(
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-            ),
-            if (section.kind == _SectionKind.live)
-              Positioned(left: 8, top: 8, child: _MediaBadge(kind: section.kind)),
-          ],
-        ),
+        child: content,
       ),
+    );
+    if (!isProfile) {
+      return materialCard;
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final side = math.min(constraints.maxWidth, constraints.maxHeight);
+        return Center(child: SizedBox(width: side, height: side, child: materialCard));
+      },
     );
   }
 
@@ -904,7 +935,7 @@ class _HomeWallpaperCard extends StatelessWidget {
     }
     final size = MediaQuery.sizeOf(context);
     final pixelRatio = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 3.0);
-    final cacheWidth = ((size.width / 3) * pixelRatio).ceil();
+    final cacheWidth = math.max(720, ((size.width / 3) * pixelRatio).ceil());
     final cacheHeight = isProfile ? cacheWidth : (cacheWidth * 2).ceil();
     return CachedNetworkImage(
       imageUrl: url,
@@ -913,7 +944,7 @@ class _HomeWallpaperCard extends StatelessWidget {
       fadeOutDuration: Duration.zero,
       placeholderFadeInDuration: Duration.zero,
       useOldImageOnUrlChange: true,
-      filterQuality: FilterQuality.medium,
+      filterQuality: FilterQuality.high,
       memCacheWidth: cacheWidth,
       memCacheHeight: cacheHeight,
       placeholder: (_, _) => const ColoredBox(color: Color(0xFF111114)),
@@ -1116,17 +1147,18 @@ class _MatchingCatalogScreenState extends State<_MatchingCatalogScreen> {
         final contentType = category.catalogContentType?.trim();
         final slug = category.catalogSlug?.trim();
         final name = category.name.trim();
-        if (contentType != widget.contentType || slug == null || slug.isEmpty || name.isEmpty) {
+        final compatibleType = contentType == PrismCatalogDataSource.matchingContentType ||
+            contentType == PrismCatalogDataSource.doubleContentType;
+        if (!compatibleType || slug == null || slug.isEmpty || slug == 'for-you' || name.isEmpty) {
           continue;
         }
         if (seen.add(slug)) {
-          allTabs.add(_MatchingCatalogTab(label: name, slug: slug));
+          allTabs.add(_MatchingCatalogTab(label: name, slug: slug, contentType: contentType));
         }
       }
       final pinnedTabs = allTabs.where((tab) => pinnedSlugs.contains(tab.slug)).toList(growable: false);
       final regularTabs = allTabs
           .where((tab) => tab.slug != 'for-you' && !pinnedSlugs.contains(tab.slug))
-          .take(8)
           .toList(growable: false);
       final tabs = <_MatchingCatalogTab>[
         const _MatchingCatalogTab(label: 'For You', slug: 'for-you'),
@@ -1167,7 +1199,7 @@ class _MatchingCatalogScreenState extends State<_MatchingCatalogScreen> {
     }
 
     try {
-      final page = await PrismCatalogDataSource.instance.fetchCategoryFeed(
+      final page = await PrismCatalogDataSource.instance.fetchFullCategoryFeed(
         category: CategoryEntity(
           name: _activeTab.label,
           source: WallpaperSource.prism,
@@ -1175,9 +1207,8 @@ class _MatchingCatalogScreenState extends State<_MatchingCatalogScreen> {
           image: '',
           image2: '',
           catalogSlug: _activeTab.slug,
-          catalogContentType: widget.contentType,
+          catalogContentType: _activeTab.contentType ?? widget.contentType,
         ),
-        refresh: refresh,
       );
       final incoming = (page?.items ?? const <FeedItemEntity>[])
           .where((item) => WallpaperTile.pairedImageUrlsForItem(item).length >= 2)
@@ -1186,7 +1217,7 @@ class _MatchingCatalogScreenState extends State<_MatchingCatalogScreen> {
       if (!mounted) return;
       setState(() {
         _items = refresh ? incoming : <FeedItemEntity>[..._items, ...incoming];
-        _hasMore = page?.hasMore ?? false;
+        _hasMore = false;
         _loading = false;
         _loadingMore = false;
       });
@@ -1222,10 +1253,10 @@ class _MatchingCatalogScreenState extends State<_MatchingCatalogScreen> {
 
   void _precacheVisiblePairs() {
     final urls = _items
-        .take(36)
+        .take(72)
         .expand((item) => WallpaperTile.matchingSideItemsForItem(item).map((side) => side.thumbnailUrl))
         .where((url) => url.trim().isNotEmpty)
-        .take(24)
+        .take(96)
         .toList(growable: false);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -1490,6 +1521,8 @@ class _MatchingCatalogSide extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final galleryIndex = galleryItems.indexWhere((candidate) => candidate.id == item.id);
+    final posterUrl = WallpaperTile.posterUrlForItem(item).trim();
+    final imageUrl = posterUrl.isNotEmpty ? posterUrl : item.thumbnailUrl;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1497,7 +1530,7 @@ class _MatchingCatalogSide extends StatelessWidget {
           WallpaperDetailGalleryStore.setFromFeedItems(items: galleryItems, index: galleryIndex >= 0 ? galleryIndex : 0);
           context.router.push(WallpaperDetailRoute(entity: WallpaperDetailEntityX.fromFeedItem(item)));
         },
-        child: _MatchingCatalogImage(url: item.thumbnailUrl, cacheWidth: cacheWidth, cacheHeight: cacheHeight),
+        child: _MatchingCatalogImage(url: imageUrl, cacheWidth: cacheWidth, cacheHeight: cacheHeight),
       ),
     );
   }
@@ -1519,7 +1552,7 @@ class _MatchingCatalogImage extends StatelessWidget {
       fadeOutDuration: Duration.zero,
       placeholderFadeInDuration: Duration.zero,
       useOldImageOnUrlChange: true,
-      filterQuality: FilterQuality.medium,
+      filterQuality: FilterQuality.high,
       memCacheWidth: cacheWidth,
       memCacheHeight: cacheHeight,
       placeholder: (_, _) => const ColoredBox(color: Color(0xFF111114)),
@@ -1639,10 +1672,11 @@ class _MatchingCatalogEmpty extends StatelessWidget {
 }
 
 class _MatchingCatalogTab {
-  const _MatchingCatalogTab({required this.label, required this.slug});
+  const _MatchingCatalogTab({required this.label, required this.slug, this.contentType});
 
   final String label;
   final String slug;
+  final String? contentType;
 }
 
 class _HomeDashboardData {
@@ -1653,7 +1687,8 @@ class _HomeDashboardData {
   String get firstPreviewUrl {
     for (final section in sections) {
       for (final item in section.items) {
-        final url = item.thumbnailUrl.trim();
+        final posterUrl = WallpaperTile.posterUrlForItem(item).trim();
+        final url = posterUrl.isNotEmpty ? posterUrl : item.thumbnailUrl.trim();
         if (url.isNotEmpty) {
           return url;
         }

@@ -108,10 +108,11 @@ class _DownloadButtonState extends State<DownloadButton> {
     }
 
     try {
-      final canDownload = await DownloadAccessService.instance.ensureCanDownload(
+      final sourceContext = widget.sourceContext ?? 'download_button';
+      final contentId = widget.contentId ?? _filenameBaseFromUrl(link);
+      final canDownload = await DownloadAccessService.instance.ensureCanStartDownload(
         context,
-        contentId: widget.contentId ?? _filenameBaseFromUrl(link),
-        sourceContext: widget.sourceContext ?? 'download_button',
+        sourceContext: sourceContext,
       );
       if (!canDownload) {
         return false;
@@ -124,7 +125,7 @@ class _DownloadButtonState extends State<DownloadButton> {
         final message = await PrismLivePhotoSaver.save(
           videoUrl: link,
           stillUrl: stillUrl,
-        ).timeout(const Duration(seconds: 45));
+        ).timeout(const Duration(seconds: 180));
         if (message != null) {
           toasts.error(message);
           return false;
@@ -156,10 +157,14 @@ class _DownloadButtonState extends State<DownloadButton> {
         }
       }
 
+      await DownloadAccessService.instance.claimSuccessfulFreeDownload(
+        contentId: contentId,
+        sourceContext: sourceContext,
+      );
       analytics.track(
         DownloadWallpaperEvent(
           link: link,
-          sourceContext: (widget.sourceContext ?? '').trim().isEmpty ? null : widget.sourceContext,
+          sourceContext: sourceContext.trim().isEmpty ? null : sourceContext,
           premiumContent: widget.isPremiumContent,
         ),
       );

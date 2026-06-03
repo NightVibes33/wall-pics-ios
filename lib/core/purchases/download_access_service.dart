@@ -12,9 +12,8 @@ class DownloadAccessService {
 
   final GitHubUserStore _userStore = const GitHubUserStore();
 
-  Future<bool> ensureCanDownload(
+  Future<bool> ensureCanStartDownload(
     BuildContext context, {
-    String? contentId,
     String? sourceContext,
   }) async {
     await PurchasesService.instance.checkAndPersistPremium();
@@ -28,11 +27,8 @@ class DownloadAccessService {
     }
 
     try {
-      final claim = await _userStore.claimFreeDownload(contentId: contentId, sourceContext: sourceContext);
-      if (claim.allowed) {
-        if (claim.quota.remaining > 0) {
-          toasts.codeSend('${claim.quota.remaining} free downloads left today.');
-        }
+      final quota = await _userStore.getDownloadQuota();
+      if (quota == null || quota.isPremium || quota.remaining > 0) {
         return true;
       }
       if (context.mounted) {
@@ -54,5 +50,40 @@ class DownloadAccessService {
       }
       return app_state.prismUser.premium;
     }
+  }
+
+  Future<void> claimSuccessfulFreeDownload({
+    String? contentId,
+    String? sourceContext,
+  }) async {
+    await PurchasesService.instance.checkAndPersistPremium();
+    if (app_state.prismUser.premium) {
+      return;
+    }
+    if (!app_state.prismUser.loggedIn || app_state.prismUser.id.trim().isEmpty) {
+      return;
+    }
+
+    try {
+      final claim = await _userStore.claimFreeDownload(contentId: contentId, sourceContext: sourceContext);
+      if (claim.allowed && claim.quota.remaining > 0) {
+        toasts.codeSend('${claim.quota.remaining} free downloads left today.');
+      }
+    } catch (_) {
+      toasts.error('Saved, but download quota could not be updated.');
+    }
+  }
+
+  Future<bool> ensureCanDownload(
+    BuildContext context, {
+    String? contentId,
+    String? sourceContext,
+  }) async {
+    final canStart = await ensureCanStartDownload(context, sourceContext: sourceContext);
+    if (!canStart) {
+      return false;
+    }
+    await claimSuccessfulFreeDownload(contentId: contentId, sourceContext: sourceContext);
+    return true;
   }
 }

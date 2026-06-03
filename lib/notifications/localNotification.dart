@@ -26,7 +26,7 @@ class LocalNotification {
       return;
     }
     if (notificationAppLaunchDetails?.notificationResponse?.payload == "downloaded") {
-      context.router.push(const DownloadRoute());
+      context.router.push(const DashboardRoute());
     }
   }
 

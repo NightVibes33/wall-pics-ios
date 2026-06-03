@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
@@ -44,8 +46,8 @@ class _AutoplayVideoPreviewState extends State<AutoplayVideoPreview> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.videoUrl != widget.videoUrl) {
       unawaited(_load());
-    } else if (_controller != null && !_controller!.value.isPlaying) {
-      unawaited(_controller!.play());
+    } else {
+      unawaited(_syncPlayback());
     }
   }
 
@@ -61,6 +63,27 @@ class _AutoplayVideoPreviewState extends State<AutoplayVideoPreview> {
     _controller = null;
     if (controller != null) {
       unawaited(controller.dispose());
+    }
+  }
+
+  Future<File?> _cachedVideoFile(String url) async {
+    try {
+      final info = await DefaultCacheManager().getFileFromCache(url).timeout(const Duration(milliseconds: 180));
+      final file = info?.file;
+      if (file != null && await file.exists()) {
+        return file;
+      }
+    } catch (_) {
+      // A cache miss should not delay visible playback.
+    }
+    return null;
+  }
+
+  Future<void> _warmVideoCache(String url) async {
+    try {
+      await DefaultCacheManager().downloadFile(url).timeout(const Duration(seconds: 30));
+    } catch (_) {
+      // Video cache warmup is opportunistic; network playback remains active.
     }
   }
 
@@ -85,9 +108,13 @@ class _AutoplayVideoPreviewState extends State<AutoplayVideoPreview> {
       return;
     }
 
-    final controller = VideoPlayerController.networkUrl(uri);
+    final cachedFile = await _cachedVideoFile(rawUrl);
+    final controller = cachedFile != null ? VideoPlayerController.file(cachedFile) : VideoPlayerController.networkUrl(uri);
+    if (cachedFile == null) {
+      unawaited(_warmVideoCache(rawUrl));
+    }
     try {
-      await controller.initialize().timeout(const Duration(seconds: 12));
+      await controller.initialize().timeout(const Duration(seconds: 8));
       await controller.setLooping(true);
       if (widget.muted) {
         await controller.setVolume(0);
@@ -97,7 +124,7 @@ class _AutoplayVideoPreviewState extends State<AutoplayVideoPreview> {
         return;
       }
       setState(() => _controller = controller);
-      unawaited(controller.play());
+      await _syncPlayback();
       widget.onReady?.call();
     } catch (_) {
       await controller.dispose();
@@ -105,6 +132,23 @@ class _AutoplayVideoPreviewState extends State<AutoplayVideoPreview> {
         setState(() => _failed = true);
       }
       widget.onReady?.call();
+    }
+  }
+
+  Future<void> _syncPlayback() async {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) {
+      return;
+    }
+    if (widget.muted) {
+      await controller.setVolume(0);
+    }
+    if (widget.playing) {
+      if (!controller.value.isPlaying) {
+        await controller.play();
+      }
+    } else if (controller.value.isPlaying) {
+      await controller.pause();
     }
   }
 

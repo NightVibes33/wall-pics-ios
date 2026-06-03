@@ -88,7 +88,7 @@ class _EnterCodePanelState extends State<EnterCodePanel> {
                         labelStyle: Theme.of(
                           context,
                         ).textTheme.headlineSmall!.copyWith(fontSize: 14, color: Colors.white),
-                        prefixIcon: const Icon(JamIcons.coin, color: Colors.white),
+                        prefixIcon: const Icon(JamIcons.key, color: Colors.white),
                       ),
                       onChanged: (value) {
                         setState(() {

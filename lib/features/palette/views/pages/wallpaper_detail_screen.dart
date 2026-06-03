@@ -220,7 +220,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
 
   void _precacheGalleryNeighbors(BuildContext context, int index) {
     if (_galleryItems.length < 2) return;
-    for (final offset in const <int>[-1, 0, 1]) {
+    for (final offset in const <int>[-2, -1, 0, 1, 2]) {
       final nextIndex = (index + offset) % _galleryItems.length;
       final wrappedIndex = nextIndex < 0 ? nextIndex + _galleryItems.length : nextIndex;
       final entity = _galleryItems[wrappedIndex];
@@ -1020,7 +1020,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     }
 
     final isParallax = _isPrismParallax(entity);
-    final String? liveStillUrl = isLivePhoto ? _catalogDisplayImageUrl(entity) : null;
+    const String? liveStillUrl = null;
     final parallaxCompositePath = isParallax ? _parallaxCompositePathFor(entity) : null;
     final downloadUrl = parallaxCompositePath ?? (isParallax ? _catalogDisplayImageUrl(entity) : entity.fullUrl);
     final setWallpaperUrl =
@@ -1148,8 +1148,8 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
                 },
                 onPanEnd: (details) {
                   final velocityX = details.velocity.pixelsPerSecond.dx;
-                  final horizontal = (_activeDragDx.abs() > 30 && _activeDragDx.abs() > _activeDragDy.abs() * 0.75) ||
-                      velocityX.abs() > 280;
+                  final horizontal = (_activeDragDx.abs() > 22 && _activeDragDx.abs() > _activeDragDy.abs() * 0.55) ||
+                      velocityX.abs() > 220;
                   if (horizontal) {
                     final direction = velocityX.abs() > 280 ? (velocityX < 0 ? 1 : -1) : (_activeDragDx < 0 ? 1 : -1);
                     _showGalleryOffset(context, direction);

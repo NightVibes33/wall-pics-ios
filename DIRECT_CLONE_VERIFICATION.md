@@ -1,39 +1,22 @@
-# Direct clone verification
+# Prism verification notes
 
-Prism is now staged as a direct upstream Prism Flutter app, not a SwiftUI-inspired rewrite.
+Prism is maintained as the iOS-first Flutter app in this repository.
 
 ## Source of truth
 
-- Upstream source: `Hash-Studios/Prism`
-- Local upstream baseline copied from: `/root/prism-ios/upstream/Prism`
-- Local direct-clone workspace: `/root/wall-pics-direct-prism`
-
-## What must stay upstream-owned
-
-These paths are copied from Prism and should not be rewritten unless we are intentionally porting a Prism feature:
-
-- `lib/`
-- `assets/`
-- `android/`
-- `ios/Runner/AppDelegate.swift`
-- `ios/Runner/SceneDelegate.swift`
-- `ios/Runner/PrismMediaHostApiImpl.swift`
-- `ios/Runner/Pigeon/`
-- `pigeons/`
-
-## Prism deltas allowed before push
-
-Only these changes are expected in the direct clone candidate:
-
-- iOS display name: `Prism`
+- Public app repo: `NightVibes33/prism-ios`
+- App name: `Přism` in App Store Connect and `Prism` in code-facing identifiers
 - Bundle ID: `com.nightvibes.prism`
 - Apple Team ID: `39A8Q3T3TR`
-- GitHub Actions rewritten for the existing Prism App Store Connect secrets and `macos-26-intel`
-- `ExportOptions.plist` for App Store Connect export
-- This verification document
 
-## Current blocker for TestFlight-ready production build
+## Current app boundary
 
-The app expects Prism dart-defines for GitHub, RevenueCat, Pexels, Sentry, Mixpanel, and optional AI client-token values.
+The mobile app should use only the Prism API worker for user storage, catalog JSON, image delivery, and video delivery. The app build env should expose the public Worker URL only. Private GitHub tokens, catalog tokens, App Store Connect keys, and upstream media allowlists stay in GitHub Actions or Worker secrets.
 
-The unsigned CI workflow builds without signing or App Store Connect material. The TestFlight workflow uses only App Store Connect signing/upload secrets plus Prism dart-defines.
+## Required runtime catalog files
+
+The app expects the Worker catalog endpoint to provide the bootstrap, category, item-location, search, and paged catalog JSON files. If `PRISM_CATALOG_BASE_URL` or `USER_STORE_API_BASE_URL` is missing from the build env, the app can launch but the catalog will be empty.
+
+## Validation rule
+
+Do not call the app TestFlight-ready until Flutter analysis/build, Worker typecheck, catalog endpoint validation, and a real-device smoke test all pass. Live Photo wallpaper compatibility must be confirmed on an actual iPhone because static code review cannot prove Photos accepts the paired resources as motion wallpaper media.

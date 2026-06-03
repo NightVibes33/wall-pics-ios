@@ -16,9 +16,10 @@ wrangler secret put APPLE_BUNDLE_ID
 wrangler secret put CATALOG_GITHUB_OWNER
 wrangler secret put CATALOG_GITHUB_REPO
 wrangler secret put CATALOG_GITHUB_TOKEN
+wrangler secret put ALLOWED_MEDIA_HOSTS
 ```
 
-`GITHUB_TOKEN` should be a fine-grained token scoped only to the private user repo contents it must write. `CATALOG_GITHUB_TOKEN` can be read-only and scoped only to the private catalog repo. If catalog owner/repo/token are omitted, the Worker falls back to the user repo settings.
+`GITHUB_TOKEN` should be a fine-grained token scoped only to the private user repo contents it must write. `CATALOG_GITHUB_TOKEN` can be read-only and scoped only to the private catalog repo. If catalog owner/repo/token are omitted, the Worker falls back to the user repo settings. `ALLOWED_MEDIA_HOSTS` is a comma-separated allowlist for the private media hosts the catalog points at; keep it in Worker secrets, not in the public app repo.
 
 ## App env
 
@@ -28,6 +29,8 @@ Set only the public Worker URL in the app build env:
 USER_STORE_API_BASE_URL=https://prism-user-store.<account>.workers.dev
 PRISM_CATALOG_BASE_URL=https://prism-user-store.<account>.workers.dev/v1/catalog
 ```
+
+The same Worker serves cached media through `/v1/media/image` and `/v1/media/video.<ext>`, so the app can load catalog thumbnails, full images, and live previews through the public Worker URL while the upstream media host allowlist stays private.
 
 Do not include `GH_TOKEN` or catalog repository tokens in `PRISM_ENV`; the iOS workflows filter known server-only keys as defense in depth.
 
