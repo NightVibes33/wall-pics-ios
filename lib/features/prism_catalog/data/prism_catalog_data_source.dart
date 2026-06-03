@@ -388,7 +388,7 @@ class PrismCatalogDataSource {
     return searches;
   }
 
-  Future<CategoryFeedPage> search({required String query, required bool refresh}) async {
+  Future<CategoryFeedPage> search({required String query, required bool refresh, bool scanFullIndex = true}) async {
     final normalizedQuery = _normalizeForSearch(query);
     if (normalizedQuery.isEmpty || _isBlockedCatalogSearch(normalizedQuery)) {
       return const CategoryFeedPage(items: <FeedItemEntity>[], hasMore: false, nextCursor: null);
@@ -396,10 +396,8 @@ class PrismCatalogDataSource {
 
     final scope = 'search.$normalizedQuery';
     final start = refresh ? 0 : (_offsets[scope] ?? 0);
-    final needed = start + _pageSize;
     final rankedRefs = await _rankedCategoryReferences(normalizedQuery);
-
-    if (rankedRefs.length < needed) {
+    if (scanFullIndex || rankedRefs.length < start + _pageSize) {
       var ordinal = rankedRefs.length;
       final searchIndex = await _loadSearchIndex();
       for (final entry in searchIndex) {
@@ -426,9 +424,9 @@ class PrismCatalogDataSource {
     }
 
     final deduped = _dedupeReferences(rankedRefs);
-    final pageRefs = deduped.skip(start).take(_pageSize).toList(growable: false);
-    final items = await _itemsByReferences(pageRefs);
-    final nextOffset = start + pageRefs.length;
+    final refs = deduped.skip(start).take(_pageSize).toList(growable: false);
+    final items = await _itemsByReferences(refs);
+    final nextOffset = start + refs.length;
     _offsets[scope] = nextOffset;
 
     return _toFeedPage(

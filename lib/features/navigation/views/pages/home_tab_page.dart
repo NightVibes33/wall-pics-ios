@@ -342,7 +342,7 @@ class _HomeTabPageState extends State<HomeTabPage> {
 
   Future<_HomeSection> _loadSearchSection({required String title, required String query}) async {
     try {
-      final page = await PrismCatalogDataSource.instance.search(query: query, refresh: true);
+      final page = await PrismCatalogDataSource.instance.search(query: query, refresh: true, scanFullIndex: false);
       return _HomeSection(
         title: title,
         contentType: PrismCatalogDataSource.regularContentType,
