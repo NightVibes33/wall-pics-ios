@@ -90,7 +90,6 @@ bool get aiEnabled => startupConfig?.aiEnabled ?? app_constants.defaultAiEnabled
 int get aiRolloutPercent => startupConfig?.aiRolloutPercent ?? app_constants.defaultAiRolloutPercent;
 bool get aiSubmitEnabled => startupConfig?.aiSubmitEnabled ?? app_constants.defaultAiSubmitEnabled;
 bool get aiVariationsEnabled => startupConfig?.aiVariationsEnabled ?? app_constants.defaultAiVariationsEnabled;
-bool get useRcPaywalls => startupConfig?.useRcPaywalls ?? app_constants.defaultUseRcPaywalls;
 
 List<String> get topTitleText => List<String>.from(startupConfig?.topTitleText ?? app_constants.defaultTopTitleText);
 List<String> get premiumCollections =>

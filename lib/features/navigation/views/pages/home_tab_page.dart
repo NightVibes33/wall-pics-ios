@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:Prism/core/purchases/paywall_orchestrator.dart';
 import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/wallpaper/wallpaper_source.dart';
 import 'package:Prism/core/widgets/common/autoplay_video_preview.dart';
@@ -452,6 +453,11 @@ class _HomeTabPageState extends State<HomeTabPage> {
                           hasText: _searchController.text.trim().isNotEmpty,
                           onSubmitted: _submitSearch,
                           onClear: _clearSearch,
+                          onProTap: () => PaywallOrchestrator.instance.present(
+                            context,
+                            placement: PaywallPlacement.mainUpsell,
+                            source: 'home_pro_button',
+                          ),
                         ),
                       ),
                       SliverToBoxAdapter(child: _HeroBanner(imageUrl: data?.firstPreviewUrl)),
@@ -496,12 +502,14 @@ class _SearchHeader extends StatelessWidget {
     required this.hasText,
     required this.onSubmitted,
     required this.onClear,
+    required this.onProTap,
   });
 
   final TextEditingController controller;
   final bool hasText;
   final ValueChanged<String> onSubmitted;
   final VoidCallback onClear;
+  final VoidCallback onProTap;
 
   @override
   Widget build(BuildContext context) {
@@ -558,24 +566,32 @@ class _SearchHeader extends StatelessWidget {
           SizedBox(
             width: 102,
             height: 64,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: <Color>[Color(0xFF4BB7FF), Color(0xFF0076FF)]),
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(20),
+              child: InkWell(
                 borderRadius: BorderRadius.circular(20),
-                boxShadow: <BoxShadow>[
-                  BoxShadow(color: const Color(0xFF0076FF).withValues(alpha: 0.26), blurRadius: 18, offset: const Offset(0, 8)),
-                ],
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: <Widget>[
-                  Icon(JamIcons.crown_f, color: Colors.white, size: 28),
-                  SizedBox(width: 9),
-                  Text(
-                    'Pro',
-                    style: TextStyle(color: Colors.white, fontFamily: 'Satoshi', fontSize: 27, fontWeight: FontWeight.w800),
+                onTap: onProTap,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(colors: <Color>[Color(0xFF4BB7FF), Color(0xFF0076FF)]),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: <BoxShadow>[
+                      BoxShadow(color: const Color(0xFF0076FF).withValues(alpha: 0.26), blurRadius: 18, offset: const Offset(0, 8)),
+                    ],
                   ),
-                ],
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      Icon(JamIcons.crown_f, color: Colors.white, size: 28),
+                      SizedBox(width: 9),
+                      Text(
+                        'Pro',
+                        style: TextStyle(color: Colors.white, fontFamily: 'Satoshi', fontSize: 27, fontWeight: FontWeight.w800),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),

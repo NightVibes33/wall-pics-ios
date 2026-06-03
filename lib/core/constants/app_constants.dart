@@ -17,7 +17,6 @@ const bool defaultAiEnabled = true;
 const int defaultAiRolloutPercent = 100;
 const bool defaultAiSubmitEnabled = true;
 const bool defaultAiVariationsEnabled = true;
-const bool defaultUseRcPaywalls = true;
 
 const bool defaultOnboardingV2Enabled = true;
 const List<Map<String, dynamic>> defaultOnboardingStarterPack = <Map<String, dynamic>>[];

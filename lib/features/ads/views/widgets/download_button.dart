@@ -2,6 +2,7 @@ import 'package:Prism/analytics/analytics_service.dart';
 import 'package:Prism/core/analytics/events/events.dart';
 import 'package:Prism/core/platform/pigeon/prism_media_api.g.dart';
 import 'package:Prism/core/platform/wallpaper_capability.dart';
+import 'package:Prism/core/purchases/download_access_service.dart';
 import 'package:Prism/core/platform/prism_live_photo_saver.dart';
 import 'package:Prism/features/startup/services/notification_permission_prompt_service.dart';
 import 'package:Prism/logger/logger.dart';
@@ -107,6 +108,15 @@ class _DownloadButtonState extends State<DownloadButton> {
     }
 
     try {
+      final canDownload = await DownloadAccessService.instance.ensureCanDownload(
+        context,
+        contentId: widget.contentId ?? _filenameBaseFromUrl(link),
+        sourceContext: widget.sourceContext ?? 'download_button',
+      );
+      if (!canDownload) {
+        return false;
+      }
+
       var savedLivePhoto = false;
       logger.d(link);
       if (_isLivePhotoVideo(link)) {
@@ -150,7 +160,7 @@ class _DownloadButtonState extends State<DownloadButton> {
         DownloadWallpaperEvent(
           link: link,
           sourceContext: (widget.sourceContext ?? '').trim().isEmpty ? null : widget.sourceContext,
-          premiumContent: false,
+          premiumContent: widget.isPremiumContent,
         ),
       );
       if (mounted) {

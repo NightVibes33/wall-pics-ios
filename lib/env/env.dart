@@ -24,11 +24,6 @@ class Env {
   static const String prismCatalogBaseUrl = String.fromEnvironment('PRISM_CATALOG_BASE_URL');
   static const String prismMediaBaseUrl = String.fromEnvironment('PRISM_MEDIA_BASE_URL');
 
-  // RevenueCat
-  static const String rcApiKey = String.fromEnvironment('RC_API_KEY');
-  static const String rcAndroidApiKey = String.fromEnvironment('RC_ANDROID_API_KEY');
-  static const String rcIosApiKey = String.fromEnvironment('RC_IOS_API_KEY');
-
   // Pexels
   static const String pexelsApiKey = String.fromEnvironment('PEXELS_API_KEY');
 

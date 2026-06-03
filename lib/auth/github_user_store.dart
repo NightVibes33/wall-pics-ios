@@ -6,12 +6,81 @@ import 'package:Prism/env/env.dart';
 import 'package:Prism/logger/logger.dart';
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+
+Map<String, dynamic> _mapValue(Object? value) {
+  if (value is Map<String, dynamic>) {
+    return value;
+  }
+  if (value is Map) {
+    return value.map((key, mapValue) => MapEntry(key.toString(), mapValue));
+  }
+  return <String, dynamic>{};
+}
+
+String _stringValue(Object? value) => (value ?? '').toString().trim();
+
+int _intValue(Object? value, {int fallback = 0}) {
+  if (value is int) {
+    return value;
+  }
+  if (value is num) {
+    return value.toInt();
+  }
+  return int.tryParse(_stringValue(value)) ?? fallback;
+}
+
+class DownloadQuotaSnapshot {
+  const DownloadQuotaSnapshot({
+    required this.day,
+    required this.used,
+    required this.limit,
+    required this.remaining,
+    required this.resetsAt,
+    required this.isPremium,
+  });
+
+  final String day;
+  final int used;
+  final int limit;
+  final int remaining;
+  final String resetsAt;
+  final bool isPremium;
+
+  factory DownloadQuotaSnapshot.fromMap(Map<String, dynamic> data) {
+    return DownloadQuotaSnapshot(
+      day: _stringValue(data['day']),
+      used: _intValue(data['used']),
+      limit: _intValue(data['limit'], fallback: 3),
+      remaining: _intValue(data['remaining'], fallback: 3),
+      resetsAt: _stringValue(data['resetsAt']),
+      isPremium: data['isPremium'] == true,
+    );
+  }
+}
+
+class DownloadQuotaClaimResult {
+  const DownloadQuotaClaimResult({required this.allowed, required this.reason, required this.quota});
+
+  final bool allowed;
+  final String reason;
+  final DownloadQuotaSnapshot quota;
+
+  factory DownloadQuotaClaimResult.fromMap(Map<String, dynamic> data) {
+    return DownloadQuotaClaimResult(
+      allowed: data['allowed'] == true,
+      reason: _stringValue(data['reason']),
+      quota: DownloadQuotaSnapshot.fromMap(_mapValue(data['quota'])),
+    );
+  }
+}
 
 class GitHubUserStore {
   const GitHubUserStore();
 
   static const Duration _timeout = Duration(seconds: 8);
   static const String _userAgent = 'Prism-iOS';
+  static const String _sessionTokenPrefsKey = 'prism_user_store_session_token';
   static String? _sessionToken;
 
   Future<PrismUsersV2> signInOrCreate({
@@ -61,6 +130,7 @@ class GitHubUserStore {
         },
       );
       _sessionToken = _stringValue(response['sessionToken']);
+      await _persistSessionToken(_sessionToken);
       final Map<String, dynamic> userData = _mapValue(response['user']);
       if (userData.isEmpty) {
         throw StateError('User store API returned no user document.');
@@ -79,7 +149,8 @@ class GitHubUserStore {
 
   Future<void> updateCurrentUserFields(Map<String, dynamic> data, {required String sourceTag}) async {
     final PrismUsersV2 user = app_state.prismUser;
-    if (!_isApiConfigured || user.id.trim().isEmpty || (_sessionToken ?? '').isEmpty) {
+    await _ensureSessionTokenLoaded();
+    if (!_isApiConfigured || user.id.trim().isEmpty || !_hasSessionToken) {
       return;
     }
 
@@ -89,13 +160,7 @@ class GitHubUserStore {
         <String, dynamic>{'data': data, 'sourceTag': sourceTag},
       );
       final Map<String, dynamic> userData = _mapValue(response['user']);
-      if (userData.isNotEmpty) {
-        app_state.prismUser = PrismUsersV2.fromMapWithUser(
-          userData,
-          PrismAuthUser(uid: user.id, displayName: user.name, email: user.email, photoURL: user.profilePhoto),
-        );
-        await app_state.persistPrismUser();
-      }
+      await _replaceAppUserFromData(userData);
     } catch (error, stackTrace) {
       logger.w(
         'User store API profile update failed.',
@@ -108,8 +173,9 @@ class GitHubUserStore {
 
   Future<void> markLoggedOut(String userId) async {
     final String trimmedUserId = userId.trim();
-    if (!_isApiConfigured || trimmedUserId.isEmpty || (_sessionToken ?? '').isEmpty) {
-      _sessionToken = null;
+    await _ensureSessionTokenLoaded();
+    if (!_isApiConfigured || trimmedUserId.isEmpty || !_hasSessionToken) {
+      await _clearSessionToken();
       return;
     }
 
@@ -123,12 +189,13 @@ class GitHubUserStore {
         stackTrace: stackTrace,
       );
     } finally {
-      _sessionToken = null;
+      await _clearSessionToken();
     }
   }
 
   Future<Map<String, dynamic>?> getUserDataById(String userId) async {
-    if (!_isApiConfigured || userId.trim().isEmpty || (_sessionToken ?? '').isEmpty) {
+    await _ensureSessionTokenLoaded();
+    if (!_isApiConfigured || userId.trim().isEmpty || !_hasSessionToken) {
       return null;
     }
 
@@ -143,10 +210,68 @@ class GitHubUserStore {
     return _mapValue(decoded['user']);
   }
 
+  Future<DownloadQuotaClaimResult> claimFreeDownload({String? contentId, String? sourceContext}) async {
+    final PrismUsersV2 user = app_state.prismUser;
+    await _ensureSessionTokenLoaded();
+    if (!_isApiConfigured || user.id.trim().isEmpty || !_hasSessionToken) {
+      throw StateError('Sign in again to use free downloads.');
+    }
+    final Map<String, dynamic> response = await _postJson(
+      '/v1/users/${Uri.encodeComponent(user.id)}/downloads/claim',
+      <String, dynamic>{
+        'contentId': (contentId ?? '').trim(),
+        'sourceContext': (sourceContext ?? '').trim(),
+      },
+    );
+    await _replaceAppUserFromData(_mapValue(response['user']));
+    return DownloadQuotaClaimResult.fromMap(response);
+  }
+
+  Future<DownloadQuotaSnapshot?> getDownloadQuota() async {
+    final PrismUsersV2 user = app_state.prismUser;
+    await _ensureSessionTokenLoaded();
+    if (!_isApiConfigured || user.id.trim().isEmpty || !_hasSessionToken) {
+      return null;
+    }
+    final Map<String, dynamic> response = await _getJson('/v1/users/${Uri.encodeComponent(user.id)}/downloads/quota');
+    await _replaceAppUserFromData(_mapValue(response['user']));
+    return DownloadQuotaSnapshot.fromMap(_mapValue(response['quota']));
+  }
+
+  Future<void> syncAppleSubscription({
+    required String productId,
+    required String purchaseId,
+    required String transactionId,
+    required String verificationData,
+    required String status,
+  }) async {
+    final PrismUsersV2 user = app_state.prismUser;
+    await _ensureSessionTokenLoaded();
+    if (!_isApiConfigured || user.id.trim().isEmpty || !_hasSessionToken) {
+      return;
+    }
+    final Map<String, dynamic> response = await _postJson(
+      '/v1/users/${Uri.encodeComponent(user.id)}/subscription/apple-sync',
+      <String, dynamic>{
+        'productId': productId,
+        'purchaseId': purchaseId,
+        'transactionId': transactionId,
+        'verificationData': verificationData,
+        'status': status,
+      },
+    );
+    await _replaceAppUserFromData(_mapValue(response['user']));
+  }
+
   static String appUserIdFor({required String provider, required String providerUserId}) {
     final String normalizedProvider = _safeSegment(provider, fallback: 'auth');
     final String digest = _hash(providerUserId.trim().isEmpty ? provider : providerUserId);
     return '${normalizedProvider}_${digest.substring(0, 20)}';
+  }
+
+  Future<Map<String, dynamic>> _getJson(String path) async {
+    final http.Response response = await http.get(_apiUri(path), headers: _headers).timeout(_timeout);
+    return _decodeApiResponse(response);
   }
 
   Future<Map<String, dynamic>> _postJson(String path, Map<String, dynamic> body) async {
@@ -171,6 +296,44 @@ class GitHubUserStore {
     }
     return decoded;
   }
+
+  Future<void> _replaceAppUserFromData(Map<String, dynamic> userData) async {
+    if (userData.isEmpty) {
+      return;
+    }
+    final PrismUsersV2 current = app_state.prismUser;
+    app_state.prismUser = PrismUsersV2.fromMapWithUser(
+      userData,
+      PrismAuthUser(uid: current.id, displayName: current.name, email: current.email, photoURL: current.profilePhoto),
+    );
+    await app_state.persistPrismUser();
+  }
+
+  Future<void> _ensureSessionTokenLoaded() async {
+    if ((_sessionToken ?? '').isNotEmpty) {
+      return;
+    }
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    _sessionToken = _stringValue(prefs.getString(_sessionTokenPrefsKey));
+  }
+
+  Future<void> _persistSessionToken(String? token) async {
+    final String value = _stringValue(token);
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    if (value.isEmpty) {
+      await prefs.remove(_sessionTokenPrefsKey);
+      return;
+    }
+    await prefs.setString(_sessionTokenPrefsKey, value);
+  }
+
+  Future<void> _clearSessionToken() async {
+    _sessionToken = null;
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_sessionTokenPrefsKey);
+  }
+
+  bool get _hasSessionToken => (_sessionToken ?? '').isNotEmpty;
 
   Uri _apiUri(String path) {
     final Uri base = Uri.parse(_apiBaseUrl);
@@ -230,6 +393,9 @@ class GitHubUserStore {
       'subscriptionTier': 'free',
       'uploadsWeekStart': '',
       'uploadsThisWeek': 0,
+      'freeDownloadDay': '',
+      'freeDownloadsToday': 0,
+      'freeDownloadsLimit': 3,
       'authProvider': provider,
       'providerUserIdHash': _hash(providerUserId),
       'githubUserDocPath': 'users/${_safeSegment(userId, fallback: 'user')}.json',

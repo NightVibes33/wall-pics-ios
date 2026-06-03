@@ -104,7 +104,6 @@ class _AppInfoPageState extends State<AppInfoPage> with AutomaticKeepAliveClient
       'Sentry Enabled': Env.sentryEnabled,
       'Mixpanel Enabled': Env.mixpanelEnabled,
       'Mixpanel Token Present': Env.mixpanelToken.isNotEmpty.toString(),
-      'RC API Key Present': Env.rcApiKey.isNotEmpty.toString(),
       'Pexels Key Present': Env.pexelsApiKey.isNotEmpty.toString(),
     };
   }

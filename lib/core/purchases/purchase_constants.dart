@@ -1,59 +1,24 @@
-/// Centralized RevenueCat identifiers.
-/// Use these constants instead of inline strings throughout the app.
+/// Centralized Apple StoreKit identifiers for Prism Pro.
+///
+/// Create matching products in App Store Connect for the `Přism` app:
+/// - `prism_pro_monthly` as an auto-renewable monthly subscription.
+/// - `prism_pro_yearly` as an auto-renewable yearly subscription.
+/// - `prism_pro_lifetime` as a non-consumable one-time purchase.
 class PurchaseConstants {
   PurchaseConstants._();
 
-  // Entitlements
-  /// Canonical v3 entitlement used by RC paywalls and new product mapping.
-  static const String entitlementV3ProAccess = 'prism_v3_pro_access';
+  static const String entitlementV3ProAccess = 'prism_pro_access';
 
-  /// Lifetime one-time purchase.
-  static const String entitlementPremium = 'prism_premium';
+  static const String productMonthly = 'prism_pro_monthly';
+  static const String productYearly = 'prism_pro_yearly';
+  static const String productLifetime = 'prism_pro_lifetime';
 
-  /// Monthly/annual subscription.
-  static const String entitlementUltra = 'prism_ultra';
-
-  /// Legacy one-time purchase.
-  static const String entitlementPro = 'prism_pro';
-
-  /// Legacy paid collections entitlement.
-  static const String entitlementCollections = 'prism_collections';
-
-  static const List<String> paidEntitlementKeys = <String>[
-    entitlementV3ProAccess,
-    entitlementUltra,
-    entitlementPremium,
-    entitlementPro,
-    entitlementCollections,
+  static const List<String> appleProductIds = <String>[
+    productMonthly,
+    productYearly,
+    productLifetime,
   ];
 
-  // Offering lookup keys
-  /// Legacy lifetime offering (RC is_current: true for old app versions).
-  /// Old live app uses this via offerings.current. Do not remove.
-  static const String offeringDefault = 'default';
-
-  /// Primary offering for new releases — monthly + annual subscription packages.
-  /// Fetched by key directly so old app versions are not affected by RC is_current changes.
-  static const String offeringUltra = 'ultra';
-
-  /// Canonical v3 offering containing monthly/annual/lifetime packages.
-  static const String offeringV3Default = 'v3_default';
-
-  /// Fallback hero image for paywall (used until metadata is added to RC).
-  static const String defaultHeroImageUrl =
-      'https://raw.githubusercontent.com/Hash-Studios/Prism/master/assets/icon/ios.png';
-
-  /// Privacy Policy URL for paywall footer.
   static const String privacyPolicyUrl = 'https://github.com/NightVibes33/prism-ios/blob/main/PRIVACY.md';
-
-  /// Terms of Use / EULA URL for paywall footer (Apple standard EULA).
   static const String termsOfUseUrl = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
-
-  /// Sample wallpaper preview URLs shown as floating cards in the paywall hero.
-  /// Replace these with your own premium wallpaper thumbnail URLs.
-  static const List<String> previewWallpaperUrls = [
-    'https://raw.githubusercontent.com/Hash-Studios/Prism/master/assets/icon/ios.png',
-    'https://raw.githubusercontent.com/Hash-Studios/Prism/master/assets/icon/ios.png',
-    'https://raw.githubusercontent.com/Hash-Studios/Prism/master/assets/icon/ios.png',
-  ];
 }

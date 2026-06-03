@@ -30,3 +30,43 @@ PRISM_CATALOG_BASE_URL=https://prism-user-store.<account>.workers.dev/v1/catalog
 ```
 
 Do not include `GH_TOKEN` or catalog repository tokens in `PRISM_ENV`; the iOS workflows filter known server-only keys as defense in depth.
+
+
+## Apple subscriptions and free download quota
+
+The app uses Apple's StoreKit path directly through Flutter `in_app_purchase`; payments are processed by Apple.
+
+Create these products in App Store Connect for the Přism app:
+
+| Product ID | Type | Suggested price |
+| --- | --- | --- |
+| `prism_pro_monthly` | Auto-renewable subscription | $4.99/month |
+| `prism_pro_yearly` | Auto-renewable subscription | $24.99/year |
+| `prism_pro_lifetime` | Non-consumable | $39.99 launch / $49.99 later |
+
+The app sends successful Apple purchase details to:
+
+```http
+POST /v1/users/:userId/subscription/apple-sync
+```
+
+The Worker stores `premium: true`, `subscriptionTier: "pro"` or `"lifetime"`, and an `appleSubscription` object in `users/<user-id>.json` in the private user repo.
+
+Free users are limited to three downloads per UTC day through:
+
+```http
+GET  /v1/users/:userId/downloads/quota
+POST /v1/users/:userId/downloads/claim
+```
+
+The user document stores:
+
+```json
+{
+  "freeDownloadDay": "2026-06-03",
+  "freeDownloadsToday": 2,
+  "freeDownloadsLimit": 3
+}
+```
+
+The app must claim a quota slot before saving media. Pro/lifetime users bypass the free quota.

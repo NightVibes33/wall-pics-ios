@@ -20,6 +20,7 @@ import 'package:Prism/core/monitoring/sentry_config.dart';
 import 'package:Prism/core/monitoring/sentry_user_scope.dart';
 import 'package:Prism/core/persistence/bootstrap/persistence_bootstrap.dart';
 import 'package:Prism/core/persistence/prefs_compat.dart';
+import 'package:Prism/core/purchases/purchases_service.dart';
 import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/router/deep_link_navigation.dart';
 import 'package:Prism/core/router/deep_link_parser.dart';
@@ -164,6 +165,11 @@ Future<void> main() async {
       unawaited(
         PrismCatalogDataSource.instance.warmHomeBootstrapCache().catchError((Object e, StackTrace s) {
           logger.w('Unable to warm Prism catalog bootstrap.', tag: 'PrismCatalog', error: e, stackTrace: s);
+        }),
+      );
+      unawaited(
+        PurchasesService.instance.configureEarly().catchError((Object e, StackTrace s) {
+          logger.w('Unable to initialize Apple StoreKit listener.', tag: 'Purchases', error: e, stackTrace: s);
         }),
       );
 
@@ -487,7 +493,10 @@ class _MyAppState extends State<_MyApp> with WidgetsBindingObserver {
         ..coverPhoto = ''
         ..followers = <String>[]
         ..following = <String>[]
-        ..links = <String, String>{};
+        ..links = <String, String>{}
+        ..freeDownloadDay = ''
+        ..freeDownloadsToday = 0
+        ..freeDownloadsLimit = 3;
       clearInAppNotificationSyncGateAll();
     }
     app_state.prismUser.loggedIn = value;

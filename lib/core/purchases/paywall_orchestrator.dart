@@ -1,13 +1,10 @@
 import 'package:Prism/analytics/analytics_service.dart';
 import 'package:Prism/core/analytics/events/events.dart';
-import 'package:Prism/core/di/injection.dart';
-import 'package:Prism/core/persistence/data_sources/settings_local_data_source.dart';
 import 'package:Prism/core/purchases/purchase_constants.dart';
 import 'package:Prism/core/purchases/purchases_service.dart';
+import 'package:Prism/core/purchases/widgets/prism_pro_paywall.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:flutter/widgets.dart';
-import 'package:purchases_flutter/purchases_flutter.dart';
-import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
 
 class PaywallPlacement {
   const PaywallPlacement._();
@@ -18,6 +15,7 @@ class PaywallPlacement {
   static const String blockedSetupCreate = 'blocked_setup_create';
   static const String uploadLimitReached = 'upload_limit_reached';
   static const String onboardingCompletion = 'onboarding_completion';
+  static const String freeDownloadLimit = 'free_download_limit';
 }
 
 class PaywallOrchestrator {
@@ -26,32 +24,38 @@ class PaywallOrchestrator {
   static final PaywallOrchestrator instance = PaywallOrchestrator._();
 
   static const int _adWatchThreshold = 3;
-  static const String _adWatchCountKey = 'paywall_ad_watch_count';
-  static const String _adWatchPromptedKey = 'paywall_ad_watch_prompted';
+  int _adWatchCount = 0;
+  bool _adWatchPrompted = false;
 
-  bool get _rcPaywallsEnabled => app_state.useRcPaywalls;
-  SettingsLocalDataSource get _settings => getIt<SettingsLocalDataSource>();
-
-  Future<void> present(BuildContext context, {required String placement, required String source}) async {
+  Future<bool> present(BuildContext context, {required String placement, required String source}) async {
     final String normalizedPlacement = placement.trim().isEmpty ? PaywallPlacement.mainUpsell : placement.trim();
     _logPlacementTriggerContext(placement: normalizedPlacement, source: source);
     analytics.track(
-      PaywallImpressionEvent(
-        source: source,
-        placement: normalizedPlacement,
-        rcOrFallback: _rcPaywallsEnabled ? RcOrFallbackValue.rcAttempt : RcOrFallbackValue.fallbackOnly,
-      ),
+      PaywallImpressionEvent(source: source, placement: normalizedPlacement, rcOrFallback: RcOrFallbackValue.fallback),
     );
 
-    bool presentedByRc = false;
-    if (_rcPaywallsEnabled) {
-      presentedByRc = await _presentRevenueCatPaywall(placement: normalizedPlacement, source: source);
-      if (presentedByRc) {
-        return;
-      }
+    final bool unlocked = await showPrismProPaywall(context, placement: normalizedPlacement, source: source);
+    final bool isPremium = await PurchasesService.instance.checkAndPersistPremium(
+      conversionContext: SubscriptionConversionContext(
+        source: source,
+        packageType: normalizedPlacement,
+        subscriptionTier: app_state.prismUser.subscriptionTier,
+      ),
+    );
+    if (unlocked || isPremium) {
+      _resetAdWatchCounter();
     }
-
-    // RevenueCat paywall not available — no fallback screen.
+    analytics.track(
+      PaywallResultEvent(
+        source: source,
+        placement: normalizedPlacement,
+        result: unlocked || isPremium ? PaywallResultValue.purchased : PaywallResultValue.cancelled,
+        entitlementSynced: isPremium ? 1 : 0,
+        entitlement: PurchaseConstants.entitlementV3ProAccess,
+        rcOrFallback: RcOrFallbackValue.fallback,
+      ),
+    );
+    return unlocked || isPremium;
   }
 
   Future<void> recordRewardedAdWatchAndMaybeUpsell(BuildContext context, {required String source}) async {
@@ -60,19 +64,17 @@ class PaywallOrchestrator {
       return;
     }
 
-    final int count = (_settings.get<int>(_adWatchCountKey, defaultValue: 0)) + 1;
-    _settings.set(_adWatchCountKey, count);
-    final bool prompted = _settings.get<bool>(_adWatchPromptedKey, defaultValue: false);
-    if (count < _adWatchThreshold || prompted) {
+    _adWatchCount += 1;
+    if (_adWatchCount < _adWatchThreshold || _adWatchPrompted) {
       return;
     }
-    _settings.set(_adWatchPromptedKey, true);
+    _adWatchPrompted = true;
     await present(context, placement: PaywallPlacement.afterAdWatch3, source: source);
   }
 
   void _resetAdWatchCounter() {
-    _settings.set(_adWatchCountKey, 0);
-    _settings.set(_adWatchPromptedKey, false);
+    _adWatchCount = 0;
+    _adWatchPrompted = false;
   }
 
   void _logPlacementTriggerContext({required String placement, required String source}) {
@@ -91,98 +93,6 @@ class PaywallOrchestrator {
         return;
       default:
         return;
-    }
-  }
-
-  Future<bool> _presentRevenueCatPaywall({required String placement, required String source}) async {
-    try {
-      await PurchasesService.instance.ensureConfigured(app_state.prismUser.id);
-      final Offering? placementOffering = await PurchasesService.instance.getCurrentOfferingForPlacement(placement);
-      final Offerings? offerings = await PurchasesService.instance.getOfferings();
-      final Offering? v3Offering = offerings?.all[PurchaseConstants.offeringV3Default];
-      Offering? offering;
-      if (v3Offering != null) {
-        offering = v3Offering;
-        if (placementOffering != null && placementOffering.identifier != PurchaseConstants.offeringV3Default) {
-          analytics.track(
-            PaywallResultEvent(
-              source: source,
-              placement: placement,
-              result: PaywallResultValue.placementOverriddenToV3,
-              placementOffering: placementOffering.identifier,
-              selectedOffering: v3Offering.identifier,
-              rcOrFallback: RcOrFallbackValue.rc,
-            ),
-          );
-        }
-      } else {
-        offering =
-            placementOffering ??
-            offerings?.all[PurchaseConstants.offeringUltra] ??
-            offerings?.all[PurchaseConstants.offeringDefault] ??
-            offerings?.current;
-      }
-      if (offering == null) {
-        analytics.track(
-          PaywallResultEvent(
-            source: source,
-            placement: placement,
-            result: PaywallResultValue.noOffering,
-            rcOrFallback: RcOrFallbackValue.rc,
-          ),
-        );
-        return false;
-      }
-
-      final PaywallResult paywallResult = await RevenueCatUI.presentPaywall(
-        offering: offering,
-        customVariables: <String, CustomVariableValue>{
-          'placement': CustomVariableValue.string(placement),
-          'source': CustomVariableValue.string(source),
-        },
-      );
-
-      if (paywallResult == PaywallResult.notPresented || paywallResult == PaywallResult.error) {
-        analytics.track(
-          PaywallResultEvent(
-            source: source,
-            placement: placement,
-            result: paywallResultValueFromSdkName(paywallResult.name),
-            rcOrFallback: RcOrFallbackValue.rc,
-          ),
-        );
-        return false;
-      }
-
-      final bool isPremium = await PurchasesService.instance.checkAndPersistPremium(
-        conversionContext: SubscriptionConversionContext(source: source, packageType: placement),
-      );
-      if (isPremium) {
-        _resetAdWatchCounter();
-      }
-
-      analytics.track(
-        PaywallResultEvent(
-          source: source,
-          placement: placement,
-          result: paywallResultValueFromSdkName(paywallResult.name),
-          entitlementSynced: isPremium ? 1 : 0,
-          entitlement: PurchaseConstants.entitlementV3ProAccess,
-          rcOrFallback: RcOrFallbackValue.rc,
-        ),
-      );
-      return true;
-    } catch (error) {
-      analytics.track(
-        PaywallResultEvent(
-          source: source,
-          placement: placement,
-          result: PaywallResultValue.rcError,
-          error: error.toString(),
-          rcOrFallback: RcOrFallbackValue.rc,
-        ),
-      );
-      return false;
     }
   }
 }

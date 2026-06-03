@@ -49,7 +49,6 @@ class StartupRepositoryImpl implements StartupRepository {
       final aiRolloutPercent = defaultAiRolloutPercent.clamp(0, 100);
       final aiSubmitEnabled = defaultAiSubmitEnabled;
       final aiVariationsEnabled = defaultAiVariationsEnabled;
-      final useRcPaywalls = defaultUseRcPaywalls;
       topTitleText.shuffle();
       final categories = category_data.categoryDefinitions
           .map(
@@ -82,7 +81,6 @@ class StartupRepositoryImpl implements StartupRepository {
         aiRolloutPercent: aiRolloutPercent,
         aiSubmitEnabled: aiSubmitEnabled,
         aiVariationsEnabled: aiVariationsEnabled,
-        useRcPaywalls: useRcPaywalls,
         onboardingV2Enabled: onboardingV2Enabled,
         onboardingStarterPack: onboardingStarterPack,
       );

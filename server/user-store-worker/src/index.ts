@@ -35,6 +35,8 @@ type GitHubFile = {
 const defaultProfilePhotoUrl = 'https://raw.githubusercontent.com/Hash-Studios/Prism/master/assets/icon/ios.png';
 const allowedMediaImageHosts = new Set(['media.wallpics.app', 'backend.wallpics.app']);
 const allowedMediaImageExtensions = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+const freeDownloadsPerDay = 3;
+const applePaidProductIds = new Set(['prism_pro_monthly', 'prism_pro_yearly', 'prism_pro_lifetime']);
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -60,6 +62,21 @@ export default {
 
       if (request.method === 'POST' && url.pathname === '/v1/users/sign-in') {
         return jsonResponse(await handleSignIn(request, env), env);
+      }
+
+      const quotaMatch = url.pathname.match(/^\/v1\/users\/([^/]+)\/downloads\/quota$/);
+      if (quotaMatch && request.method === 'GET') {
+        return jsonResponse(await handleGetDownloadQuota(quotaMatch[1], request, env), env);
+      }
+
+      const claimDownloadMatch = url.pathname.match(/^\/v1\/users\/([^/]+)\/downloads\/claim$/);
+      if (claimDownloadMatch && request.method === 'POST') {
+        return jsonResponse(await handleClaimFreeDownload(claimDownloadMatch[1], request, env), env);
+      }
+
+      const appleSubscriptionMatch = url.pathname.match(/^\/v1\/users\/([^/]+)\/subscription\/apple-sync$/);
+      if (appleSubscriptionMatch && request.method === 'POST') {
+        return jsonResponse(await handleSyncAppleSubscription(appleSubscriptionMatch[1], request, env), env);
       }
 
       const userMatch = url.pathname.match(/^\/v1\/users\/([^/]+)$/);
@@ -326,6 +343,107 @@ async function handlePatchUser(encodedUserId: string, request: Request, env: Env
   return { user };
 }
 
+async function handleGetDownloadQuota(encodedUserId: string, request: Request, env: Env): Promise<JsonMap> {
+  const userId = decodeURIComponent(encodedUserId);
+  await requireSession(request, env, userId);
+  const existing = await readGithubJson(userPath(userId), env);
+  if (!existing) {
+    throw new Error('User not found');
+  }
+  const user = normalizeUser(existing.data);
+  const quota = downloadQuotaForUser(user, new Date());
+  return { quota, user };
+}
+
+async function handleClaimFreeDownload(encodedUserId: string, request: Request, env: Env): Promise<JsonMap> {
+  const userId = decodeURIComponent(encodedUserId);
+  await requireSession(request, env, userId);
+  const body = await readJson(request);
+  const path = userPath(userId);
+  const existing = await readGithubJson(path, env);
+  if (!existing) {
+    throw new Error('User not found');
+  }
+
+  const now = new Date();
+  const user = normalizeUser(existing.data);
+  const tier = stringValue(user.subscriptionTier).toLowerCase();
+  const isPremium = user.premium === true || tier === 'pro' || tier === 'lifetime';
+  if (isPremium) {
+    return {
+      allowed: true,
+      reason: 'premium',
+      quota: { ...downloadQuotaForUser(user, now), isPremium: true },
+      user,
+    };
+  }
+
+  const quota = downloadQuotaForUser(user, now);
+  const remaining = numberValue(quota.remaining);
+  if (remaining <= 0) {
+    return {
+      allowed: false,
+      reason: 'free_quota_exhausted',
+      quota,
+      user,
+    };
+  }
+
+  const used = numberValue(quota.used) + 1;
+  const updated = normalizeUser({
+    ...user,
+    freeDownloadDay: stringValue(quota.day),
+    freeDownloadsToday: used,
+    freeDownloadsLimit: freeDownloadsPerDay,
+    lastFreeDownloadAt: now.toISOString(),
+    lastDownloadContentId: stringValue(body.contentId),
+    lastDownloadSource: stringValue(body.sourceContext),
+    updatedAt: now.toISOString(),
+  });
+  await writeGithubJson(path, updated, existing.sha, `Claim Prism free download ${userId}`, env);
+  return {
+    allowed: true,
+    reason: 'free_quota_claimed',
+    quota: downloadQuotaForUser(updated, now),
+    user: updated,
+  };
+}
+
+async function handleSyncAppleSubscription(encodedUserId: string, request: Request, env: Env): Promise<JsonMap> {
+  const userId = decodeURIComponent(encodedUserId);
+  await requireSession(request, env, userId);
+  const body = await readJson(request);
+  const productId = stringValue(body.productId);
+  if (!applePaidProductIds.has(productId)) {
+    throw new Error('Invalid Apple product');
+  }
+  const path = userPath(userId);
+  const existing = await readGithubJson(path, env);
+  if (!existing) {
+    throw new Error('User not found');
+  }
+
+  const now = new Date().toISOString();
+  const tier = productId === 'prism_pro_lifetime' ? 'lifetime' : 'pro';
+  const user = normalizeUser({
+    ...existing.data,
+    premium: true,
+    subscriptionTier: tier,
+    appleSubscription: {
+      provider: 'apple_storekit',
+      productId,
+      transactionId: stringValue(body.transactionId),
+      purchaseId: stringValue(body.purchaseId),
+      verificationData: stringValue(body.verificationData),
+      status: stringValue(body.status) || 'purchased',
+      syncedAt: now,
+    },
+    updatedAt: now,
+  });
+  await writeGithubJson(path, user, existing.sha, `Sync Prism Apple subscription ${userId}`, env);
+  return { user, subscriptionTier: tier, premium: true };
+}
+
 async function handleLogout(encodedUserId: string, request: Request, env: Env): Promise<JsonMap> {
   const userId = decodeURIComponent(encodedUserId);
   await requireSession(request, env, userId);
@@ -470,6 +588,10 @@ function defaultUserData(userId: string, identity: VerifiedIdentity, now: string
     subscriptionTier: 'free',
     uploadsWeekStart: '',
     uploadsThisWeek: 0,
+    freeDownloadDay: '',
+    freeDownloadsToday: 0,
+    freeDownloadsLimit: freeDownloadsPerDay,
+    appleSubscription: {},
     authProvider: identity.provider,
     providerUserIdHash: sha1Hex(identity.providerUserId),
     githubUserDocPath: userPath(userId),
@@ -499,12 +621,38 @@ function normalizeUser(data: JsonMap): JsonMap {
     subscriptionTier: stringValue(data.subscriptionTier) || 'free',
     uploadsWeekStart: stringValue(data.uploadsWeekStart),
     uploadsThisWeek: numberValue(data.uploadsThisWeek),
+    freeDownloadDay: stringValue(data.freeDownloadDay),
+    freeDownloadsToday: clampNumber(numberValue(data.freeDownloadsToday), 0, freeDownloadsPerDay),
+    freeDownloadsLimit: freeDownloadsPerDay,
+    appleSubscription: asMap(data.appleSubscription),
     authProvider: stringValue(data.authProvider),
     providerUserIdHash: stringValue(data.providerUserIdHash),
     githubUserDocPath: stringValue(data.githubUserDocPath),
     updatedAt: stringValue(data.updatedAt),
     lastLogoutAt: stringValue(data.lastLogoutAt),
   };
+}
+
+function downloadQuotaForUser(user: JsonMap, now: Date): JsonMap {
+  const day = utcDayKey(now);
+  const storedDay = stringValue(user.freeDownloadDay);
+  const used = storedDay === day ? clampNumber(numberValue(user.freeDownloadsToday), 0, freeDownloadsPerDay) : 0;
+  return {
+    day,
+    used,
+    limit: freeDownloadsPerDay,
+    remaining: Math.max(0, freeDownloadsPerDay - used),
+    resetsAt: nextUtcDayIso(now),
+    isPremium: user.premium === true || ['pro', 'lifetime'].includes(stringValue(user.subscriptionTier).toLowerCase()),
+  };
+}
+
+function utcDayKey(value: Date): string {
+  return value.toISOString().slice(0, 10);
+}
+
+function nextUtcDayIso(value: Date): string {
+  return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate() + 1)).toISOString();
 }
 
 function allowedUserUpdates(data: JsonMap): JsonMap {

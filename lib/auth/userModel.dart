@@ -94,6 +94,9 @@ class PrismUsersV2 {
   String subscriptionTier;
   String uploadsWeekStart;
   int uploadsThisWeek;
+  String freeDownloadDay;
+  int freeDownloadsToday;
+  int freeDownloadsLimit;
 
   PrismUsersV2({
     required this.username,
@@ -117,6 +120,9 @@ class PrismUsersV2 {
     this.subscriptionTier = 'free',
     this.uploadsWeekStart = '',
     this.uploadsThisWeek = 0,
+    this.freeDownloadDay = '',
+    this.freeDownloadsToday = 0,
+    this.freeDownloadsLimit = 3,
   }) {
     logger.d("Default constructor !!!!");
   }
@@ -149,6 +155,9 @@ class PrismUsersV2 {
       subscriptionTier: tierValue,
       uploadsWeekStart: data['uploadsWeekStart']?.toString() ?? '',
       uploadsThisWeek: data['uploadsThisWeek'] as int? ?? 0,
+      freeDownloadDay: data['freeDownloadDay']?.toString() ?? '',
+      freeDownloadsToday: data['freeDownloadsToday'] as int? ?? 0,
+      freeDownloadsLimit: data['freeDownloadsLimit'] as int? ?? 3,
     );
   }
 
@@ -181,6 +190,9 @@ class PrismUsersV2 {
       subscriptionTier: tierValue,
       uploadsWeekStart: data['uploadsWeekStart']?.toString() ?? '',
       uploadsThisWeek: data['uploadsThisWeek'] as int? ?? 0,
+      freeDownloadDay: data['freeDownloadDay']?.toString() ?? '',
+      freeDownloadsToday: data['freeDownloadsToday'] as int? ?? 0,
+      freeDownloadsLimit: data['freeDownloadsLimit'] as int? ?? 3,
     );
   }
   Map<String, dynamic> toJson() => _$PrismUsersV2ToJson(this);
