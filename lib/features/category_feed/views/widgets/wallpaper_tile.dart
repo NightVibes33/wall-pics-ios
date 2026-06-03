@@ -109,15 +109,18 @@ class WallpaperTile extends StatelessWidget {
     return item.when(
       prism: (_, wallpaper) {
         final metadata = wallpaper.aiMetadata ?? const <String, Object?>{};
-        return _firstStringValue(
+        final preferred = _firstStringValue(
           <Object?>[
+            wallpaper.core.fullUrl,
+            metadata['catalogPreviewUrl'],
             metadata['catalogStaticThumbnailUrl'],
             metadata['catalogFirstFrameThumbnailUrl'],
             wallpaper.core.thumbnailUrl,
-            metadata['catalogPreviewUrl'],
           ],
           imageOnly: true,
         );
+        final fast = PrismCatalogDataSource.fastImageTileUrl(preferred);
+        return fast.isNotEmpty ? fast : preferred;
       },
       wallhaven: (_, wallpaper) => wallpaper.thumbnailUrl,
       pexels: (_, wallpaper) => wallpaper.thumbnailUrl,
@@ -154,9 +157,7 @@ class WallpaperTile extends StatelessWidget {
                   parentId: id,
                   wallpaper: wallpaper,
                   fullUrl: sideRows[index]['download_url']?.toString().trim() ?? '',
-                  previewUrl: (sideRows[index]['preview_url']?.toString().trim() ?? '').isNotEmpty
-                      ? sideRows[index]['preview_url'].toString().trim()
-                      : sideRows[index]['download_url'].toString().trim(),
+                  previewUrl: sideRows[index]['download_url'].toString().trim(),
                   index: index,
                 ),
           ];
@@ -349,8 +350,8 @@ class WallpaperTile extends StatelessWidget {
     final tileImageUrl = posterUrl.isNotEmpty ? posterUrl : item.thumbnailUrl;
     final image = pairedImageUrls.length >= 2
         ? _matchingSetTile(context, pairedImageUrls, cacheWidth: cacheWidth, cacheHeight: cacheHeight)
-        : playVideoPreview && videoUrl.isNotEmpty
-            ? AutoplayVideoPreview(videoUrl: videoUrl, posterUrl: tileImageUrl)
+        : (playVideoPreview || videoUrl.isNotEmpty) && videoUrl.isNotEmpty
+            ? AutoplayVideoPreview(videoUrl: videoUrl, posterUrl: tileImageUrl, playing: true)
             : _cachedTileImage(context, tileImageUrl, cacheWidth: cacheWidth, cacheHeight: cacheHeight);
     return Material(
       color: Colors.transparent,

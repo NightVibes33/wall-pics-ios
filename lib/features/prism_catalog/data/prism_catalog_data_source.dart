@@ -20,18 +20,18 @@ class PrismCatalogDataSource {
 
   static final PrismCatalogDataSource instance = PrismCatalogDataSource._();
 
-  static String fastImageTileUrl(String url, {int width = 540, int quality = 72}) {
+  static String fastImageTileUrl(String url, {int width = 1080, int quality = 90}) {
     return _fastTileImageUrl(url, width: width, quality: quality);
   }
 
-  static const int _pageSize = 24;
+  static const int _pageSize = 72;
   static const int _catalogShardSize = 100;
   static const Duration _metadataTimeout = Duration(seconds: 20);
   static const Duration _pageTimeout = Duration(seconds: 15);
   static const Duration _searchIndexTimeout = Duration(seconds: 35);
   static const Duration _bootstrapTimeout = Duration(seconds: 8);
   static const String _homeBootstrapFile = 'prism_bootstrap_home.json';
-  static const int _bootstrapPrefetchLimit = 36;
+  static const int _bootstrapPrefetchLimit = 144;
   static const String regularContentType = 'regular_wallpaper';
   static const String liveContentType = 'live_wallpaper';
   static const String matchingContentType = 'matching_wallpaper';
@@ -199,13 +199,13 @@ class PrismCatalogDataSource {
     for (final rawUrl in bootstrap.prefetchUrls) {
       addPrefetchUrl(_fastTileImageUrl(rawUrl));
     }
-    const batchSize = 4;
+    const batchSize = 10;
     for (var index = 0; index < urls.length; index += batchSize) {
       final batch = urls.skip(index).take(batchSize);
       await Future.wait<void>(
         batch.map((url) async {
           try {
-            await DefaultCacheManager().downloadFile(url).timeout(const Duration(seconds: 6));
+            await DefaultCacheManager().downloadFile(url).timeout(const Duration(seconds: 8));
           } catch (_) {
             // Prefetch failures should not block startup or catalog rendering.
           }
@@ -825,7 +825,7 @@ class PrismCatalogDataSource {
           _isBlockedCatalogLabel(_string(row['parent_slug']))) {
         continue;
       }
-      final score = _scoreSearchFields(
+      final score = _scoreSearchFieldsWithAliases(
         normalizedQuery: normalizedQuery,
         name: name,
         slug: slug,
@@ -1235,7 +1235,6 @@ class _PrismItem {
     final parallaxFile = url(json['parallax_file']);
     final previewImage = url(json['preview_image']);
     final catalogDownload = url(json['download_url']);
-    final appTileUrl = url(json['app_tile_url']);
     final appDisplayUrl = url(json['app_display_url']);
     final appDownloadUrl = url(json['app_download_url']);
     final pairedWallpapers = _maps(json['paired_wallpapers']);
@@ -1258,10 +1257,6 @@ class _PrismItem {
       ...explicitPairedDownloadUrls,
       ...derivedPairedDownloadUrls,
     ]);
-    final explicitPairedPreviewUrls = <String>[
-      ...appMatchingSides.map((side) => url(side['preview_url'])),
-      ..._strings(json['paired_preview_urls']).map((value) => url(value)),
-    ].where((value) => value.isNotEmpty).toList(growable: false);
     final derivedPairedPreviewUrls = pairedWallpapers
         .map((wallpaper) => _firstString(<Object?>[
               url(wallpaper['wallpaper']),
@@ -1269,18 +1264,24 @@ class _PrismItem {
               url(wallpaper['download_url']),
               url(wallpaper['full_url']),
               url(wallpaper['url']),
-              url(wallpaper['thumbnail']),
-              url(wallpaper['static_thumbnail']),
-              url(wallpaper['preview_image']),
             ]))
         .where((value) => value.isNotEmpty)
         .toList(growable: false);
-    final pairedPreviewUrls = _uniqueStrings(<String>[
-      ...pairedDownloadUrls.map(_fastTileOrOriginal),
-      ...explicitPairedPreviewUrls.map(_fastTileOrOriginal),
+    final pairedDownloadDisplayUrls = _uniqueStrings(pairedDownloadUrls.map(_fastTileOrOriginal));
+    final pairedFallbackPreviewUrls = _uniqueStrings(<String>[
       ...derivedPairedPreviewUrls.map(_fastTileOrOriginal),
     ]);
-    final pairedDisplayUrls = pairedPreviewUrls.isNotEmpty ? pairedPreviewUrls : pairedDownloadUrls;
+    final pairedDisplayUrls = pairedDownloadDisplayUrls.isNotEmpty ? pairedDownloadDisplayUrls : pairedFallbackPreviewUrls;
+    final normalizedMatchingSides = <Map<String, dynamic>>[
+      for (var index = 0; index < appMatchingSides.length; index++)
+        <String, dynamic>{
+          ...appMatchingSides[index],
+          'download_url': url(appMatchingSides[index]['download_url']),
+          'preview_url': index < pairedDisplayUrls.length
+              ? pairedDisplayUrls[index]
+              : _fastTileOrOriginal(url(appMatchingSides[index]['download_url'])),
+        },
+    ];
     final mediaAssetUrls = _strings(json['media_assets'])
         .map((value) => url(value))
         .where((value) => value.isNotEmpty)
@@ -1351,12 +1352,10 @@ class _PrismItem {
       isImageUrl(wallpaper) ? wallpaper : '',
       isImageUrl(image) ? image : '',
       isImageUrl(sticker) ? sticker : '',
-      isImageUrl(appTileUrl) ? appTileUrl : '',
       isImageUrl(hqThumbnail) ? hqThumbnail : '',
       isImageUrl(staticThumbnail) ? staticThumbnail : '',
       isImageUrl(firstFrameThumbnail) ? firstFrameThumbnail : '',
       isImageUrl(thumbnail) ? thumbnail : '',
-      isImageUrl(previewImage) ? previewImage : '',
     ]);
     final fullMedia = _firstString(<Object?>[
       appDownloadUrl,
@@ -1369,6 +1368,7 @@ class _PrismItem {
       parallaxFile,
     ]);
     final livePoster = _firstString(<Object?>[
+      isImageUrl(fullImage) ? fullImage : '',
       isImageUrl(firstFrameThumbnail) ? firstFrameThumbnail : '',
       isImageUrl(staticThumbnail) ? staticThumbnail : '',
       isImageUrl(hqThumbnail) ? hqThumbnail : '',
@@ -1376,7 +1376,6 @@ class _PrismItem {
       isImageUrl(previewImage) ? previewImage : '',
     ]);
     final parallaxLayerPreview = firstParallaxLayerImage();
-    final fastAppTileUrl = _fastTileOrOriginal(appTileUrl);
     final fastFullImage = _fastTileOrOriginal(fullImage);
     final fastLivePoster = _fastTileOrOriginal(livePoster);
     final parallaxTileImage = _firstString(<Object?>[
@@ -1385,7 +1384,6 @@ class _PrismItem {
     ]);
     final tileImage = _firstString(<Object?>[
       isMatchingContent ? _firstString(<Object?>[...pairedDisplayUrls]) : '',
-      !isLiveContent && !isParallaxContent && isImageUrl(appTileUrl) ? fastAppTileUrl : '',
       fastFullImage,
       fastLivePoster,
     ]);
@@ -1405,10 +1403,10 @@ class _PrismItem {
     final preview = isMatchingContent
         ? _firstString(<Object?>[...pairedDisplayUrls, fullImage, thumb])
         : isLiveContent
-            ? _firstString(<Object?>[appDisplayUrl, video, fullMedia, livePoster])
+            ? _firstString(<Object?>[video, appDownloadUrl, catalogDownload, fullImage, livePoster, appDisplayUrl])
             : isParallaxContent
                 ? _firstString(<Object?>[parallaxArchive, fullImage, thumb])
-                : _firstString(<Object?>[fullImage, thumb, previewImage]);
+                : _firstString(<Object?>[fullImage, thumb]);
     final displayOnlyContent = contentType == PrismCatalogDataSource.diyTemplateContentType ||
         contentType == PrismCatalogDataSource.liveDiyTemplateContentType ||
         contentType == PrismCatalogDataSource.parallaxContentType;
@@ -1445,7 +1443,7 @@ class _PrismItem {
       parallaxFileUrl: parallaxArchive,
       mediaAssetUrls: mediaAssetUrls,
       pairedWallpapers: pairedWallpapers,
-      matchingSides: appMatchingSides,
+      matchingSides: normalizedMatchingSides,
       pairedPreviewUrls: pairedDisplayUrls,
       pairedDownloadUrls: pairedDownloadUrls,
       authorName: _firstString(<Object?>[author['name'], json['author']]).trim().isEmpty
@@ -1577,7 +1575,7 @@ String _resolveCatalogUrl(Object? value, {required String sourceBase}) {
 }
 
 
-String _fastTileImageUrl(String rawUrl, {int width = 540, int quality = 72}) {
+String _fastTileImageUrl(String rawUrl, {int width = 1080, int quality = 90}) {
   final source = rawUrl.trim();
   if (!_isProxyableCatalogImageUrl(source)) {
     return '';
@@ -1599,7 +1597,7 @@ String _fastTileImageUrl(String rawUrl, {int width = 540, int quality = 72}) {
       .toString();
 }
 
-String _fastTileOrOriginal(String rawUrl, {int width = 540, int quality = 72}) {
+String _fastTileOrOriginal(String rawUrl, {int width = 1080, int quality = 90}) {
   final fastUrl = _fastTileImageUrl(rawUrl, width: width, quality: quality);
   return fastUrl.isNotEmpty ? fastUrl : rawUrl.trim();
 }
@@ -1644,6 +1642,15 @@ const Set<String> _blockedCatalogTerms = <String>{
   'widescreen',
 };
 
+const Map<String, List<String>> _searchAliasesByToken = <String, List<String>>{
+  'goku': <String>['son goku', 'kakarot', 'kakarotto', 'dragon ball', 'dragonball', 'dbz', 'dragon ball z', 'dragon ball super'],
+  'vegeta': <String>['dragon ball', 'dragonball', 'dbz', 'dragon ball z', 'dragon ball super'],
+  'spiderman': <String>['spider man', 'spider-man', 'miles morales', 'peter parker'],
+  'batman': <String>['bruce wayne', 'dark knight'],
+  'naruto': <String>['uzumaki', 'shippuden'],
+  'luffy': <String>['one piece', 'monkey d luffy'],
+};
+
 bool _isBlockedCatalogLabel(String value) {
   final normalized = _normalizeForSearch(value);
   if (normalized.isEmpty) {
@@ -1667,7 +1674,7 @@ String _normalizeForSearch(String value) {
 }
 
 int _scoreSearchEntry(_SearchIndexEntry entry, String normalizedQuery) {
-  return _scoreSearchFields(
+  return _scoreSearchFieldsWithAliases(
     normalizedQuery: normalizedQuery,
     name: entry.name,
     slug: entry.slug,
@@ -1675,6 +1682,67 @@ int _scoreSearchEntry(_SearchIndexEntry entry, String normalizedQuery) {
     categorySlugs: entry.categorySlugs,
     tags: entry.tags,
   );
+}
+
+int _scoreSearchFieldsWithAliases({
+  required String normalizedQuery,
+  required String name,
+  required String slug,
+  required Iterable<String> categories,
+  required Iterable<String> categorySlugs,
+  required Iterable<String> tags,
+  String description = '',
+}) {
+  var best = 0;
+  for (final query in _expandedSearchQueries(normalizedQuery)) {
+    final score = _scoreSearchFields(
+      normalizedQuery: query,
+      name: name,
+      slug: slug,
+      categories: categories,
+      categorySlugs: categorySlugs,
+      tags: tags,
+      description: description,
+    );
+    if (score > best) {
+      best = score;
+    }
+  }
+  return best;
+}
+
+List<String> _expandedSearchQueries(String normalizedQuery) {
+  final seen = <String>{};
+  final queries = <String>[];
+  void add(String value) {
+    final normalized = _normalizeForSearch(value);
+    if (normalized.isNotEmpty && seen.add(normalized)) {
+      queries.add(normalized);
+    }
+  }
+
+  add(normalizedQuery);
+  for (final token in normalizedQuery.split(' ')) {
+    for (final alias in _searchAliasesByToken[token] ?? const <String>[]) {
+      add(alias);
+    }
+  }
+  return queries;
+}
+
+bool _containsSearchPhrase(String field, String query) {
+  if (field == query) {
+    return true;
+  }
+  return field.startsWith('$query ') || field.endsWith(' $query') || field.contains(' $query ');
+}
+
+bool _containsSearchToken(String field, String token) {
+  return field.split(' ').any((fieldToken) => fieldToken == token);
+}
+
+bool _containsSearchTokenPrefix(String field, String token) {
+  return field.split(' ').any((fieldToken) => fieldToken.startsWith(token));
 }
 
 int _scoreSearchFields({
@@ -1710,6 +1778,8 @@ int _scoreSearchFields({
   }
   final compactQuery = normalizedQuery.replaceAll(' ', '');
   final compactFields = fields.map((value) => value.replaceAll(' ', '')).toList(growable: false);
+  final singleToken = tokens.length == 1 ? tokens.first : null;
+  final allowCompactMatch = compactQuery.length >= 4;
   if (normalizedName == normalizedQuery || normalizedSlug == normalizedQuery) {
     return 10000;
   }
@@ -1720,23 +1790,39 @@ int _scoreSearchFields({
   if (normalizedTags.any((value) => value == normalizedQuery)) {
     return 8000;
   }
-  if (normalizedName.startsWith(normalizedQuery) || normalizedSlug.startsWith(normalizedQuery)) {
+  if (singleToken == null
+      ? (normalizedName.startsWith(normalizedQuery) || normalizedSlug.startsWith(normalizedQuery))
+      : (_containsSearchTokenPrefix(normalizedName, singleToken) || _containsSearchTokenPrefix(normalizedSlug, singleToken))) {
     return 7000;
   }
-  if (normalizedCategories.any((value) => value.startsWith(normalizedQuery)) ||
-      normalizedCategorySlugs.any((value) => value.startsWith(normalizedQuery)) ||
-      normalizedTags.any((value) => value.startsWith(normalizedQuery))) {
+  if (singleToken == null
+      ? (normalizedCategories.any((value) => value.startsWith(normalizedQuery)) ||
+          normalizedCategorySlugs.any((value) => value.startsWith(normalizedQuery)) ||
+          normalizedTags.any((value) => value.startsWith(normalizedQuery)))
+      : (normalizedCategories.any((value) => _containsSearchTokenPrefix(value, singleToken)) ||
+          normalizedCategorySlugs.any((value) => _containsSearchTokenPrefix(value, singleToken)) ||
+          normalizedTags.any((value) => _containsSearchTokenPrefix(value, singleToken)))) {
     return 6000;
   }
-  if (normalizedName.contains(normalizedQuery) ||
-      normalizedSlug.contains(normalizedQuery) ||
-      compactFields.any((value) => compactQuery.isNotEmpty && value.contains(compactQuery))) {
+  if (_containsSearchPhrase(normalizedName, normalizedQuery) ||
+      _containsSearchPhrase(normalizedSlug, normalizedQuery) ||
+      (allowCompactMatch && compactFields.any((value) => value.contains(compactQuery)))) {
     return 5000;
   }
-  if (fields.any((value) => value.contains(normalizedQuery))) {
+  if (fields.any((value) => _containsSearchPhrase(value, normalizedQuery))) {
     return 4000;
   }
-  if (tokens.length > 1 && fields.any((value) => tokens.every(value.contains))) {
+  if (singleToken != null) {
+    if (fields.any((value) => _containsSearchToken(value, singleToken))) {
+      return 3800;
+    }
+    if (singleToken.length >= 3 && fields.any((value) => _containsSearchTokenPrefix(value, singleToken))) {
+      return 2600;
+    }
+    return 0;
+  }
+  if (tokens.length > 1 &&
+      fields.any((value) => tokens.every((token) => _containsSearchToken(value, token) || _containsSearchPhrase(value, token)))) {
     return 3000;
   }
 

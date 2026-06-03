@@ -750,7 +750,7 @@ class _CatalogPanel extends StatelessWidget {
                 key: sectionKeyFor(section),
                 child: _WallpaperSection(
                   section: section,
-                  playVideo: activeVideoSectionKey == section.playbackKey,
+                  playVideo: section.kind == _SectionKind.live || activeVideoSectionKey == section.playbackKey,
                   onMore: () => onMore(section),
                 ),
               ),
@@ -864,6 +864,7 @@ class _WallpaperSection extends StatelessWidget {
             child: ListView.separated(
               padding: const EdgeInsets.only(right: 18),
               scrollDirection: Axis.horizontal,
+              cacheExtent: cardWidth * 8,
               itemBuilder: (context, index) {
                 return SizedBox(
                   width: cardWidth,
@@ -903,7 +904,7 @@ class _HomeWallpaperCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isProfile = section.kind == _SectionKind.profile;
+    final isProfile = section.kind == _SectionKind.profile || WallpaperTile.isProfilePictureItem(item);
     final paired = WallpaperTile.pairedPreviewUrlsForItem(item);
     final videoUrl = WallpaperTile.videoUrlForItem(item);
     final posterUrl = WallpaperTile.posterUrlForItem(item);
@@ -911,7 +912,7 @@ class _HomeWallpaperCard extends StatelessWidget {
     final image = paired.length >= 2
         ? _pairedImage(context, paired)
         : section.kind == _SectionKind.live && playVideo && videoUrl.isNotEmpty
-            ? AutoplayVideoPreview(videoUrl: videoUrl, posterUrl: imageUrl)
+            ? AutoplayVideoPreview(videoUrl: videoUrl, posterUrl: imageUrl, playing: true)
             : _image(context, imageUrl, isProfile: isProfile);
     final shape = isProfile ? const CircleBorder() : RoundedRectangleBorder(borderRadius: BorderRadius.circular(8));
     return Material(

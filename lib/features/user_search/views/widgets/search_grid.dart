@@ -33,7 +33,7 @@ class _SearchFilterSpec {
 
 class _SearchGridState extends State<SearchGrid> {
   final GlobalKey<RefreshIndicatorState> _refreshKey = GlobalKey<RefreshIndicatorState>();
-  static const Duration _thumbnailPrecacheTimeout = Duration(seconds: 3);
+  static const Duration _thumbnailPrecacheTimeout = Duration(seconds: 5);
   static const List<_SearchFilterSpec> _filters = <_SearchFilterSpec>[
     _SearchFilterSpec(filter: _SearchResultFilter.all, label: 'All', icon: JamIcons.grid_f),
     _SearchFilterSpec(filter: _SearchResultFilter.wallpapers, label: 'Wallpapers', icon: JamIcons.picture_f),
@@ -275,6 +275,7 @@ class _SearchGridState extends State<SearchGrid> {
                       ? _EmptyFilteredResults(filter: _activeFilter)
                       : GridView.builder(
                           padding: const EdgeInsets.fromLTRB(5, 6, 5, 120),
+                          cacheExtent: 12000,
                           itemCount: displayItems.length + (_hasMore ? 1 : 0),
                           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: MediaQuery.of(context).orientation == Orientation.portrait ? 3 : 5,

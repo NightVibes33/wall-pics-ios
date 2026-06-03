@@ -36,22 +36,16 @@ class _AutoplayVideoPreviewState extends State<AutoplayVideoPreview> {
   @override
   void initState() {
     super.initState();
-    if (widget.playing) {
-      unawaited(_load());
-    }
+    unawaited(_load());
   }
 
   @override
   void didUpdateWidget(covariant AutoplayVideoPreview oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!widget.playing) {
-      _loadGeneration++;
-      _disposeController();
-      widget.onReady?.call();
-      return;
-    }
-    if (oldWidget.videoUrl != widget.videoUrl || !oldWidget.playing) {
+    if (oldWidget.videoUrl != widget.videoUrl) {
       unawaited(_load());
+    } else if (_controller != null && !_controller!.value.isPlaying) {
+      unawaited(_controller!.play());
     }
   }
 
@@ -78,10 +72,6 @@ class _AutoplayVideoPreviewState extends State<AutoplayVideoPreview> {
     if (mounted) {
       setState(() {});
     }
-    if (!widget.playing) {
-      widget.onReady?.call();
-      return;
-    }
     if (rawUrl.isEmpty) {
       widget.onReady?.call();
       return;
@@ -102,14 +92,12 @@ class _AutoplayVideoPreviewState extends State<AutoplayVideoPreview> {
       if (widget.muted) {
         await controller.setVolume(0);
       }
-      if (!mounted || generation != _loadGeneration || !widget.playing) {
+      if (!mounted || generation != _loadGeneration) {
         await controller.dispose();
         return;
       }
       setState(() => _controller = controller);
-      if (widget.playing) {
-        unawaited(controller.play());
-      }
+      unawaited(controller.play());
       widget.onReady?.call();
     } catch (_) {
       await controller.dispose();

@@ -25,8 +25,8 @@ class WallpaperGrid extends StatefulWidget {
 }
 
 class _WallpaperGridState extends State<WallpaperGrid> {
-  static const int _lookAheadPrecacheCount = 36;
-  static const Duration _thumbnailPrecacheTimeout = Duration(seconds: 3);
+  static const int _lookAheadPrecacheCount = 96;
+  static const Duration _thumbnailPrecacheTimeout = Duration(seconds: 5);
 
   final GlobalKey<RefreshIndicatorState> refreshHomeKey = GlobalKey<RefreshIndicatorState>();
   final ScrollMilestoneTracker _scrollMilestoneTracker = ScrollMilestoneTracker();
@@ -34,10 +34,8 @@ class _WallpaperGridState extends State<WallpaperGrid> {
   final Set<String> _prefetchedThumbnailUrls = <String>{};
 
   bool seeMoreLoader = false;
-  int _activeVideoRow = 0;
   int _lastLoggedSubWallsCount = -1;
   String? _lastLookAheadBatchKey;
-  String? _lastContentType;
 
   @override
   void initState() {
@@ -129,24 +127,9 @@ class _WallpaperGridState extends State<WallpaperGrid> {
     return state.selectedCategory?.catalogContentType == PrismCatalogDataSource.liveContentType;
   }
 
-  void _updateActiveVideoRow(ScrollMetrics metrics, double rowExtent) {
-    if (rowExtent <= 0) {
-      return;
-    }
-    final nextRow = ((metrics.pixels + metrics.viewportDimension * 0.42) / rowExtent).floor().clamp(0, 1 << 20).toInt();
-    if (nextRow != _activeVideoRow) {
-      setState(() => _activeVideoRow = nextRow);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final CategoryFeedState state = context.watch<CategoryFeedBloc>().state;
-    final contentType = state.selectedCategory?.catalogContentType;
-    if (_lastContentType != contentType) {
-      _lastContentType = contentType;
-      _activeVideoRow = 0;
-    }
     final List<PrismFeedItem> rawSubWalls = state.items.whereType<PrismFeedItem>().toList(growable: false);
     final List<FeedItemEntity> subWalls = WallpaperTile.expandMatchingItemsForDisplay(rawSubWalls);
     final List<PrismFeedItem> prismSubWalls = subWalls.whereType<PrismFeedItem>().toList(growable: false);
@@ -161,7 +144,6 @@ class _WallpaperGridState extends State<WallpaperGrid> {
     final showSkeletonTiles = subWalls.isEmpty;
     final columns = MediaQuery.of(context).orientation == Orientation.portrait ? 3 : 5;
     final aspectRatio = _gridAspectRatio(state);
-    final rowExtent = MediaQuery.sizeOf(context).width / columns / aspectRatio;
     final playLiveVideos = _isLiveCategory(state);
 
     if (subWalls.isNotEmpty) {
@@ -218,9 +200,6 @@ class _WallpaperGridState extends State<WallpaperGrid> {
                 );
               },
             );
-            if (playLiveVideos) {
-              _updateActiveVideoRow(scrollInfo.metrics, rowExtent);
-            }
             if (scrollInfo.metrics.pixels >= scrollInfo.metrics.maxScrollExtent - 320) {
               unawaited(_triggerSeeMore(hasMore: state.hasMore, currentItemCount: subWalls.length));
             }
@@ -228,6 +207,7 @@ class _WallpaperGridState extends State<WallpaperGrid> {
           },
           child: GridView.builder(
             physics: const ScrollPhysics(),
+            cacheExtent: 12000,
             padding: EdgeInsets.zero,
             itemCount: showSkeletonTiles ? 20 : subWalls.length + (state.hasMore ? 1 : 0),
             shrinkWrap: true,
@@ -271,7 +251,7 @@ class _WallpaperGridState extends State<WallpaperGrid> {
                 item: item,
                 index: itemIndex,
                 galleryItems: subWalls,
-                playVideoPreview: playLiveVideos && itemIndex ~/ columns == _activeVideoRow,
+                playVideoPreview: playLiveVideos,
               );
             },
           ),
