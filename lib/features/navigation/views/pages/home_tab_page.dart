@@ -50,10 +50,10 @@ class _HomeTabPageState extends State<HomeTabPage> {
       accent: Color(0xFF4A8DFF),
     ),
     _HomeShortcut(
-      label: 'Ringtone',
-      icon: JamIcons.music_f,
-      contentType: PrismCatalogDataSource.stickerContentType,
-      accent: Color(0xFFFF9F2D),
+      label: '3D',
+      icon: JamIcons.box_f,
+      contentType: PrismCatalogDataSource.parallaxContentType,
+      accent: Color(0xFF8BE36C),
     ),
     _HomeShortcut(
       label: 'PFP',
@@ -830,6 +830,7 @@ class _WallpaperSection extends StatelessWidget {
         : WallpaperTile.expandMatchingItemsForDisplay(section.items);
     final galleryItems = sourceItems.toList(growable: false);
     final visibleItems = galleryItems.take(section.kind == _SectionKind.matching ? 12 : 9).toList(growable: false);
+    final titleFontSize = section.title.length > 17 ? 23.0 : 27.0;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 24, 0, 0),
@@ -845,10 +846,10 @@ class _WallpaperSection extends StatelessWidget {
                     section.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Colors.white,
                       fontFamily: 'Satoshi',
-                      fontSize: 27,
+                      fontSize: titleFontSize,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
