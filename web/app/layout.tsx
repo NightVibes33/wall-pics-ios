@@ -11,10 +11,9 @@ const manrope = Manrope({
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title:
-    "Prism Wallpapers - Premium Android Wallpaper App for Wallpapers, Setups and Collections",
+  title: `${APP_NAME} - iPhone Wallpaper App`,
   description:
-    "Discover high-quality wallpapers, curated collections, and home screen setups with Prism Wallpapers, a premium wallpaper app for Android. Download on Google Play.",
+    "Přism is an iPhone wallpaper app for browsing high-quality wallpapers, Live Photos, matching sets, and profile pictures.",
   alternates: {
     canonical: "/",
   },
@@ -26,26 +25,24 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     url: SITE_URL,
-    title:
-      "Prism Wallpapers - Premium Android Wallpaper App for Wallpapers, Setups and Collections",
+    title: `${APP_NAME} - iPhone Wallpaper App`,
     description:
-      "Discover high-quality wallpapers, curated collections, and home screen setups with Prism Wallpapers. Built for Android personalization lovers.",
+      "Browse high-quality wallpapers, Live Photos, matching sets, and profile pictures for iPhone.",
     siteName: APP_NAME,
     images: [
       {
         url: "/assets/screenshots/screen1.jpg",
         width: 390,
         height: 844,
-        alt: "Prism Wallpapers app screenshot",
+        alt: "Přism app screenshot",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title:
-      "Prism Wallpapers - Premium Android Wallpaper App for Wallpapers, Setups and Collections",
+    title: `${APP_NAME} - iPhone Wallpaper App`,
     description:
-      "Discover high-quality wallpapers, curated collections, and home screen setups with Prism Wallpapers.",
+      "Browse high-quality wallpapers, Live Photos, matching sets, and profile pictures for iPhone.",
     images: ["/assets/screenshots/screen1.jpg"],
   },
 };

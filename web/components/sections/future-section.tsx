@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { PLAY_STORE_URL, TESTFLIGHT_COMING_SOON } from "@/lib/site-config";
+import { APP_STORE_URL } from "@/lib/site-config";
 
 export function FutureSection() {
   return (
@@ -10,20 +10,15 @@ export function FutureSection() {
         <article className="rounded-3xl border border-accent/25 bg-base-800/75 p-8 sm:p-10">
           <Badge>Coming next</Badge>
           <h2 className="mt-4 text-balance text-3xl font-bold tracking-tight text-white sm:text-4xl">
-            iPhone support is coming soon
+            Přism is ready for iPhone
           </h2>
           <p className="mt-4 max-w-3xl text-base leading-relaxed text-white/75">
-            Prism is evolving toward even more creative personalization tools, smarter
+            Přism is evolving toward even more polished personalization tools, smarter
             discovery, and expanded platform support. We are building carefully so each
             step stays polished.
           </p>
           <div className="mt-7 flex flex-wrap gap-3">
-            <Button href={PLAY_STORE_URL}>Get it on Google Play</Button>
-            {TESTFLIGHT_COMING_SOON ? (
-              <Button href="#faq" variant="secondary">
-                iPhone coming soon
-              </Button>
-            ) : null}
+            <Button href={APP_STORE_URL}>View app</Button>
           </div>
         </article>
       </div>

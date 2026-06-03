@@ -1,136 +1,49 @@
 # Privacy Policy
 
-Hash Studios built the Prism app as an open source app. This service is provided by Hash Studios at no cost and is intended for use as-is.
+**Effective date:** June 3, 2026
 
-This page informs visitors regarding our policies for the collection, use, and disclosure of personal information for anyone who uses our service. If you choose to use our service, you agree to the collection and use of information in relation to this policy. The personal information that we collect is used for providing and improving the service. We will not use or share your information with anyone except as described in this Privacy Policy.
-
-**Effective date:** 2026-02-28
-
----
+This Privacy Policy explains how Přism handles information when you use the iPhone app, website, and related services.
 
 ## Information We Collect
 
-### When You Use the App Without Signing In
+When you sign in, we may receive account information such as your name, email address, provider user ID, and authentication provider details from Apple or Google.
 
-You can use Prism without creating an account. In this case we collect:
+We may store app data needed to run the product, including preferences, favorites, saved items, download history, search activity, settings, and support messages you send us.
 
-- **Usage and analytics data** — app interactions, screens visited, features used (via Mixpanel)
-- **Crash reports and diagnostic data** — error logs and device information (via Sentry)
-- **Ad identifiers** — anonymous advertising ID used to serve relevant ads (via Google Mobile Ads)
-- **Device information** — device model, OS version, IP address (collected automatically by analytics and crash SDKs)
+We may collect diagnostics, crash logs, device type, operating system version, app version, and basic analytics so we can improve performance and fix bugs.
 
-### When You Sign In
+## Photos and Media
 
-When you create an account using Google Sign-In or Sign in with Apple, we additionally collect:
+Přism requests photo library access only when needed to save selected media or when you choose media from your device.
 
-- **Name and email address** — from your Google or Apple account
-- **Profile photo** — from your Google account (if using Google Sign-In)
-- **User ID** — a unique identifier assigned to your account in the app
+We do not scan your full photo library. We only handle the specific media actions you start inside the app.
 
-### Content You Create
+## How We Use Information
 
-When you use community features, we collect:
+We use information to authenticate users, operate the app, save preferences, provide downloads, improve search and browsing, diagnose problems, prevent abuse, and respond to support requests.
 
-- **Uploaded wallpapers and home screen setups** — stored by the app backend when upload features are enabled
-- **Profile information** — username, bio, profile photo, cover photo, and social links you add
-- **Favourites** — wallpapers and setups you mark as favourites
-- **AI-generated wallpapers** — prompts you submit and images generated
+If purchases or subscriptions are enabled, purchase status is used only to unlock the relevant app features and support account or billing questions.
 
-### Purchase Information
+## Service Providers
 
-If you purchase a subscription or lifetime access:
+We may use trusted service providers for authentication, hosting, analytics, crash reporting, purchase handling, email support, and app infrastructure.
 
-- **Purchase history and entitlement status** — managed by RevenueCat and Apple's StoreKit
+These providers process information only as needed to provide their services to us and are not allowed to use it for unrelated purposes.
 
----
+## Data Retention and Deletion
 
-## How We Use Your Information
+We keep information only as long as needed to provide the app, comply with legal obligations, resolve disputes, and protect the service.
 
-We use the information we collect to:
+You can request account deletion or data access by contacting us at the email below. Some records may remain where required for security, legal, or accounting reasons.
 
-- Provide, maintain, and improve the app
-- Authenticate you and manage your account
-- Sync your favourites and profile across devices
-- Serve relevant advertisements (free tier only)
-- Process in-app purchases and verify subscription entitlements
-- Monitor for crashes and technical errors
-- Understand how features are used and improve the user experience
-- Send push notifications for activity on your posts (if you grant permission)
+## Children
 
----
+Přism is not directed to children under 13, and we do not knowingly collect personal information from children under 13.
 
-## Third-Party Service Providers
+## Changes
 
-We use the following third-party services. Each has access only to the data necessary to perform their function. We require them to uphold the same level of data protection as this policy.
+We may update this policy when the app or our practices change. The effective date above shows the latest version.
 
-| Service | Purpose | Privacy Policy |
-|---------|---------|----------------|
-| Sentry | Crash reporting and error monitoring (includes session replay for debug purposes) | [sentry.io/privacy](https://sentry.io/privacy) |
-| Mixpanel | Product analytics and event tracking | [mixpanel.com/legal/privacy-policy](https://mixpanel.com/legal/privacy-policy) |
-| RevenueCat | Subscription management and purchase validation | [revenuecat.com/privacy](https://www.revenuecat.com/privacy) |
-| Google Mobile Ads | Advertising (free tier) | [policies.google.com/privacy](https://policies.google.com/privacy) |
-| Pexels API | Curated wallpaper content | [pexels.com/privacy-policy](https://www.pexels.com/privacy-policy) |
-| WallHaven API | Curated wallpaper content (safe tier by default) | [wallhaven.cc/help/privacy](https://wallhaven.cc/help/privacy) |
+## Contact
 
----
-
-## Data Retention
-
-- **Account data** — retained while your account is active. Deleted within 30 days of an account deletion request.
-- **Analytics data** — retained according to each provider's retention policies.
-- **Crash logs** — retained for 90 days in Sentry.
-- **Uploaded content** — retained until you delete it or request account deletion.
-- **Purchase history** — retained by RevenueCat and Apple as required for financial record-keeping.
-
----
-
-## Your Rights and Choices
-
-### Accessing and Deleting Your Data
-
-You can request deletion of your account and associated data at any time by contacting us at **hash.studios.inc+prism@gmail.com**. We will delete your account data within 30 days. Note that some data held by third-party providers (e.g. Apple purchase history) is outside our control and subject to their own retention policies.
-
-### Revoking Consent
-
-- **Analytics opt-out** — You can limit ad tracking through your device's privacy settings (iOS: Settings → Privacy & Security → Tracking).
-- **Push notifications** — You can disable push notifications at any time in your device settings.
-- **Sign out** — You can sign out of your account at any time within the app. This stops further syncing of personal data.
-
----
-
-## Cookies
-
-This app does not use cookies directly. However, some third-party SDKs (such as analytics and advertising libraries) may use local storage or device identifiers with similar functionality. You can limit this through your device's advertising settings.
-
----
-
-## Children's Privacy
-
-This service does not knowingly collect personal information from children under 13. If you are a parent or guardian and believe your child has provided us with personal information, please contact us at **hash.studios.inc+prism@gmail.com** and we will delete it promptly.
-
----
-
-## Security
-
-We value your trust and strive to use commercially acceptable means to protect your personal information. However, no method of transmission over the internet or electronic storage is 100% secure. We cannot guarantee absolute security.
-
----
-
-## Links to Other Sites
-
-The app may contain links to external sites. These are not operated by us. We strongly advise reviewing the privacy policies of any third-party sites you visit.
-
----
-
-## Changes to This Privacy Policy
-
-We may update this Privacy Policy from time to time. Changes will be posted on this page with an updated effective date. Continued use of the app after changes constitutes acceptance of the updated policy.
-
----
-
-## Contact Us
-
-If you have questions or requests regarding this Privacy Policy, contact us at:
-
-**Email:** hash.studios.inc+prism@gmail.com  
-**Website:** https://prismwalls.com
+Questions or deletion requests can be sent to **hash.studios.inc+prism@gmail.com**.

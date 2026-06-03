@@ -20,7 +20,7 @@ export function ShowcaseGallerySection() {
             >
               <Image
                 src={item.image}
-                alt={`Prism Wallpapers screenshot: ${item.title}`}
+                alt={`Přism screenshot: ${item.title}`}
                 width={280}
                 height={560}
                 className="h-auto w-full rounded-xl"

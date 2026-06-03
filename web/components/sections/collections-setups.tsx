@@ -13,7 +13,7 @@ export function CollectionsSetupsSection() {
           />
           <div className="mt-7 space-y-3 text-sm leading-relaxed text-white/75">
             <p>
-              Explore aesthetic wallpapers for Android with context around style, tone,
+              Explore aesthetic wallpapers for iPhone with context around style, tone,
               and compatibility.
             </p>
             <p id="setups">
@@ -31,7 +31,7 @@ export function CollectionsSetupsSection() {
           <article className="rounded-2xl border border-white/10 bg-base-800/70 p-4">
             <Image
               src="/assets/screenshots/screen3.jpg"
-              alt="Prism Wallpapers curated collections panel"
+              alt="Přism curated collections panel"
               width={390}
               height={844}
               className="h-auto w-full rounded-xl"
@@ -41,7 +41,7 @@ export function CollectionsSetupsSection() {
           <article className="rounded-2xl border border-white/10 bg-base-800/70 p-4">
             <Image
               src="/assets/screenshots/screen4.jpg"
-              alt="Prism Wallpapers setup inspiration browsing panel"
+              alt="Přism setup inspiration browsing panel"
               width={390}
               height={844}
               className="h-auto w-full rounded-xl"

@@ -16,74 +16,74 @@ export const seoRouteContent: Record<SeoRouteContent["slug"], SeoRouteContent> =
   "4k-wallpapers": {
     slug: "4k-wallpapers",
     navLabel: "4K Wallpapers",
-    title: `4K Wallpapers for Android | ${APP_NAME}`,
+    title: `4K iPhone Wallpapers | ${APP_NAME}`,
     description:
-      "Browse premium 4K wallpapers for Android with Prism Wallpapers. Discover high-resolution styles, curated collections, and personalization-focused browsing.",
-    h1: "4K wallpapers for Android, curated with a premium feel",
+      "Browse crisp iPhone wallpapers with Přism, including high-resolution images, Live Photos, matching sets, and profile pictures.",
+    h1: "4K iPhone wallpapers with fast discovery",
     intro:
-      "Prism Wallpapers helps you discover clean, high-resolution looks built for modern Android screens. Explore visual styles faster with curated paths and setup-friendly context.",
+      "Přism focuses on clean browsing, high-quality previews, and simple saving flows for iPhone wallpaper users.",
     bullets: [
-      "Discover high-resolution wallpapers that stay crisp across devices.",
-      "Explore curated 4K collections instead of random low-signal feeds.",
-      "Move from wallpaper discovery to full personalization with setups.",
+      "Discover wallpapers that stay crisp on modern iPhone screens.",
+      "Move between categories, search results, and fullscreen previews quickly.",
+      "Save the actual media item instead of a low-quality branded preview.",
     ],
-    sectionTitle: "Why Prism for 4K wallpaper discovery",
+    sectionTitle: "Built for iPhone wallpaper browsing",
     sectionBody:
-      "Prism focuses on visual quality and browsing quality together, so finding your next 4K wallpaper feels faster, cleaner, and more intentional.",
+      "Přism keeps the product focused on wallpapers, Live Photos, matching sets, and profile pictures so users are not pushed through unrelated app flows.",
   },
   "amoled-wallpapers": {
     slug: "amoled-wallpapers",
     navLabel: "AMOLED Wallpapers",
-    title: `AMOLED Wallpapers App for Android | ${APP_NAME}`,
+    title: `AMOLED iPhone Wallpapers | ${APP_NAME}`,
     description:
-      "Find AMOLED-friendly wallpapers with Prism Wallpapers. Explore dark, high-contrast styles and curated collections for Android personalization lovers.",
-    h1: "AMOLED wallpapers that look clean, bold, and intentional",
+      "Find dark, high-contrast wallpapers with Přism, built for iPhone users who want a sharper browsing and saving flow.",
+    h1: "AMOLED-style wallpapers that look clean on iPhone",
     intro:
-      "Prism makes it easy to browse dark and contrast-rich wallpapers that pair well with AMOLED displays, while still giving you setup inspiration and curated personalization flows.",
+      "Přism makes dark and high-contrast wallpaper discovery simple, organized, and focused on the image itself.",
     bullets: [
-      "Browse deep-tone wallpapers made for AMOLED visual impact.",
-      "Explore curated aesthetics, not only individual images.",
-      "Find looks that pair naturally with icon packs and widgets.",
+      "Browse deep-tone images with clean fullscreen previews.",
+      "Use category rows and search to move faster through the catalog.",
+      "Save media through iOS-native flows with fewer interruptions.",
     ],
-    sectionTitle: "A better AMOLED browsing experience",
+    sectionTitle: "Cleaner dark wallpaper discovery",
     sectionBody:
-      "Prism is designed for people who care about how their phone feels daily. The app combines style discovery, setup context, and premium browsing polish.",
+      "The experience is designed to get users from browsing to saving with less friction and fewer unrelated app surfaces.",
   },
   "home-screen-setups": {
     slug: "home-screen-setups",
-    navLabel: "Home Screen Setups",
-    title: `Home Screen Setups App for Android | ${APP_NAME}`,
+    navLabel: "iPhone Wallpapers",
+    title: `iPhone Wallpaper App | ${APP_NAME}`,
     description:
-      "Explore home screen setup inspiration with Prism Wallpapers. Discover wallpapers, setup ideas, and personalization-first Android browsing in one app.",
-    h1: "Home screen setup inspiration, not just isolated wallpapers",
+      "Přism is an iPhone wallpaper app for high-quality wallpapers, Live Photos, matching sets, and profile pictures.",
+    h1: "iPhone wallpaper browsing without the clutter",
     intro:
-      "Prism helps Android users move beyond standalone wallpaper browsing by surfacing setup ideas that make complete home screens feel more cohesive and expressive.",
+      "Přism keeps the app centered on finding, previewing, swiping, and saving the media users actually want.",
     bullets: [
-      "See setup context so wallpapers feel more actionable.",
-      "Discover aesthetic directions faster with curated inspiration.",
-      "Build a complete phone look with less trial and error.",
+      "Browse vertically by category and horizontally within each row.",
+      "Open fullscreen previews and swipe to nearby images.",
+      "Keep matching sets split so each image can be saved separately.",
     ],
-    sectionTitle: "Designed for personalization lovers",
+    sectionTitle: "Focused on the core wallpaper flow",
     sectionBody:
-      "Prism is built for people who enjoy the craft of personalization. It blends wallpapers, setups, and collections into one premium Android experience.",
+      "The app avoids unrelated feeds, coin systems, and extra tool surfaces so the experience stays fast and direct.",
   },
   collections: {
     slug: "collections",
     navLabel: "Collections",
-    title: `Wallpaper Collections App for Android | ${APP_NAME}`,
+    title: `Wallpaper Collections for iPhone | ${APP_NAME}`,
     description:
-      "Browse curated wallpaper collections in Prism Wallpapers. Discover premium Android wallpapers by style, mood, and personalization direction.",
-    h1: "Curated wallpaper collections for a better Android look",
+      "Browse organized iPhone wallpaper collections with Přism, including Live Photos, matching sets, and profile pictures.",
+    h1: "Wallpaper collections organized for faster browsing",
     intro:
-      "Prism replaces endless random browsing with structured, visual collections so you can discover wallpapers by style, mood, and personalization intent.",
+      "Přism uses clear categories and media types so users can find the right image without digging through unrelated content.",
     bullets: [
-      "Navigate curated categories designed for faster discovery.",
-      "Find wallpapers that align with your overall setup style.",
-      "Turn quick inspiration into a polished daily home screen.",
+      "Navigate curated categories designed for quick discovery.",
+      "Browse wallpapers, Live Photos, matching sets, and profile pictures separately.",
+      "Use fullscreen previews and clean save flows for each media item.",
     ],
-    sectionTitle: "Collections with editorial quality",
+    sectionTitle: "Collections with a simple product shape",
     sectionBody:
-      "Prism treats discovery like a premium browsing experience, combining careful curation and personalization context to help Android users choose with confidence.",
+      "Přism treats the catalog as the center of the app and keeps supporting features lightweight around it.",
   },
 };
 

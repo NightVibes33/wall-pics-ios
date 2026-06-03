@@ -1,4 +1,4 @@
-import { APP_NAME, PLAY_STORE_URL, SITE_URL } from "@/lib/site-config";
+import { APP_NAME, APP_STORE_URL, SITE_URL } from "@/lib/site-config";
 
 export function getSoftwareApplicationSchema() {
   return {
@@ -6,11 +6,11 @@ export function getSoftwareApplicationSchema() {
     "@type": "SoftwareApplication",
     name: APP_NAME,
     applicationCategory: "MultimediaApplication",
-    operatingSystem: "Android",
+    operatingSystem: "iOS",
     description:
-      "Discover high-quality wallpapers, curated collections, and home screen setups with Prism Wallpapers, a premium wallpaper app for Android.",
-    downloadUrl: PLAY_STORE_URL,
-    installUrl: PLAY_STORE_URL,
+      "Browse high-quality wallpapers, Live Photos, matching sets, and profile pictures for iPhone.",
+    downloadUrl: APP_STORE_URL,
+    installUrl: APP_STORE_URL,
     url: SITE_URL,
     offers: {
       "@type": "Offer",

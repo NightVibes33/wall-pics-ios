@@ -1,90 +1,75 @@
-import {
-  APP_NAME,
-  GITHUB_URL,
-  PLAY_STORE_URL,
-  TESTFLIGHT_COMING_SOON,
-} from "@/lib/site-config";
+import { APP_NAME, APP_STORE_URL } from "@/lib/site-config";
 
 export const trustPoints = [
-  "Open source",
-  "Android app live now",
-  "Built for personalization lovers",
+  "iOS-first",
+  "TestFlight ready",
+  "Built for fast wallpaper discovery",
 ] as const;
 
 export const credibilityItems = [
-  { label: "100K+ downloads", detail: "Trusted by Android personalization fans" },
-  { label: "Open source", detail: "Built in public with a creator-first mindset" },
-  { label: "Community-driven", detail: "Inspired by real setups and real users" },
+  { label: "iOS-first", detail: "Designed around the way iPhone users browse and save media" },
+  { label: "Fast browsing", detail: "Focused on quick discovery and fewer dead loading states" },
+  { label: "Clean library", detail: "Organized around wallpapers, Live Photos, sets, and profile pictures" },
   {
-    label: "Android-focused",
-    detail: "Designed for people who care how their home screen feels",
+    label: "Private by design",
+    detail: "Account and app data are handled only to run the experience",
   },
 ] as const;
 
 export const featureItems = [
   {
     title: "High-quality wallpapers",
-    body: "Find polished wallpapers made to look crisp on modern Android displays.",
+    body: "Find polished wallpapers made to look crisp on modern iPhone displays.",
   },
   {
-    title: "Curated collections",
-    body: "Explore themed collections so you can discover faster with less scrolling.",
+    title: "Live Photos",
+    body: "Browse motion-ready wallpapers with a flow built around iOS saving behavior.",
   },
   {
-    title: "Home screen setups",
-    body: "Browse setups and inspiration, not just standalone images.",
+    title: "Matching sets",
+    body: "Discover paired and group sets where each image can be viewed and saved separately.",
   },
   {
-    title: "Preview before you apply",
-    body: "Check how a wallpaper fits your screen style before committing.",
+    title: "Profile pictures",
+    body: "Find square and circular-ready profile images without fighting bad crops.",
   },
   {
-    title: "Better discovery and browsing",
-    body: "Navigate with intent using categories, styles, and visual cues.",
+    title: "Better search",
+    body: "Search across wallpaper types with clearer results and less random clutter.",
   },
   {
-    title: "Personalization-first experience",
-    body: "Every flow is built around making your phone feel more like yours.",
+    title: "Simple library flow",
+    body: "The app keeps the focus on browsing, viewing, swiping, and saving.",
   },
 ] as const;
 
 export const galleryItems = [
   { title: "Explore Wallpapers", image: "/assets/screenshots/screen1.jpg" },
-  { title: "Browse Setups", image: "/assets/screenshots/screen2.jpg" },
-  { title: "Curated Collections", image: "/assets/screenshots/screen3.jpg" },
-  { title: "Preview on Home Screen", image: "/assets/screenshots/screen4.jpg" },
-  { title: "Personalize Your Look", image: "/assets/screenshots/screen5.jpg" },
+  { title: "Browse Live Photos", image: "/assets/screenshots/screen2.jpg" },
+  { title: "Matching Sets", image: "/assets/screenshots/screen3.jpg" },
+  { title: "Preview Fullscreen", image: "/assets/screenshots/screen4.jpg" },
+  { title: "Save Your Look", image: "/assets/screenshots/screen5.jpg" },
 ] as const;
 
 export const faqItems = [
   {
-    q: "What is Prism Wallpapers?",
-    a: `${APP_NAME} is a premium wallpaper and setup app focused on helping Android users discover better wallpapers, curated collections, and personalization inspiration in one place.`,
+    q: "What is Přism?",
+    a: `${APP_NAME} is an iPhone wallpaper app focused on browsing wallpapers, Live Photos, matching sets, and profile pictures in one clean experience.`,
   },
   {
-    q: "Is Prism Wallpapers available on Android?",
-    a: `Yes. ${APP_NAME} is live on Google Play and built specifically for Android users who care about home screen quality and customization.`,
+    q: "Is Přism available on iPhone?",
+    a: `${APP_NAME} is set up for iOS distribution and is being prepared through TestFlight and App Store Connect.`,
   },
   {
-    q: "Is Prism coming to iPhone?",
-    a: TESTFLIGHT_COMING_SOON
-      ? "An iPhone version is in progress and planned for TestFlight."
-      : "Yes, iPhone support is planned.",
+    q: "Does Přism support Live Photos?",
+    a: "The app is built around iOS media flows, including Live Photo wallpaper browsing and saving behavior.",
   },
   {
-    q: "Does Prism include 4K and AMOLED wallpapers?",
-    a: "Prism is designed for high-quality visual browsing, including styles popular with 4K and AMOLED wallpaper lovers.",
+    q: "Does Přism include matching sets?",
+    a: "Yes. Matching sets are treated as separate images so each person can save the copy they want.",
   },
   {
-    q: "Can I browse setups and home screen inspiration?",
-    a: "Yes. Prism highlights setups and inspiration flows so you can discover complete looks, not only individual wallpapers.",
-  },
-  {
-    q: "Is Prism open source?",
-    a: `Yes. You can explore the project on GitHub: ${GITHUB_URL}`,
-  },
-  {
-    q: "Where can I download Prism Wallpapers?",
-    a: `Download ${APP_NAME} directly from Google Play: ${PLAY_STORE_URL}`,
+    q: "Where can I view the app listing?",
+    a: `The App Store record is ${APP_STORE_URL}`,
   },
 ] as const;

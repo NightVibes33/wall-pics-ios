@@ -101,6 +101,23 @@ jobs:
             -authenticationKeyPath "$PWD/private_keys/AuthKey_$APP_STORE_CONNECT_KEY_ID.p8" \
             -authenticationKeyID "$APP_STORE_CONNECT_KEY_ID" \
             -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID"
+          IPA_PATH="$(find build/export -maxdepth 1 -name '*.ipa' -print -quit)"
+          if [ -z "$IPA_PATH" ]; then
+            echo "No IPA found in build/export"
+            find build/export -maxdepth 2 -type f -print
+            exit 1
+          fi
+          shasum -a 256 "$IPA_PATH" | tee build/export/ipa.sha256
+
+      - name: Upload TestFlight IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Prism-testflight-ipa-${{ github.run_number }}
+          path: |
+            build/export/*.ipa
+            build/export/ipa.sha256
+          retention-days: 30
+          if-no-files-found: error
 
       - name: Upload to TestFlight
         env:

@@ -9,7 +9,7 @@ export function FaqSection() {
           centered
           kicker="FAQ"
           title="Frequently asked questions"
-          description="Answers for Android users looking for a premium wallpaper and setup app."
+          description="Answers for iPhone users looking for a premium wallpaper and setup app."
         />
 
         <div className="mt-10 space-y-3">

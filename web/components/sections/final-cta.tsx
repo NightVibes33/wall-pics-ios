@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { PLAY_STORE_URL, TESTFLIGHT_COMING_SOON } from "@/lib/site-config";
+import { APP_STORE_URL } from "@/lib/site-config";
 
 export function FinalCtaSection() {
   return (
@@ -10,17 +10,12 @@ export function FinalCtaSection() {
             Ready to upgrade your phone&apos;s look?
           </h2>
           <p className="mt-4 max-w-2xl text-base leading-relaxed text-white/75">
-            Install Prism Wallpapers on Google Play and discover a cleaner, richer, and
+            View Přism on the App Store and discover a cleaner, richer, and
             more intentional personalization flow.
           </p>
 
           <div className="mt-7 flex flex-wrap gap-3">
-            <Button href={PLAY_STORE_URL}>Get it on Google Play</Button>
-            {TESTFLIGHT_COMING_SOON ? (
-              <Button href="#future" variant="secondary">
-                iPhone coming soon
-              </Button>
-            ) : null}
+            <Button href={APP_STORE_URL}>View app</Button>
           </div>
         </article>
       </div>

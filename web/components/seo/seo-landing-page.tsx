@@ -4,7 +4,7 @@ import { Header } from "@/components/sections/header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { seoRouteContent, seoRouteOrder, type SeoRouteContent } from "@/lib/seo-pages";
-import { APP_NAME, PLAY_STORE_URL, TESTFLIGHT_COMING_SOON } from "@/lib/site-config";
+import { APP_NAME, APP_STORE_URL } from "@/lib/site-config";
 
 type SeoLandingPageProps = {
   content: SeoRouteContent;
@@ -22,7 +22,7 @@ export function SeoLandingPage({ content }: SeoLandingPageProps) {
       <main className="min-h-screen bg-hero-noise">
         <section className="border-b border-white/10 py-20 sm:py-24">
           <div className="mx-auto w-full max-w-5xl px-4 sm:px-6 lg:px-8">
-            <Badge>Android personalization</Badge>
+            <Badge>iPhone wallpapers</Badge>
             <h1 className="mt-5 text-balance text-4xl font-bold tracking-tight text-white sm:text-5xl">
               {content.h1}
             </h1>
@@ -31,12 +31,7 @@ export function SeoLandingPage({ content }: SeoLandingPageProps) {
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
-              <Button href={PLAY_STORE_URL}>Get it on Google Play</Button>
-              {TESTFLIGHT_COMING_SOON ? (
-                <Button href="/#future" variant="secondary">
-                  iPhone coming soon
-                </Button>
-              ) : null}
+              <Button href={APP_STORE_URL}>View app</Button>
             </div>
           </div>
         </section>
@@ -86,7 +81,7 @@ export function SeoLandingPage({ content }: SeoLandingPageProps) {
               Related personalization pages
             </h2>
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/70">
-              Explore more Android wallpaper and setup topics to find styles that match
+              Explore more iPhone wallpaper topics to find styles that match
               your taste.
             </p>
 
