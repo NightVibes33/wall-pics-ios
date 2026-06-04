@@ -42,6 +42,7 @@ import 'package:Prism/features/palette/palette.dart';
 import 'package:Prism/features/session/domain/entities/session_entity.dart';
 import 'package:Prism/features/session/session.dart';
 import 'package:Prism/features/startup/startup.dart';
+import 'package:Prism/features/theme_mode/views/theme_mode_bloc_utils.dart';
 import 'package:Prism/features/user_search/user_search.dart';
 import 'package:Prism/logger/logger.dart';
 import 'package:Prism/notifications/localNotification.dart';
@@ -578,6 +579,7 @@ class _MyAppState extends State<_MyApp> with WidgetsBindingObserver {
       SetupLinkIntent() => TargetTypeValue.setup,
       ReferLinkIntent() => TargetTypeValue.refer,
       ShortCodeIntent() => TargetTypeValue.shortCode,
+      ChargingAnimationIntent() => TargetTypeValue.unknown,
       UnknownIntent() => TargetTypeValue.unknown,
     };
   }
@@ -648,6 +650,13 @@ class _MyAppState extends State<_MyApp> with WidgetsBindingObserver {
         );
       case ShortCodeIntent():
         await _resolveAndNavigateShortCode(action.code);
+      case ChargingAnimationIntent():
+        _appRouter.push(const NotFoundRoute());
+        unawaited(
+          analytics.track(
+            const DeepLinkNavigationResultEvent(targetType: TargetTypeValue.unknown, result: EventResultValue.failure),
+          ),
+        );
       case UnknownIntent():
         _appRouter.push(const NotFoundRoute());
         unawaited(

@@ -184,8 +184,8 @@ class _CategoryFeedContentState extends State<_CategoryFeedContent> {
         if (items.isEmpty) {
           return RefreshIndicator(
             onRefresh: _refresh,
-            child: const ListView(
-              children: <Widget>[
+            child: ListView(
+              children: const <Widget>[
                 SizedBox(height: 220),
                 Center(child: Text('No wallpapers loaded. Pull to retry.')),
               ],
