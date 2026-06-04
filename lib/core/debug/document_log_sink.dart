@@ -38,7 +38,8 @@ class DocumentLogSink implements LogSink {
   static final RegExp _hexSecretPattern = RegExp(r'\b[a-fA-F0-9]{32,}\b');
   static final RegExp _longSecretPattern = RegExp(r'\b[A-Za-z0-9_-]{40,}\b');
   static final RegExp _keyValueSecretPattern = RegExp(
-    r'(?i)\b(authorization|bearer|token|api[_ -]?key|secret|password|cookie|client[_ -]?id|credential)\b\s*[:=]\s*[^,\s\}\]]+',
+    r'\b(authorization|bearer|token|api[_ -]?key|secret|password|cookie|client[_ -]?id|credential)\b\s*[:=]\s*[^,\s\}\]]+',
+    caseSensitive: false,
   );
 
   final List<AppLogRecord> _pending = <AppLogRecord>[];
