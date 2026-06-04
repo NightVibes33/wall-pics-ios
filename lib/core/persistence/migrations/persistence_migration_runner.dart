@@ -5,10 +5,27 @@ class PersistenceMigrationRunner {
   const PersistenceMigrationRunner._();
 
   static Future<void> run(LocalStore store) async {
-    final version = (store.get(PersistenceKeys.schemaVersion) as int?) ?? 0;
-    if (version < 3) {
+    final version = _intValue(store.get(PersistenceKeys.schemaVersion)) ?? 0;
+    if (version < PersistenceKeys.currentSchemaVersion) {
       await _migrateToV3(store);
     }
+  }
+
+  static int? _intValue(Object? value) {
+    if (value is int) return value;
+    if (value is num) return value.round();
+    if (value is String) return int.tryParse(value.trim());
+    return null;
+  }
+
+  static Set<String> _stringSet(Object? value) {
+    if (value is Iterable) {
+      return value.map((item) => item.toString()).where((item) => item.isNotEmpty).toSet();
+    }
+    if (value is String && value.isNotEmpty) {
+      return <String>{value};
+    }
+    return <String>{};
   }
 
   /// v→3: consolidate per-item favorite keys into set-based keys, and remove
@@ -33,8 +50,7 @@ class PersistenceMigrationRunner {
     }
     for (final entry in wallsByScope.entries) {
       final setKey = PersistenceKeys.favoritesWallSet(entry.key);
-      final existing = store.get(setKey);
-      final existingSet = existing is List ? Set<String>.from(existing.cast<String>()) : <String>{};
+      final existingSet = _stringSet(store.get(setKey));
       existingSet.addAll(entry.value);
       await store.set(setKey, existingSet.toList(growable: false));
     }
@@ -59,8 +75,7 @@ class PersistenceMigrationRunner {
     }
     for (final entry in setupsByScope.entries) {
       final setKey = PersistenceKeys.favoritesSetupSet(entry.key);
-      final existing = store.get(setKey);
-      final existingSet = existing is List ? Set<String>.from(existing.cast<String>()) : <String>{};
+      final existingSet = _stringSet(store.get(setKey));
       existingSet.addAll(entry.value);
       await store.set(setKey, existingSet.toList(growable: false));
     }

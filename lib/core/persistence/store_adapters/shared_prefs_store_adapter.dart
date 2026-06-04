@@ -25,11 +25,17 @@ class SharedPrefsStoreAdapter implements LocalStore {
 
   @override
   Object? get(String key) {
-    final raw = _requirePrefs.getString(key);
+    final raw = _requirePrefs.get(key);
     if (raw == null) {
       return null;
     }
-    return StoreValueCodec.decode(raw);
+    if (raw is String) {
+      return StoreValueCodec.decode(raw);
+    }
+    if (raw is bool || raw is int || raw is double || raw is List<String>) {
+      return raw;
+    }
+    return raw.toString();
   }
 
   @override

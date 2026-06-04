@@ -111,6 +111,16 @@ int _colorValueFromPrefs(dynamic rawValue, {required int fallback}) {
   return fallback;
 }
 
+int _intValueFromPrefs(dynamic rawValue, {required int fallback}) {
+  if (rawValue == null) return fallback;
+  if (rawValue is int) return rawValue;
+  if (rawValue is num) return rawValue.round();
+
+  final raw = rawValue.toString().trim();
+  if (raw.isEmpty) return fallback;
+  return int.tryParse(raw) ?? fallback;
+}
+
 Future<void> main() async {
   await runZonedGuarded<Future<void>>(
     () async {
@@ -192,8 +202,8 @@ Future<void> main() async {
       final darkAccentValue = _colorValueFromPrefs(localPrefs.get('darkAccent'), fallback: 0xFFE57697);
       darkAccent = Color(darkAccentValue);
       optimisedWallpapers = localPrefs.get('optimisedWallpapers') == true;
-      categories = localPrefs.get('WHcategories') as int? ?? 100;
-      purity = localPrefs.get('WHpurity') as int? ?? 100;
+      categories = _intValueFromPrefs(localPrefs.get('WHcategories'), fallback: 100);
+      purity = _intValueFromPrefs(localPrefs.get('WHpurity'), fallback: 100);
 
       await Future.wait(<Future<void>>[
         localPrefs.put("systemOverlayColor", systemOverlayColorValue),
