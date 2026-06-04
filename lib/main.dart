@@ -164,8 +164,10 @@ Future<void> main() async {
 
       final SentryConfig sentryConfig = _resolveSentryConfig();
 
-      // Only truly-blocking tasks remain on the critical path.
-      await Future.wait(<Future<Object?>>[PersistenceBootstrap.initialize(), _initializeMonitoring(sentryConfig)]);
+      // Persistence is the only native-plugin bootstrap that must finish before
+      // the app reads prefs. Monitoring should never hold the first frame.
+      await PersistenceBootstrap.initialize();
+      unawaited(_initializeMonitoring(sentryConfig));
 
       unawaited(
         PrismCatalogDataSource.instance.warmHomeBootstrapCache().catchError((Object e, StackTrace s) {
