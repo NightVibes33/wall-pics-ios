@@ -1,3 +1,5 @@
+import 'package:Prism/core/interaction/prism_haptics.dart';
+import 'package:Prism/core/interaction/prism_tap_scale.dart';
 import 'package:Prism/features/navigation/views/widgets/prism_bottom_nav.dart';
 import 'package:Prism/theme/jam_icons_icons.dart';
 import 'package:flutter/material.dart';
@@ -107,6 +109,7 @@ class _BottomBarScrollVisibilityState extends State<_BottomBarScrollVisibility> 
       return;
     }
 
+    PrismHaptics.selection();
     await position.animateTo(
       position.minScrollExtent,
       duration: const Duration(milliseconds: 180),
@@ -133,21 +136,24 @@ class _BottomBarScrollVisibilityState extends State<_BottomBarScrollVisibility> 
                   alignment: Alignment.bottomRight,
                   child: Padding(
                     padding: const EdgeInsets.only(right: 16, bottom: 82),
-                    child: SizedBox(
-                      width: 48,
-                      height: 48,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.74),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
-                        ),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            customBorder: const CircleBorder(),
-                            onTap: _scrollToTop,
-                            child: const Icon(JamIcons.arrow_up, color: Colors.white, size: 24),
+                    child: PrismTapScale(
+                      pressedScale: 0.9,
+                      child: SizedBox(
+                        width: 48,
+                        height: 48,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.74),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              customBorder: const CircleBorder(),
+                              onTap: _scrollToTop,
+                              child: const Icon(JamIcons.arrow_up, color: Colors.white, size: 24),
+                            ),
                           ),
                         ),
                       ),

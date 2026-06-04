@@ -3,6 +3,9 @@ import 'dart:ui';
 
 import 'package:Prism/analytics/analytics_service.dart';
 import 'package:Prism/core/analytics/events/events.dart';
+import 'package:Prism/core/interaction/prism_haptics.dart';
+import 'package:Prism/core/interaction/prism_motion.dart';
+import 'package:Prism/core/interaction/prism_tap_scale.dart';
 import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/logger/logger.dart';
 import 'package:Prism/theme/jam_icons_icons.dart';
@@ -141,33 +144,45 @@ class _TabButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final foreground = Colors.white.withValues(alpha: isActive ? 1 : 0.9);
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
     return Tooltip(
       message: tooltip,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(999),
-          onTap: onPressed,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            curve: Curves.easeOutCubic,
-            height: double.infinity,
-            decoration: BoxDecoration(
-              color: isActive ? Colors.white.withValues(alpha: 0.18) : Colors.transparent,
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                Icon(icon, color: foreground, size: 29),
-                const SizedBox(height: 3),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: foreground, fontFamily: 'Satoshi', fontSize: 13, fontWeight: FontWeight.w900),
-                ),
-              ],
+      child: PrismTapScale(
+        pressedScale: 0.94,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(999),
+            onTap: () {
+              PrismHaptics.selection();
+              onPressed();
+            },
+            child: AnimatedContainer(
+              duration: reduceMotion ? PrismMotion.instant : PrismMotion.quick,
+              curve: PrismMotion.emphasized,
+              height: double.infinity,
+              decoration: BoxDecoration(
+                color: isActive ? Colors.white.withValues(alpha: 0.18) : Colors.transparent,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  AnimatedScale(
+                    scale: isActive ? 1.08 : 1,
+                    duration: reduceMotion ? PrismMotion.instant : PrismMotion.quick,
+                    curve: PrismMotion.emphasized,
+                    child: Icon(icon, color: foreground, size: 29),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: foreground, fontFamily: 'Satoshi', fontSize: 13, fontWeight: FontWeight.w900),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

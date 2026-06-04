@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:Prism/core/interaction/prism_haptics.dart';
+import 'package:Prism/core/interaction/prism_tap_scale.dart';
 import 'package:Prism/core/purchases/paywall_orchestrator.dart';
 import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/wallpaper/wallpaper_source.dart';
@@ -510,7 +512,10 @@ class _SearchHeader extends StatelessWidget {
                       ? IconButton(
                           tooltip: 'Clear search',
                           icon: const Icon(Icons.close, color: Colors.white70),
-                          onPressed: onClear,
+                          onPressed: () {
+                            PrismHaptics.selection();
+                            onClear();
+                          },
                         )
                       : null,
                 ),
@@ -518,33 +523,39 @@ class _SearchHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 14),
-          SizedBox(
-            width: 102,
-            height: 64,
-            child: Material(
-              color: Colors.transparent,
-              borderRadius: BorderRadius.circular(20),
-              child: InkWell(
+          PrismTapScale(
+            pressedScale: 0.95,
+            child: SizedBox(
+              width: 102,
+              height: 64,
+              child: Material(
+                color: Colors.transparent,
                 borderRadius: BorderRadius.circular(20),
-                onTap: onProTap,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: <Color>[Color(0xFF4BB7FF), Color(0xFF0076FF)]),
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: <BoxShadow>[
-                      BoxShadow(color: const Color(0xFF0076FF).withValues(alpha: 0.26), blurRadius: 18, offset: const Offset(0, 8)),
-                    ],
-                  ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: <Widget>[
-                      Icon(JamIcons.crown_f, color: Colors.white, size: 28),
-                      SizedBox(width: 9),
-                      Text(
-                        'Pro',
-                        style: TextStyle(color: Colors.white, fontFamily: 'Satoshi', fontSize: 27, fontWeight: FontWeight.w800),
-                      ),
-                    ],
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(20),
+                  onTap: () {
+                    PrismHaptics.mediumImpact();
+                    onProTap();
+                  },
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: <Color>[Color(0xFF4BB7FF), Color(0xFF0076FF)]),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: <BoxShadow>[
+                        BoxShadow(color: const Color(0xFF0076FF).withValues(alpha: 0.26), blurRadius: 18, offset: const Offset(0, 8)),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: <Widget>[
+                        Icon(JamIcons.crown_f, color: Colors.white, size: 28),
+                        SizedBox(width: 9),
+                        Text(
+                          'Pro',
+                          style: TextStyle(color: Colors.white, fontFamily: 'Satoshi', fontSize: 27, fontWeight: FontWeight.w800),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -641,34 +652,40 @@ class _ShortcutTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 78,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(13),
-          onTap: onTap,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: const Color(0xFF202023),
-              borderRadius: BorderRadius.circular(13),
-              border: Border.all(color: shortcut.accent, width: 1.4),
-              boxShadow: <BoxShadow>[
-                BoxShadow(color: shortcut.accent.withValues(alpha: 0.16), blurRadius: 12, offset: const Offset(0, 6)),
-              ],
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                Icon(shortcut.icon, color: Colors.white, size: 28),
-                const SizedBox(height: 7),
-                Text(
-                  shortcut.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white, fontFamily: 'Satoshi', fontSize: 13, fontWeight: FontWeight.w700),
-                ),
-              ],
+    return PrismTapScale(
+      pressedScale: 0.94,
+      child: SizedBox(
+        width: 78,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(13),
+            onTap: () {
+              PrismHaptics.selection();
+              onTap();
+            },
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: const Color(0xFF202023),
+                borderRadius: BorderRadius.circular(13),
+                border: Border.all(color: shortcut.accent, width: 1.4),
+                boxShadow: <BoxShadow>[
+                  BoxShadow(color: shortcut.accent.withValues(alpha: 0.16), blurRadius: 12, offset: const Offset(0, 6)),
+                ],
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  Icon(shortcut.icon, color: Colors.white, size: 28),
+                  const SizedBox(height: 7),
+                  Text(
+                    shortcut.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white, fontFamily: 'Satoshi', fontSize: 13, fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -740,31 +757,37 @@ class _TopTabs extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         itemBuilder: (context, index) {
           final selected = activeIndex == index;
-          return InkWell(
-            borderRadius: BorderRadius.circular(4),
-            onTap: () => onSelected(index),
-            child: SizedBox(
-              height: 54,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    tabs[index].label,
-                    style: TextStyle(
-                      color: selected ? Colors.white : Colors.white.withValues(alpha: 0.48),
-                      fontFamily: 'Satoshi',
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
+          return PrismTapScale(
+            pressedScale: 0.96,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(4),
+              onTap: () {
+                PrismHaptics.selection();
+                onSelected(index);
+              },
+              child: SizedBox(
+                height: 54,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      tabs[index].label,
+                      style: TextStyle(
+                        color: selected ? Colors.white : Colors.white.withValues(alpha: 0.48),
+                        fontFamily: 'Satoshi',
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
-                  ),
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 140),
-                    width: selected ? 72 : 0,
-                    height: 3,
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(999)),
-                  ),
-                ],
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 140),
+                      width: selected ? 72 : 0,
+                      height: 3,
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(999)),
+                    ),
+                  ],
+                ),
               ),
             ),
           );
@@ -896,17 +919,21 @@ class _HomeWallpaperCard extends StatelessWidget {
           Positioned(left: 8, top: 8, child: _MediaBadge(kind: section.kind)),
       ],
     );
-    Widget materialCard = Material(
-      color: Colors.transparent,
-      shape: shape,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        customBorder: shape,
-        onTap: () {
-          WallpaperDetailGalleryStore.setFromFeedItems(items: galleryItems, index: index);
-          context.router.push(WallpaperDetailRoute(entity: WallpaperDetailEntityX.fromFeedItem(item)));
-        },
-        child: content,
+    Widget materialCard = PrismTapScale(
+      pressedScale: isProfile ? 0.94 : 0.97,
+      child: Material(
+        color: Colors.transparent,
+        shape: shape,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          customBorder: shape,
+          onTap: () {
+            PrismHaptics.lightImpact();
+            WallpaperDetailGalleryStore.setFromFeedItems(items: galleryItems, index: index);
+            context.router.push(WallpaperDetailRoute(entity: WallpaperDetailEntityX.fromFeedItem(item)));
+          },
+          child: content,
+        ),
       ),
     );
     if (!isProfile) {
@@ -995,22 +1022,28 @@ class _MoreButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 34,
-      child: OutlinedButton(
-        onPressed: onPressed,
-        style: OutlinedButton.styleFrom(
-          foregroundColor: Colors.white,
-          side: const BorderSide(color: Colors.white, width: 1.6),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-          padding: const EdgeInsets.only(left: 14, right: 10),
-        ),
-        child: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Text('More', style: TextStyle(fontFamily: 'Satoshi', fontSize: 17, fontWeight: FontWeight.w800)),
-            Icon(Icons.chevron_right, size: 21),
-          ],
+    return PrismTapScale(
+      pressedScale: 0.96,
+      child: SizedBox(
+        height: 34,
+        child: OutlinedButton(
+          onPressed: () {
+            PrismHaptics.selection();
+            onPressed();
+          },
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.white,
+            side: const BorderSide(color: Colors.white, width: 1.6),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+            padding: const EdgeInsets.only(left: 14, right: 10),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Text('More', style: TextStyle(fontFamily: 'Satoshi', fontSize: 17, fontWeight: FontWeight.w800)),
+              Icon(Icons.chevron_right, size: 21),
+            ],
+          ),
         ),
       ),
     );
@@ -1424,33 +1457,39 @@ class _MatchingCatalogTabs extends StatelessWidget {
         separatorBuilder: (_, _) => const SizedBox(width: 26),
         itemBuilder: (context, index) {
           final active = index == activeIndex;
-          return InkWell(
-            borderRadius: BorderRadius.circular(4),
-            onTap: () => onSelected(index),
-            child: SizedBox(
-              height: 52,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    tabs[index].label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: active ? Colors.white : Colors.white.withValues(alpha: 0.5),
-                      fontFamily: 'Satoshi',
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
+          return PrismTapScale(
+            pressedScale: 0.96,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(4),
+              onTap: () {
+                PrismHaptics.selection();
+                onSelected(index);
+              },
+              child: SizedBox(
+                height: 52,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      tabs[index].label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: active ? Colors.white : Colors.white.withValues(alpha: 0.5),
+                        fontFamily: 'Satoshi',
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
-                  ),
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 140),
-                    width: active ? 70 : 0,
-                    height: 3,
-                    decoration: BoxDecoration(color: const Color(0xFF1AA0FF), borderRadius: BorderRadius.circular(999)),
-                  ),
-                ],
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 140),
+                      width: active ? 70 : 0,
+                      height: 3,
+                      decoration: BoxDecoration(color: const Color(0xFF1AA0FF), borderRadius: BorderRadius.circular(999)),
+                    ),
+                  ],
+                ),
               ),
             ),
           );
@@ -1527,10 +1566,14 @@ class _MatchingCatalogSide extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: () {
+          PrismHaptics.lightImpact();
           WallpaperDetailGalleryStore.setFromFeedItems(items: galleryItems, index: galleryIndex >= 0 ? galleryIndex : 0);
           context.router.push(WallpaperDetailRoute(entity: WallpaperDetailEntityX.fromFeedItem(item)));
         },
-        child: _MatchingCatalogImage(url: imageUrl, cacheWidth: cacheWidth, cacheHeight: cacheHeight),
+        child: PrismTapScale(
+          pressedScale: 0.97,
+          child: _MatchingCatalogImage(url: imageUrl, cacheWidth: cacheWidth, cacheHeight: cacheHeight),
+        ),
       ),
     );
   }
@@ -1586,17 +1629,23 @@ class _MatchingSortBar extends StatelessWidget {
                 padding: const EdgeInsets.all(5),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(19),
-                  onTap: () => onSelected(index),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 140),
-                    decoration: BoxDecoration(
-                      color: active ? const Color(0xFF696970) : Colors.transparent,
-                      borderRadius: BorderRadius.circular(19),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      labels[index],
-                      style: const TextStyle(color: Colors.white, fontFamily: 'Satoshi', fontSize: 18, fontWeight: FontWeight.w900),
+                  onTap: () {
+                    PrismHaptics.selection();
+                    onSelected(index);
+                  },
+                  child: PrismTapScale(
+                    pressedScale: 0.96,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 140),
+                      decoration: BoxDecoration(
+                        color: active ? const Color(0xFF696970) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(19),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        labels[index],
+                        style: const TextStyle(color: Colors.white, fontFamily: 'Satoshi', fontSize: 18, fontWeight: FontWeight.w900),
+                      ),
                     ),
                   ),
                 ),
