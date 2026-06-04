@@ -24,12 +24,24 @@ import UIKit
   }
 
   private func registerGeneratedPluginsIfNeeded(with registry: FlutterPluginRegistry) {
+    if isSideloadBuild {
+      appendNativeLaunchLog("sideload build detected; skipping generated plugin registration")
+      return
+    }
     if registry.hasPlugin("AppLinksIosPlugin") {
       appendNativeLaunchLog("generated plugins already registered")
       return
     }
     GeneratedPluginRegistrant.register(with: registry)
     appendNativeLaunchLog("generated plugins registered on implicit engine")
+  }
+
+  private var isSideloadBuild: Bool {
+    let rawVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
+    guard let buildNumber = Int(rawVersion.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+      return false
+    }
+    return buildNumber >= 3000
   }
 
   private func registerPrismChannels(binaryMessenger: FlutterBinaryMessenger) {
