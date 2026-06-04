@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:Prism/core/router/app_router.dart';
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/foundation.dart';
@@ -8,6 +10,10 @@ class LocalNotification {
   FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
   LocalNotification() {
     flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+    unawaited(_initializePlugin().catchError((_) {}));
+  }
+
+  Future<void> _initializePlugin() async {
     const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings(
       '@drawable/ic_notification',
     );
@@ -16,7 +22,7 @@ class LocalNotification {
       android: initializationSettingsAndroid,
       iOS: initializationSettingsIOS,
     );
-    flutterLocalNotificationsPlugin.initialize(settings: initializationSettings);
+    await flutterLocalNotificationsPlugin.initialize(settings: initializationSettings);
   }
 
   Future<void> fetchNotificationData(BuildContext context) async {

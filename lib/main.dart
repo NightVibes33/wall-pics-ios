@@ -122,9 +122,12 @@ int _intValueFromPrefs(dynamic rawValue, {required int fallback}) {
 }
 
 Future<void> main() async {
+  var realAppStarted = false;
+
   await runZonedGuarded<Future<void>>(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
+      runApp(const _PrismBootFrame());
       unawaited(
         app_state.initializeRuntimeAppVersion().catchError((Object e, StackTrace s) {
           logger.w(
@@ -250,14 +253,91 @@ Future<void> main() async {
         ),
         // ),  // SentryWidget closing
       );
+      realAppStarted = true;
     },
     (obj, stacktrace) {
       logger.e('Uncaught zone error', tag: 'ZoneError', error: obj, stackTrace: stacktrace);
       try {
         unawaited(analytics.track(const AppCrashFatalEvent()));
       } catch (_) {}
+      if (!realAppStarted) {
+        runApp(_PrismStartupFailureFrame(error: obj));
+      }
     },
   );
+}
+
+class _PrismBootFrame extends StatelessWidget {
+  const _PrismBootFrame();
+
+  @override
+  Widget build(BuildContext context) {
+    return const MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Text(
+                '▲ prism',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 34,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0,
+                ),
+              ),
+              SizedBox(height: 18),
+              SizedBox(
+                width: 30,
+                height: 30,
+                child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PrismStartupFailureFrame extends StatelessWidget {
+  const _PrismStartupFailureFrame({required this.error});
+
+  final Object error;
+
+  @override
+  Widget build(BuildContext context) {
+    final message = error.toString();
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        backgroundColor: Colors.black,
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                const Text(
+                  'prism startup failed',
+                  style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  message.length > 700 ? '${message.substring(0, 700)}...' : message,
+                  style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.35),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 Future<void> _deferredStartup() async {
