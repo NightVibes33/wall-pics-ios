@@ -56,7 +56,7 @@ jobs:
       - name: Build iOS app without codesigning
         run: |
           DART_DEFINES="$(./tool/dart_defines_from_env.sh)"
-          DART_DEFINES="$DART_DEFINES --dart-define=SIDELOAD_BUILD=true"
+          DART_DEFINES="$DART_DEFINES --dart-define=SIDELOAD_BUILD=true --dart-define=LOCAL_PERSISTENCE_BACKEND=memory"
           SIDELOAD_BUILD_NUMBER="$((3000 + GITHUB_RUN_NUMBER))"
           echo "Building SideStore-safe app build $SIDELOAD_BUILD_NUMBER"
           flutter build ios --release --no-codesign --no-pub --build-number="$SIDELOAD_BUILD_NUMBER" $DART_DEFINES

@@ -8,9 +8,13 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class LocalNotification {
   FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-  LocalNotification() {
+  Future<void>? _initializationFuture;
+
+  LocalNotification({bool initializeImmediately = true}) {
     flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-    unawaited(_initializePlugin().catchError((_) {}));
+    if (initializeImmediately) {
+      unawaited(_ensureInitialized().catchError((_) {}));
+    }
   }
 
   Future<void> _initializePlugin() async {
@@ -25,7 +29,13 @@ class LocalNotification {
     await flutterLocalNotificationsPlugin.initialize(settings: initializationSettings);
   }
 
+  Future<void> _ensureInitialized() {
+    _initializationFuture ??= _initializePlugin();
+    return _initializationFuture!;
+  }
+
   Future<void> fetchNotificationData(BuildContext context) async {
+    await _ensureInitialized();
     final NotificationAppLaunchDetails? notificationAppLaunchDetails = await flutterLocalNotificationsPlugin
         .getNotificationAppLaunchDetails();
     if (!context.mounted) {
@@ -40,6 +50,7 @@ class LocalNotification {
     if (defaultTargetPlatform != TargetPlatform.android) {
       return;
     }
+    await _ensureInitialized();
 
     final AndroidFlutterLocalNotificationsPlugin? androidImplementation = flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
@@ -65,6 +76,7 @@ class LocalNotification {
   }
 
   Future<void> createDownloadNotification() async {
+    await _ensureInitialized();
     const AndroidNotificationDetails androidPlatformChannelSpecifics = AndroidNotificationDetails(
       'downloads',
       'Downloads',
@@ -88,6 +100,7 @@ class LocalNotification {
   }
 
   Future<void> cancelDownloadNotification() async {
+    await _ensureInitialized();
     await flutterLocalNotificationsPlugin.cancel(id: 0);
     const AndroidNotificationDetails androidPlatformChannelSpecifics = AndroidNotificationDetails(
       'downloads',

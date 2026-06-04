@@ -7,6 +7,7 @@ import 'package:Prism/core/persistence/data_sources/settings_local_data_source.d
 import 'package:Prism/core/utils/result.dart';
 import 'package:Prism/data/categories/categories.dart' as category_data;
 import 'package:Prism/data/notifications/notifications.dart';
+import 'package:Prism/env/env.dart';
 import 'package:Prism/features/in_app_notifications/biz/bloc/in_app_notifications_bloc.j.dart';
 import 'package:Prism/features/prism_catalog/data/prism_catalog_data_source.dart';
 import 'package:Prism/features/startup/domain/entities/startup_config_entity.dart';
@@ -91,6 +92,11 @@ class StartupRepositoryImpl implements StartupRepository {
       _currentConfig = entity;
       if (!_configController.isClosed) {
         _configController.add(entity);
+      }
+
+      if (Env.sideloadBuild) {
+        logger.i('Skipping optional startup repository warmups for sideload build.', tag: 'StartupRepository');
+        return Result.success(entity);
       }
 
       unawaited(syncInAppNotificationsFromRemote());

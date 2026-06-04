@@ -9,7 +9,7 @@ import UIKit
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    appendNativeLaunchLog("didFinishLaunching start")
+    appendNativeLaunchLog("didFinishLaunching start bundleVersion=\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") ?? "unknown")")
     let launched = super.application(application, didFinishLaunchingWithOptions: launchOptions)
     appendNativeLaunchLog("didFinishLaunching complete launched=\(launched)")
     return launched
@@ -17,6 +17,7 @@ import UIKit
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     appendNativeLaunchLog("implicit Flutter engine initialized")
+    appendNativeLaunchLog("generated plugins registration starting")
     registerGeneratedPluginsIfNeeded(with: engineBridge.pluginRegistry)
     let messenger = engineBridge.applicationRegistrar.messenger()
     registerPrismChannels(binaryMessenger: messenger)

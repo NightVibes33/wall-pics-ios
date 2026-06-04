@@ -130,18 +130,22 @@ Future<void> main() async {
       logger.i('Flutter binding initialized.', tag: 'Startup');
       runApp(const _PrismBootFrame());
       logger.i('Boot frame rendered.', tag: 'Startup');
-      unawaited(
-        app_state.initializeRuntimeAppVersion().catchError((Object e, StackTrace s) {
-          logger.w(
-            'Unable to read runtime app version; falling back to static constants.',
-            tag: 'AppVersion',
-            error: e,
-            stackTrace: s,
-          );
-        }),
-      );
+      if (Env.sideloadBuild) {
+        logger.i('Sideload launch isolation enabled; skipping package-info startup read.', tag: 'Startup');
+      } else {
+        unawaited(
+          app_state.initializeRuntimeAppVersion().catchError((Object e, StackTrace s) {
+            logger.w(
+              'Unable to read runtime app version; falling back to static constants.',
+              tag: 'AppVersion',
+              error: e,
+              stackTrace: s,
+            );
+          }),
+        );
+      }
       Bloc.observer = const BlocDebugObserver();
-      localNotification = LocalNotification();
+      localNotification = LocalNotification(initializeImmediately: !Env.sideloadBuild);
 
       PlatformDispatcher.instance.onError = (Object error, StackTrace stackTrace) {
         logger.e('Uncaught platform error', tag: 'PlatformError', error: error, stackTrace: stackTrace);
@@ -176,21 +180,11 @@ Future<void> main() async {
       logger.i('Persistence bootstrap complete.', tag: 'Startup');
       unawaited(_initializeMonitoring(sentryConfig));
 
-      unawaited(
-        PrismCatalogDataSource.instance.warmHomeBootstrapCache().catchError((Object e, StackTrace s) {
-          logger.w('Unable to warm Prism catalog bootstrap.', tag: 'PrismCatalog', error: e, stackTrace: s);
-        }),
-      );
-      unawaited(
-        PurchasesService.instance.configureEarly().catchError((Object e, StackTrace s) {
-          logger.w('Unable to initialize Apple StoreKit listener.', tag: 'Purchases', error: e, stackTrace: s);
-        }),
-      );
-
-      // Defer analytics wiring to after first frame.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        unawaited(_deferredStartup());
-      });
+      if (!Env.sideloadBuild) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          unawaited(_deferredStartup());
+        });
+      }
 
       await MonitoringRuntime.reporter.addBreadcrumb(
         message: 'Startup stage reached',
@@ -260,6 +254,11 @@ Future<void> main() async {
       );
       logger.i('Root app rendered.', tag: 'Startup');
       realAppStarted = true;
+      if (Env.sideloadBuild) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          unawaited(_deferredStartup());
+        });
+      }
     },
     (obj, stacktrace) {
       logger.e('Uncaught zone error', tag: 'ZoneError', error: obj, stackTrace: stacktrace);
@@ -348,6 +347,22 @@ class _PrismStartupFailureFrame extends StatelessWidget {
 
 Future<void> _deferredStartup() async {
   await _configureAnalyticsRuntime();
+
+  if (Env.sideloadBuild) {
+    logger.i('Skipping optional native startup warmups for sideload build.', tag: 'Startup');
+    return;
+  }
+
+  unawaited(
+    PrismCatalogDataSource.instance.warmHomeBootstrapCache().catchError((Object e, StackTrace s) {
+      logger.w('Unable to warm Prism catalog bootstrap.', tag: 'PrismCatalog', error: e, stackTrace: s);
+    }),
+  );
+  unawaited(
+    PurchasesService.instance.configureEarly().catchError((Object e, StackTrace s) {
+      logger.w('Unable to initialize Apple StoreKit listener.', tag: 'Purchases', error: e, stackTrace: s);
+    }),
+  );
 }
 
 SentryConfig _resolveSentryConfig() {
@@ -361,6 +376,12 @@ SentryConfig _resolveSentryConfig() {
 }
 
 Future<void> _initializeMonitoring(SentryConfig config) async {
+  if (Env.sideloadBuild) {
+    MonitoringRuntime.reset();
+    logger.i('Skipping Sentry initialization for sideload build.', tag: 'Startup');
+    return;
+  }
+
   if (!config.enabled) {
     MonitoringRuntime.reset();
     return;
@@ -450,6 +471,12 @@ Future<void> _initializeMonitoring(SentryConfig config) async {
 // }
 
 Future<void> _configureAnalyticsRuntime() async {
+  if (Env.sideloadBuild) {
+    AnalyticsRuntime.reset();
+    logger.i('Using no-op analytics provider for sideload build.', tag: 'Analytics');
+    return;
+  }
+
   final bool mixpanelEnabled = _isMixpanelEnabled();
   logger.i(
     'Analytics startup configuration resolved.',
@@ -924,15 +951,23 @@ class _MyAppState extends State<_MyApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _appRouter = AppRouter(/* navigatorKey: _sentryFeedbackNavigatorKey */);
     _analyticsIdentitySync = AnalyticsIdentitySync(analytics: AnalyticsRuntime.instance);
-    unawaited(_configureLocalNotificationChannels());
-    unawaited(getLoginStatus().whenComplete(completeAuthBootstrap));
-    unawaited(localNotification.fetchNotificationData(context));
+    if (Env.sideloadBuild) {
+      logger.i('Skipping optional auth and notification startup for sideload build.', tag: 'Startup');
+      completeAuthBootstrap();
+    } else {
+      unawaited(_configureLocalNotificationChannels());
+      unawaited(getLoginStatus().whenComplete(completeAuthBootstrap));
+      unawaited(localNotification.fetchNotificationData(context));
+    }
     unawaited(_listenForPushMessages());
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      if (Env.sideloadBuild) {
+        return;
+      }
       final now = DateTime.now();
       if (_lastGetNotifsResume == null || now.difference(_lastGetNotifsResume!) >= _getNotifsResumeThrottle) {
         _lastGetNotifsResume = now;
