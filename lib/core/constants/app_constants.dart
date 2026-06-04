@@ -6,7 +6,7 @@ const String defaultProfilePhotoUrl =
     'https://raw.githubusercontent.com/Hash-Studios/Prism/master/assets/icon/ios.png';
 
 const String currentAppVersion = '3.0.8';
-const String currentAppVersionCode = '332';
+const String currentAppVersionCode = '333';
 const String defaultObsoleteAppVersion = '2.6.0';
 
 const String defaultBannerText = 'Prism on GitHub';

@@ -54,7 +54,9 @@ jobs:
         run: |
           DART_DEFINES="$(./tool/dart_defines_from_env.sh)"
           DART_DEFINES="$DART_DEFINES --dart-define=SIDELOAD_BUILD=true"
-          flutter build ios --release --no-codesign --no-pub $DART_DEFINES
+          SIDELOAD_BUILD_NUMBER="$((3000 + GITHUB_RUN_NUMBER))"
+          echo "Building SideStore-safe unsigned app build $SIDELOAD_BUILD_NUMBER"
+          flutter build ios --release --no-codesign --no-pub --build-number="$SIDELOAD_BUILD_NUMBER" $DART_DEFINES
 
       - name: Package unsigned IPA
         run: |
@@ -62,6 +64,13 @@ jobs:
           if [ ! -d "$APP_PATH" ]; then
             echo "No unsigned Runner.app found"
             find build/ios -maxdepth 4 -print || true
+            exit 1
+          fi
+
+          BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Info.plist")"
+          echo "Packaged app build number: $BUILD_NUMBER"
+          if [ "$BUILD_NUMBER" -le 332 ]; then
+            echo "SideStore build number did not increase: $BUILD_NUMBER"
             exit 1
           fi
 
@@ -86,11 +95,7 @@ jobs:
               codesign --force --sign - --timestamp=none "$framework"
             done < <(find "$APP_PATH/Frameworks" -maxdepth 1 -type d -name '*.framework' -print0)
           fi
-          if [ -f ios/Runner/Runner.entitlements ]; then
-            codesign --force --sign - --entitlements ios/Runner/Runner.entitlements --timestamp=none "$APP_PATH"
-          else
-            codesign --force --sign - --timestamp=none "$APP_PATH"
-          fi
+          codesign --force --sign - --timestamp=none "$APP_PATH"
 
           echo "Embedded framework count:"
           find "$APP_PATH/Frameworks" -maxdepth 1 -name '*.framework' -print 2>/dev/null | wc -l

@@ -57,12 +57,21 @@ jobs:
         run: |
           DART_DEFINES="$(./tool/dart_defines_from_env.sh)"
           DART_DEFINES="$DART_DEFINES --dart-define=SIDELOAD_BUILD=true"
-          flutter build ios --release --no-codesign --no-pub $DART_DEFINES
+          SIDELOAD_BUILD_NUMBER="$((3000 + GITHUB_RUN_NUMBER))"
+          echo "Building SideStore-safe app build $SIDELOAD_BUILD_NUMBER"
+          flutter build ios --release --no-codesign --no-pub --build-number="$SIDELOAD_BUILD_NUMBER" $DART_DEFINES
 
       - name: Verify Prism app bundle
         run: |
           APP_PATH="build/ios/iphoneos/Runner.app"
           test -d "$APP_PATH"
+          BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Info.plist")"
+          echo "Packaged app build number: $BUILD_NUMBER"
+          if [ "$BUILD_NUMBER" -le 332 ]; then
+            echo "SideStore build number did not increase: $BUILD_NUMBER"
+            exit 1
+          fi
+
           DISPLAY_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP_PATH/Info.plist")"
           BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
           if [ "$DISPLAY_NAME" != "Přism" ]; then
