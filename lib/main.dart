@@ -127,7 +127,9 @@ Future<void> main() async {
   await runZonedGuarded<Future<void>>(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
+      logger.i('Flutter binding initialized.', tag: 'Startup');
       runApp(const _PrismBootFrame());
+      logger.i('Boot frame rendered.', tag: 'Startup');
       unawaited(
         app_state.initializeRuntimeAppVersion().catchError((Object e, StackTrace s) {
           logger.w(
@@ -169,7 +171,9 @@ Future<void> main() async {
 
       // Persistence is the only native-plugin bootstrap that must finish before
       // the app reads prefs. Monitoring should never hold the first frame.
+      logger.i('Persistence bootstrap starting.', tag: 'Startup');
       await PersistenceBootstrap.initialize();
+      logger.i('Persistence bootstrap complete.', tag: 'Startup');
       unawaited(_initializeMonitoring(sentryConfig));
 
       unawaited(
@@ -195,7 +199,7 @@ Future<void> main() async {
       );
       DebugFlags.instance.loadFromStore();
       localPrefs = PrefsCompat.fromRuntime();
-      logger.d("Persistence initialized");
+      logger.d('Runtime prefs attached.', tag: 'Startup');
 
       // Read all prefs first, then batch writes in parallel.
       final systemOverlayColorValue = _colorValueFromPrefs(localPrefs.get("systemOverlayColor"), fallback: 0xFFE57697);
@@ -223,6 +227,7 @@ Future<void> main() async {
       ]);
 
       configureDependencies();
+      logger.i('Dependency injection configured.', tag: 'Startup');
       await Future.wait(<Future<void>>[
         SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge),
         SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]),
@@ -253,6 +258,7 @@ Future<void> main() async {
         ),
         // ),  // SentryWidget closing
       );
+      logger.i('Root app rendered.', tag: 'Startup');
       realAppStarted = true;
     },
     (obj, stacktrace) {

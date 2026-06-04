@@ -86,6 +86,17 @@ class _SplashWidgetState extends State<SplashWidget> {
       final routes = !isLoggedIn || (!isOnboarded && v2Enabled)
           ? <PageRouteInfo>[const OnboardingV2ShellRoute()]
           : <PageRouteInfo>[const DashboardRoute()];
+      final targetRoute = routes.first is OnboardingV2ShellRoute ? 'onboarding' : 'dashboard';
+      logger.i(
+        'Startup route resolved.',
+        tag: 'Startup',
+        fields: <String, Object?>{
+          'logged_in': isLoggedIn,
+          'onboarded': isOnboarded,
+          'onboarding_v2': v2Enabled,
+          'target': targetRoute,
+        },
+      );
       if (routes.first is OnboardingV2ShellRoute) {
         _debugOnboardingShownThisSession = true;
       }
