@@ -2,7 +2,7 @@ import Flutter
 import UIKit
 
 @main
-@objc class AppDelegate: FlutterAppDelegate {
+@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private var prismChannelsRegistered = false
 
   override func application(
@@ -10,11 +10,13 @@ import UIKit
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
     registerGeneratedPluginsIfNeeded(with: self)
-    if let controller = window?.rootViewController as? FlutterViewController {
-      controller.view.backgroundColor = .black
-      registerPrismChannels(binaryMessenger: controller.binaryMessenger)
-    }
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
+    registerGeneratedPluginsIfNeeded(with: engineBridge.pluginRegistry)
+    let messenger = engineBridge.applicationRegistrar.messenger()
+    registerPrismChannels(binaryMessenger: messenger)
   }
 
   private func registerGeneratedPluginsIfNeeded(with registry: FlutterPluginRegistry) {
