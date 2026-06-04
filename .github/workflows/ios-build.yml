@@ -36,7 +36,7 @@ jobs:
       - name: Write optional app env
         env:
           PRISM_ENV: ${{ secrets.PRISM_ENV }}
-          CATALOG_BASE_URL: ${{ secrets.PRISM_CATALOG_BASE_URL || vars.PRISM_CATALOG_BASE_URL }}
+          CATALOG_BASE_URL: ${{ secrets.PRISM_CATALOG_BASE_URL || secrets.WALL_PICS_CATALOG_BASE_URL || vars.PRISM_CATALOG_BASE_URL }}
           USER_STORE_API_BASE_URL: ${{ secrets.USER_STORE_API_BASE_URL || vars.USER_STORE_API_BASE_URL }}
           MEDIA_BASE_URL: ${{ secrets.PRISM_MEDIA_BASE_URL || vars.PRISM_MEDIA_BASE_URL }}
         run: sh tool/write_prism_env.sh
