@@ -10,7 +10,6 @@ import 'package:Prism/features/onboarding_v2/src/utils/onboarding_v2_config.dart
 import 'package:Prism/features/startup/biz/bloc/startup_bloc.j.dart';
 import 'package:Prism/features/startup/views/pages/old_version_screen.dart';
 import 'package:Prism/logger/logger.dart';
-import 'package:Prism/theme/config.dart' as config;
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -27,6 +26,7 @@ class _SplashWidgetState extends State<SplashWidget> {
   final SettingsLocalDataSource _settingsLocal = getIt<SettingsLocalDataSource>();
   bool _navigated = false;
   bool _notchMeasured = false;
+  Timer? _failOpenTimer;
 
   // Tracks whether the debug-forced onboarding redirect has already fired this
   // app session. Resets on process restart (static lives for the process lifetime).
@@ -44,6 +44,13 @@ class _SplashWidgetState extends State<SplashWidget> {
       if (s.status == LoadStatus.success && !s.isObsoleteVersion) {
         unawaited(_navigatePostBootstrap(context));
       }
+    });
+    _failOpenTimer = Timer(const Duration(milliseconds: 1600), () {
+      if (!mounted || _navigated) {
+        return;
+      }
+      logger.w('Startup bootstrap timed out; continuing to auth flow.', tag: 'Startup');
+      unawaited(_navigatePostBootstrap(context));
     });
   }
 
@@ -76,13 +83,25 @@ class _SplashWidgetState extends State<SplashWidget> {
         return;
       }
       final isLoggedIn = app_state.prismUser.loggedIn;
-      if (!isLoggedIn || (!isOnboarded && v2Enabled)) {
+      final routes = !isLoggedIn || (!isOnboarded && v2Enabled)
+          ? <PageRouteInfo>[const OnboardingV2ShellRoute()]
+          : <PageRouteInfo>[const DashboardRoute()];
+      if (routes.first is OnboardingV2ShellRoute) {
         _debugOnboardingShownThisSession = true;
-        context.router.replaceAll([const OnboardingV2ShellRoute()]);
-      } else {
-        context.router.replaceAll([const DashboardRoute()]);
+      }
+      try {
+        context.router.replaceAll(routes);
+      } catch (error, stackTrace) {
+        _navigated = false;
+        logger.e('Post-bootstrap navigation failed.', tag: 'Startup', error: error, stackTrace: stackTrace);
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _failOpenTimer?.cancel();
+    super.dispose();
   }
 
   @override
@@ -92,6 +111,13 @@ class _SplashWidgetState extends State<SplashWidget> {
     return BlocConsumer<StartupBloc, StartupState>(
       listener: (context, state) {
         if (state.status == LoadStatus.success && !state.isObsoleteVersion) {
+          unawaited(_navigatePostBootstrap(context));
+        } else if (state.status == LoadStatus.failure) {
+          logger.w(
+            'Startup bootstrap failed; continuing to auth flow.',
+            tag: 'Startup',
+            error: state.failure,
+          );
           unawaited(_navigatePostBootstrap(context));
         }
       },
@@ -110,12 +136,10 @@ class _SecondarySplash extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = MediaQuery.platformBrightnessOf(context);
-    final bool darkModeOn = brightness == Brightness.dark;
     return Container(
       width: MediaQuery.of(context).size.width,
       height: MediaQuery.of(context).size.height,
-      color: darkModeOn ? config.Colors().mainDarkColor(1) : config.Colors().mainColor(1),
+      color: Colors.black,
       child: Center(
         child: Container(
           width: MediaQuery.of(context).size.width * 0.29074074074,
