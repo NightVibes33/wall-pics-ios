@@ -242,7 +242,7 @@ final class PrismLivePhotoSaver: NSObject {
       if livePhoto != nil {
         isValid = true
       }
-      let degraded = (info?[PHLivePhotoInfoIsDegradedKey] as? NSNumber)?.boolValue ?? false
+      let degraded = (info[PHLivePhotoInfoIsDegradedKey] as? NSNumber)?.boolValue ?? false
       if !degraded {
         signalOnce()
       }
