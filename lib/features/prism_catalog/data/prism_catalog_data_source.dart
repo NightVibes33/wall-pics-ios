@@ -1739,8 +1739,13 @@ class _PrismItem {
       return path.endsWith('.zip');
     }
 
+    bool isUnsupportedDisplayResource(String value) {
+      final path = Uri.tryParse(value)?.path.toLowerCase() ?? value.toLowerCase();
+      return path.endsWith('.heic') || path.endsWith('.heif') || path.endsWith('.json');
+    }
+
     bool isImageUrl(String value) {
-      if (value.trim().isEmpty || isVideoUrl(value) || isArchiveUrl(value)) {
+      if (value.trim().isEmpty || isVideoUrl(value) || isArchiveUrl(value) || isUnsupportedDisplayResource(value)) {
         return false;
       }
       final path = Uri.tryParse(value)?.path.toLowerCase() ?? value.toLowerCase();
@@ -1749,6 +1754,15 @@ class _PrismItem {
           path.endsWith('.png') ||
           path.endsWith('.webp') ||
           path.endsWith('.gif');
+    }
+
+    bool isPotentialImageUrl(String value) {
+      if (value.trim().isEmpty || isVideoUrl(value) || isArchiveUrl(value) || isUnsupportedDisplayResource(value)) {
+        return false;
+      }
+      final uri = Uri.tryParse(value.trim());
+      return isImageUrl(value) ||
+          (uri != null && (uri.scheme == 'http' || uri.scheme == 'https') && uri.host.isNotEmpty);
     }
 
     bool isActualImageUrl(String value) => isImageUrl(value) && _isActualCatalogImageUrl(value);
@@ -1761,7 +1775,7 @@ class _PrismItem {
       final thumbnailConfig = _asMap(json['thumbnail_config']);
       for (final layer in _maps(thumbnailConfig['layers'])) {
         final candidate = url(layer['url']);
-        if (isActualImageUrl(candidate)) {
+        if (isPotentialImageUrl(candidate) && !_isCatalogPreviewAssetUrl(candidate)) {
           return candidate;
         }
       }
@@ -2515,17 +2529,22 @@ bool _isCatalogPreviewAssetUrl(String value) {
     uri?.path ?? raw,
     uri?.query ?? '',
   ].join('?')).toLowerCase();
-  return decoded.contains('/preview') ||
-      decoded.contains('/previews') ||
-      decoded.contains('/thumbnail') ||
-      decoded.contains('/thumb') ||
-      decoded.contains('first_frame') ||
-      decoded.contains('app_display') ||
-      decoded.contains('display_url') ||
-      decoded.contains('poster') ||
-      decoded.contains('watermark') ||
-      decoded.contains('brand') ||
-      decoded.contains('logo');
+  final previewProbe = decoded
+      .replaceAll('/thumbnail_config', '/spatial_config')
+      .replaceAll('thumbnail_config', 'spatial_config')
+      .replaceAll('/thumbnail-config', '/spatial-config')
+      .replaceAll('thumbnail-config', 'spatial-config');
+  return previewProbe.contains('/preview') ||
+      previewProbe.contains('/previews') ||
+      previewProbe.contains('/thumbnail') ||
+      previewProbe.contains('/thumb') ||
+      previewProbe.contains('first_frame') ||
+      previewProbe.contains('app_display') ||
+      previewProbe.contains('display_url') ||
+      previewProbe.contains('poster') ||
+      previewProbe.contains('watermark') ||
+      previewProbe.contains('brand') ||
+      previewProbe.contains('logo');
 }
 
 bool _isProxyableCatalogVideoUrl(String value) {

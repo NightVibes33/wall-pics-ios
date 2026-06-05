@@ -44,6 +44,7 @@ class _WallpaperFilterScreenState extends State<WallpaperFilterScreen> {
   final Map<String, Uint8List> _fullFilterCache = <String, Uint8List>{};
   final Map<String, Future<Uint8List>> _thumbnailFilterFutures = <String, Future<Uint8List>>{};
   final Map<String, Future<Uint8List>> _fullFilterFutures = <String, Future<Uint8List>>{};
+  bool _filterTrayOpen = false;
   Filter? _filter;
   imagelib.Image? image;
   imagelib.Image? finalImage;
@@ -337,57 +338,117 @@ class _WallpaperFilterScreenState extends State<WallpaperFilterScreen> {
         height: double.infinity,
         child: loading
             ? Center(child: Loader())
-            : Column(
-                children: [
-                  Expanded(
-                    flex: 6,
-                    child: SizedBox(
-                      width: double.infinity,
-                      height: double.infinity,
+            : Stack(
+                children: <Widget>[
+                  Positioned.fill(
+                    child: AnimatedPadding(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOutCubic,
+                      padding: EdgeInsets.only(bottom: _filterTrayReservedBottom(context)),
                       child: _buildFilteredImage(_filter, finalImage, finalFilename),
                     ),
                   ),
-                  const Divider(height: 1),
-                  Expanded(
-                    flex: 2,
-                    child: ColoredBox(
-                      color: Theme.of(context).primaryColor,
+                  Positioned(left: 0, right: 0, bottom: 0, child: _buildFilterTray(context)),
+                ],
+              ),
+      ),
+    );
+  }
+
+  double _filterTrayHeight() => _filterTrayOpen ? 164.0 : 46.0;
+
+  double _filterTrayReservedBottom(BuildContext context) {
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    return _filterTrayHeight() + bottomInset + 18.0;
+  }
+
+  Widget _buildFilterTray(BuildContext context) {
+    final trayHeight = _filterTrayHeight();
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: Material(
+            color: Theme.of(context).primaryColor.withValues(alpha: 0.94),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              height: trayHeight,
+              child: Column(
+                children: <Widget>[
+                  InkWell(
+                    onTap: () => setState(() => _filterTrayOpen = !_filterTrayOpen),
+                    child: SizedBox(
+                      height: 46,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: <Widget>[
+                          Icon(
+                            _filterTrayOpen ? Icons.keyboard_arrow_down_rounded : Icons.keyboard_arrow_up_rounded,
+                            color: Theme.of(context).colorScheme.secondary,
+                            size: 30,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            _filter?.name ?? 'Filter',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                                  color: Theme.of(context).colorScheme.secondary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (_filterTrayOpen)
+                    Expanded(
                       child: ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
                         scrollDirection: Axis.horizontal,
                         itemCount: selectedFilters.length,
                         itemBuilder: (BuildContext context, int index) {
+                          final filter = selectedFilters[index];
                           return GestureDetector(
-                            onTap: () => setState(() {
-                              _filter = selectedFilters[index];
-                            }),
-                            child: Container(
-                              padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                            onTap: () => setState(() => _filter = filter),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 6),
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: <Widget>[
                                   Stack(
                                     alignment: Alignment.center,
-                                    children: [
-                                      _buildFilterThumbnail(selectedFilters[index], image, filename),
-                                      if (_filter == selectedFilters[index])
-                                        Container(
+                                    children: <Widget>[
+                                      _buildFilterThumbnail(filter, image, filename),
+                                      if (_filter == filter)
+                                        DecoratedBox(
                                           decoration: BoxDecoration(
                                             borderRadius: BorderRadius.circular(500),
                                             color: Colors.white,
                                           ),
-                                          child: const Icon(JamIcons.check, color: Colors.black),
-                                        )
-                                      else
-                                        Container(),
+                                          child: const Padding(
+                                            padding: EdgeInsets.all(4),
+                                            child: Icon(JamIcons.check, color: Colors.black, size: 20),
+                                          ),
+                                        ),
                                     ],
                                   ),
-                                  const SizedBox(height: 10.0),
-                                  Text(
-                                    selectedFilters[index].name,
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.bodyMedium!.copyWith(color: Theme.of(context).colorScheme.secondary),
+                                  const SizedBox(height: 6),
+                                  SizedBox(
+                                    width: 82,
+                                    child: Text(
+                                      filter.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.center,
+                                      style: Theme.of(context).textTheme.bodySmall!.copyWith(
+                                            color: Theme.of(context).colorScheme.secondary,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                    ),
                                   ),
                                 ],
                               ),
@@ -396,9 +457,11 @@ class _WallpaperFilterScreenState extends State<WallpaperFilterScreen> {
                         },
                       ),
                     ),
-                  ),
                 ],
               ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -438,8 +501,8 @@ class _WallpaperFilterScreenState extends State<WallpaperFilterScreen> {
     return ClipRRect(
       borderRadius: BorderRadius.circular(10),
       child: Container(
-        width: 90.0,
-        height: MediaQuery.of(context).size.height * 0.15,
+        width: 82.0,
+        height: 92.0,
         color: Theme.of(context).primaryColor,
         child: child,
       ),

@@ -229,7 +229,13 @@ def _is_image_url(raw_url: str) -> bool:
         return False
     parsed = urllib.parse.urlparse(url)
     lowered = urllib.parse.unquote((parsed.path + "?" + parsed.query).lower())
-    if any(marker in lowered for marker in PREVIEW_MARKERS):
+    preview_probe = (
+        lowered.replace("/thumbnail_config", "/spatial_config")
+        .replace("thumbnail_config", "spatial_config")
+        .replace("/thumbnail-config", "/spatial-config")
+        .replace("thumbnail-config", "spatial-config")
+    )
+    if any(marker in preview_probe for marker in PREVIEW_MARKERS):
         return False
     if lowered.endswith((".mp4", ".mov", ".zip", ".heic", ".heif", ".json")):
         return False

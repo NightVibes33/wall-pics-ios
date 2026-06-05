@@ -650,7 +650,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
 
   double _panelMinHeight(BuildContext context) {
     final bottomInset = MediaQuery.paddingOf(context).bottom;
-    return math.max(128.0, bottomInset + 112.0);
+    return math.max(_minInteractiveTarget + 10.0, bottomInset + 24.0);
   }
 
   double _panelMaxHeight(BuildContext context) {
@@ -658,18 +658,20 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
   }
 
   double _panelBottomMargin(BuildContext context) {
-    return math.max(_panelSideInset, MediaQuery.paddingOf(context).bottom + 36.0);
+    return math.max(_panelSideInset, MediaQuery.paddingOf(context).bottom + 12.0);
   }
 
   Widget _buildInfoPanel(BuildContext context, WallpaperDetailLoaded state) {
     final entity = state.entity;
+    final collapsed = state.panelCollapsed;
     final w = MediaQuery.sizeOf(context).width;
     final h = MediaQuery.sizeOf(context).height;
     final size = Size(w - _panelSideInset * 2, h * 0.43);
+    final panelHeight = collapsed ? _panelMinHeight(context) : size.height;
 
     return Container(
       margin: EdgeInsets.fromLTRB(_panelSideInset, 0, _panelSideInset, _panelBottomMargin(context)),
-      height: size.height,
+      height: panelHeight,
       width: size.width,
       child: LiquidGlassLayer(
         settings: LiquidGlassSettings(
@@ -682,34 +684,36 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
         child: LiquidGlass(
           shape: const LiquidRoundedSuperellipse(borderRadius: 56),
           child: SizedBox(
-            height: size.height,
+            height: panelHeight,
             width: size.width,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildCollapseHandle(context, state),
-                _buildColorBar(context, state),
-                Expanded(
-                  flex: 8,
-                  child: SingleChildScrollView(
-                    child: NotificationListener<ScrollNotification>(
-                      onNotification: (notification) {
-                        if (notification is ScrollStartNotification) {
-                          context.read<WallpaperDetailBloc>().add(const OnPanelScrollStart());
-                        } else if (notification is ScrollEndNotification) {
-                          Future.delayed(const Duration(milliseconds: 200), () {
-                            if (!context.mounted) return;
-                            context.read<WallpaperDetailBloc>().add(const OnPanelScrollEnd());
-                          });
-                        }
-                        return false;
-                      },
-                      child: _buildMetadataRow(context, entity, state),
+                if (!collapsed) ...[
+                  _buildColorBar(context, state),
+                  Expanded(
+                    flex: 8,
+                    child: SingleChildScrollView(
+                      child: NotificationListener<ScrollNotification>(
+                        onNotification: (notification) {
+                          if (notification is ScrollStartNotification) {
+                            context.read<WallpaperDetailBloc>().add(const OnPanelScrollStart());
+                          } else if (notification is ScrollEndNotification) {
+                            Future.delayed(const Duration(milliseconds: 200), () {
+                              if (!context.mounted) return;
+                              context.read<WallpaperDetailBloc>().add(const OnPanelScrollEnd());
+                            });
+                          }
+                          return false;
+                        },
+                        child: _buildMetadataRow(context, entity, state),
+                      ),
                     ),
                   ),
-                ),
-                _buildActionButtons(context, state),
-                const SizedBox(height: _sheetHPad),
+                  _buildActionButtons(context, state),
+                  const SizedBox(height: _sheetHPad),
+                ],
               ],
             ),
           ),
