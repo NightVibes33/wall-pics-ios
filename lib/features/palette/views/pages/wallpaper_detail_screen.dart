@@ -478,10 +478,12 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
   }
 
   String _catalogLiveVideoUrl(WallpaperDetailEntity entity) {
+    final full = entity.fullUrl.trim();
     return _firstNonEmpty(<String>[
+      _prismMetadataValue(entity, 'catalogOriginalVideoUrl'),
+      _isVideoUrl(full) ? full : '',
       _prismMetadataValue(entity, 'catalogVideoUrl'),
       _prismMetadataValue(entity, 'catalogThumbnailVideoUrl'),
-      entity.fullUrl,
     ]);
   }
 

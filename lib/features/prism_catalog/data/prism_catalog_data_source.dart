@@ -1701,9 +1701,12 @@ class _PrismItem {
         .map((value) => url(value))
         .where((value) => value.isNotEmpty)
         .toList(growable: false);
-    final video = _firstString(<Object?>[
+    final originalVideo = _firstString(<Object?>[
       url(json['video_original ']),
       url(json['video_original']),
+    ]);
+    final video = _firstString(<Object?>[
+      originalVideo,
       url(json['video']),
       url(json['lq_video']),
     ]);
@@ -1736,11 +1739,9 @@ class _PrismItem {
 
     bool isActualImageUrl(String value) => isImageUrl(value) && _isActualCatalogImageUrl(value);
 
+    final thumbnailVideo = url(json['thumbnail_video']);
     final fastVideo = _fastVideoOrOriginal(video);
-    final fastThumbnailVideo = _fastVideoOrOriginal(url(json['thumbnail_video']));
-    final fastAppDownloadVideo = isVideoUrl(appDownloadUrl) ? _fastVideoOrOriginal(appDownloadUrl) : '';
-    final fastCatalogDownloadVideo = isVideoUrl(catalogDownload) ? _fastVideoOrOriginal(catalogDownload) : '';
-    final fastWallpaperVideo = isVideoUrl(wallpaper) ? _fastVideoOrOriginal(wallpaper) : '';
+    final fastThumbnailVideo = _fastVideoOrOriginal(thumbnailVideo);
 
     String firstParallaxLayerImage() {
       final thumbnailConfig = _asMap(json['thumbnail_config']);
@@ -1795,6 +1796,15 @@ class _PrismItem {
       isActualImageUrl(wallpaper) ? wallpaper : '',
       isActualImageUrl(image) ? image : '',
     ]);
+    final liveOriginalVideo = _firstString(<Object?>[
+      isVideoUrl(originalVideo) ? originalVideo : '',
+      isVideoUrl(appDownloadUrl) ? appDownloadUrl : '',
+      isVideoUrl(catalogDownload) ? catalogDownload : '',
+      isVideoUrl(video) ? video : '',
+      isVideoUrl(wallpaper) ? wallpaper : '',
+    ]);
+    final livePreviewVideo = isLiveContent ? liveOriginalVideo : fastVideo;
+    final liveThumbnailVideo = isLiveContent ? thumbnailVideo : fastThumbnailVideo;
     final parallaxLayerPreview = firstParallaxLayerImage();
     final fastFullImage = _fastTileOrOriginal(fullImage);
     final fastFullSizeImage = _fastTileOrOriginal(fullImage, width: 3840, quality: 98);
@@ -1847,7 +1857,7 @@ class _PrismItem {
     final preview = isMatchingContent
         ? _firstString(<Object?>[...pairedDisplayUrls, fullImage, thumb])
         : isLiveContent
-            ? _firstString(<Object?>[fastVideo, fastAppDownloadVideo, fastCatalogDownloadVideo, fastWallpaperVideo, fullImage, livePoster])
+            ? _firstString(<Object?>[livePreviewVideo, fullImage, livePoster])
             : isParallaxContent
                 ? _firstString(<Object?>[parallaxDisplayImage, thumb])
                 : _firstString(<Object?>[fullImage, thumb]);
@@ -1860,16 +1870,7 @@ class _PrismItem {
         : isMatchingContent
             ? _firstString(<Object?>[...pairedDownloadUrls, imageDownload, fullImage, ...pairedDisplayUrls])
             : isLiveContent
-                ? _firstString(<Object?>[
-                    fastVideo,
-                    fastAppDownloadVideo,
-                    fastCatalogDownloadVideo,
-                    fastWallpaperVideo,
-                    isVideoUrl(appDownloadUrl) ? appDownloadUrl : '',
-                    isVideoUrl(catalogDownload) ? catalogDownload : '',
-                    video,
-                    isVideoUrl(wallpaper) ? wallpaper : '',
-                  ])
+                ? liveOriginalVideo
                 : _firstString(<Object?>[imageDownload, fullImage]);
     final rawWidth = _int(json['width']);
     final rawHeight = _int(json['height']);
@@ -1895,8 +1896,8 @@ class _PrismItem {
           : isImageUrl(firstFrameThumbnail)
               ? _fastTileOrOriginal(firstFrameThumbnail)
               : '',
-      videoUrl: fastVideo,
-      thumbnailVideoUrl: fastThumbnailVideo,
+      videoUrl: livePreviewVideo,
+      thumbnailVideoUrl: liveThumbnailVideo,
       templateUrl: template.isNotEmpty ? template : catalogDownload,
       parallaxFileUrl: parallaxArchive,
       mediaAssetUrls: mediaAssetUrls,
@@ -1958,6 +1959,7 @@ class _PrismItem {
         'catalogStaticThumbnailUrl': staticThumbnailUrl,
         'catalogFirstFrameThumbnailUrl': firstFrameThumbnailUrl,
         'catalogVideoUrl': videoUrl,
+        'catalogOriginalVideoUrl': contentType == PrismCatalogDataSource.liveContentType ? downloadUrl : '',
         'catalogThumbnailVideoUrl': thumbnailVideoUrl,
         'catalogTemplateUrl': templateUrl,
         'catalogParallaxFileUrl': parallaxFileUrl,
