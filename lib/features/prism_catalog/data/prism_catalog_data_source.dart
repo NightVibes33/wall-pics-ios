@@ -2203,7 +2203,7 @@ void _normalizeDirectPairList(Map<String, dynamic> item, {required String fallba
     final thumbnail = _firstString(<Object?>[row['thumbnail'], row['preview_url'], image]);
     pairs.add(<String, dynamic>{
       ...row,
-      'role': _firstString(<Object?>[row['role'], '$fallbackRolePrefix_${index + 1}']),
+      'role': _firstString(<Object?>[row['role'], '${fallbackRolePrefix}_${index + 1}']),
       'image': image,
       'download_url': image,
       'thumbnail': thumbnail,
