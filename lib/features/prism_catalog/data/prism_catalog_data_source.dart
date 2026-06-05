@@ -1711,6 +1711,7 @@ class _PrismItem {
     final thumbnail = url(json['thumbnail']);
     final staticThumbnail = url(json['static_thumbnail']);
     final hqThumbnail = url(json['hq_thumbnail']);
+    final previewImage = url(json['preview_image']);
     bool isVideoUrl(String value) {
       final path = Uri.tryParse(value)?.path.toLowerCase() ?? value.toLowerCase();
       return path.endsWith('.mp4') || path.endsWith('.mov');
@@ -1798,13 +1799,25 @@ class _PrismItem {
     final fastFullImage = _fastTileOrOriginal(fullImage);
     final fastFullSizeImage = _fastTileOrOriginal(fullImage, width: 3840, quality: 98);
     final fastLivePoster = _fastTileOrOriginal(livePoster);
+    final previewThumbImage = _firstString(<Object?>[
+      isImageUrl(previewImage) ? previewImage : '',
+      isImageUrl(staticThumbnail) ? staticThumbnail : '',
+      isImageUrl(hqThumbnail) ? hqThumbnail : '',
+      isImageUrl(thumbnail) ? thumbnail : '',
+      isImageUrl(firstFrameThumbnail) ? firstFrameThumbnail : '',
+    ]);
+    final fastPreviewThumbImage = _fastTileOrOriginal(previewThumbImage);
+    final fastParallaxLayerPreview = _fastTileOrOriginal(parallaxLayerPreview, width: 1920, quality: 94);
     final parallaxTileImage = _firstString(<Object?>[
-      _fastTileOrOriginal(parallaxLayerPreview, width: 3840, quality: 98),
+      fastPreviewThumbImage,
+      fastParallaxLayerPreview,
+      fastFullImage,
       fastFullSizeImage,
     ]);
     final parallaxDisplayImage = isParallaxContent
         ? _firstString(<Object?>[
-            fastFullSizeImage,
+            fastPreviewThumbImage,
+            fastParallaxLayerPreview,
             parallaxTileImage,
             fastFullImage,
             fullImage,
@@ -1818,16 +1831,19 @@ class _PrismItem {
     final thumb = isLiveContent
         ? _firstString(<Object?>[fastLivePoster, tileImage])
         : isParallaxContent
-            ? _firstString(<Object?>[parallaxTileImage, fastFullImage])
+            ? _firstString(<Object?>[fastPreviewThumbImage, parallaxTileImage, fastParallaxLayerPreview, fastFullImage])
             : tileImage;
     final staticThumb = isLiveContent
         ? _firstString(<Object?>[fastLivePoster, thumb])
-        : _firstString(<Object?>[
-            isActualImageUrl(staticThumbnail) ? _fastTileOrOriginal(staticThumbnail) : '',
-            isActualImageUrl(hqThumbnail) ? _fastTileOrOriginal(hqThumbnail) : '',
-            thumb,
-            fastFullImage,
-          ]);
+        : isParallaxContent
+            ? _firstString(<Object?>[fastPreviewThumbImage, thumb, fastParallaxLayerPreview])
+            : _firstString(<Object?>[
+                isImageUrl(staticThumbnail) ? _fastTileOrOriginal(staticThumbnail) : '',
+                isImageUrl(hqThumbnail) ? _fastTileOrOriginal(hqThumbnail) : '',
+                isImageUrl(previewImage) ? _fastTileOrOriginal(previewImage) : '',
+                thumb,
+                fastFullImage,
+              ]);
     final preview = isMatchingContent
         ? _firstString(<Object?>[...pairedDisplayUrls, fullImage, thumb])
         : isLiveContent
@@ -1876,7 +1892,7 @@ class _PrismItem {
       staticThumbnailUrl: staticThumb,
       firstFrameThumbnailUrl: isLiveContent
           ? fastLivePoster
-          : isActualImageUrl(firstFrameThumbnail)
+          : isImageUrl(firstFrameThumbnail)
               ? _fastTileOrOriginal(firstFrameThumbnail)
               : '',
       videoUrl: fastVideo,

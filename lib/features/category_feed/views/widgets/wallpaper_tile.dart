@@ -109,11 +109,11 @@ class WallpaperTile extends StatelessWidget {
         final metadata = wallpaper.aiMetadata ?? const <String, Object?>{};
         final preferred = _firstStringValue(
           <Object?>[
-            wallpaper.core.fullUrl,
-            metadata['catalogFirstFrameThumbnailUrl'],
             metadata['catalogStaticThumbnailUrl'],
+            metadata['catalogFirstFrameThumbnailUrl'],
             metadata['catalogPreviewUrl'],
             wallpaper.core.thumbnailUrl,
+            wallpaper.core.fullUrl,
           ],
           imageOnly: true,
         );

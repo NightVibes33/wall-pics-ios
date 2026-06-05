@@ -157,7 +157,7 @@ class _HomeTabPageState extends State<HomeTabPage> {
       final bootstrap = await PrismCatalogDataSource.instance.fetchHomeBootstrap();
       final bootstrapped = _dashboardFromBootstrap(bootstrap, activeTab);
       if (bootstrapped != null) {
-        return bootstrapped;
+        return _fillMissingBootstrapSections(bootstrapped, activeTab);
       }
     }
 
@@ -253,6 +253,77 @@ class _HomeTabPageState extends State<HomeTabPage> {
       return 0;
     });
     return _HomeDashboardData(sections: sections);
+  }
+
+  Future<_HomeDashboardData> _fillMissingBootstrapSections(
+    _HomeDashboardData dashboard,
+    _HomeTabSpec activeTab,
+  ) async {
+    final sections = List<_HomeSection>.of(dashboard.sections);
+
+    Future<void> ensureSection({
+      required String title,
+      required String contentType,
+      String slug = 'for-you',
+      _SectionKind kind = _SectionKind.wallpaper,
+    }) async {
+      final exists = sections.any(
+        (section) => section.contentType == contentType && section.slug == slug && section.items.isNotEmpty,
+      );
+      if (exists) {
+        return;
+      }
+      final fallback = await _loadCatalogSection(title: title, contentType: contentType, slug: slug, kind: kind);
+      if (fallback.items.isNotEmpty) {
+        sections.add(fallback);
+      }
+    }
+
+    await Future.wait<void>(<Future<void>>[
+      ensureSection(
+        title: 'Live Wallpapers',
+        contentType: PrismCatalogDataSource.liveContentType,
+        kind: _SectionKind.live,
+      ),
+      ensureSection(title: 'For You', contentType: PrismCatalogDataSource.regularContentType),
+      ensureSection(title: '3D Spatial', contentType: PrismCatalogDataSource.parallaxContentType),
+      ensureSection(
+        title: 'Matching',
+        contentType: PrismCatalogDataSource.matchingContentType,
+        kind: _SectionKind.matching,
+      ),
+      ensureSection(
+        title: 'Profile Pictures',
+        contentType: PrismCatalogDataSource.profilePictureContentType,
+        kind: _SectionKind.profile,
+      ),
+    ]);
+
+    return _HomeDashboardData(sections: _orderedHomeSections(sections, activeTab));
+  }
+
+  List<_HomeSection> _orderedHomeSections(List<_HomeSection> sections, _HomeTabSpec activeTab) {
+    final indexed = sections.asMap().entries.toList(growable: false);
+    indexed.sort((a, b) {
+      final rankResult = _homeSectionRank(a.value, activeTab).compareTo(_homeSectionRank(b.value, activeTab));
+      if (rankResult != 0) return rankResult;
+      return a.key.compareTo(b.key);
+    });
+    return indexed.map((entry) => entry.value).toList(growable: false);
+  }
+
+  int _homeSectionRank(_HomeSection section, _HomeTabSpec activeTab) {
+    final activeContentType = activeTab.contentType ?? PrismCatalogDataSource.regularContentType;
+    final activeSlug = activeTab.slug ?? 'for-you';
+    if (section.contentType == activeContentType && section.slug == activeSlug) {
+      return 0;
+    }
+    if (section.contentType == PrismCatalogDataSource.liveContentType) return 10;
+    if (section.contentType == PrismCatalogDataSource.regularContentType && section.slug == 'for-you') return 20;
+    if (section.contentType == PrismCatalogDataSource.parallaxContentType) return 30;
+    if (section.contentType == PrismCatalogDataSource.matchingContentType) return 40;
+    if (section.contentType == PrismCatalogDataSource.profilePictureContentType) return 50;
+    return 100;
   }
 
   _SectionKind _kindForBootstrap(String kind, String contentType) {

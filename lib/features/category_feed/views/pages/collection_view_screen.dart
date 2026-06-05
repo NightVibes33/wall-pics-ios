@@ -127,7 +127,7 @@ class _CategoryFeedContentState extends State<_CategoryFeedContent> {
   }
 
   Future<List<FeedItemEntity>> _loadItems() async {
-    final page = await PrismCatalogDataSource.instance.fetchFullCategoryFeed(category: widget.category);
+    final page = await PrismCatalogDataSource.instance.fetchCategoryFeed(category: widget.category, refresh: true);
     return _uniqueItems(page?.items ?? const <FeedItemEntity>[]);
   }
 

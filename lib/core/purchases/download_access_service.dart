@@ -138,6 +138,12 @@ class DownloadAccessService {
     if (claimed) {
       return true;
     }
+    if (_localRemainingFreeDownloads() > 0) {
+      final localClaimed = await _claimLocalFreeDownload();
+      if (localClaimed) {
+        return true;
+      }
+    }
     if (context.mounted) {
       await PaywallOrchestrator.instance.present(
         context,
