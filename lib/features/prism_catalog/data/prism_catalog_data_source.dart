@@ -1804,7 +1804,7 @@ class _PrismItem {
       isVideoUrl(wallpaper) ? wallpaper : '',
     ]);
     final livePreviewVideo = isLiveContent ? liveOriginalVideo : fastVideo;
-    final liveThumbnailVideo = isLiveContent ? thumbnailVideo : fastThumbnailVideo;
+    final liveThumbnailVideo = isLiveContent ? liveOriginalVideo : fastThumbnailVideo;
     final parallaxLayerPreview = firstParallaxLayerImage();
     final fastFullImage = _fastTileOrOriginal(fullImage);
     final fastFullSizeImage = _fastTileOrOriginal(fullImage, width: 3840, quality: 98);
