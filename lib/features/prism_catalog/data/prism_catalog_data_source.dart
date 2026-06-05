@@ -111,9 +111,26 @@ class PrismCatalogDataSource {
     '3': matchingContentType,
     '4': parallaxContentType,
   };
+  static const Map<String, String> _directApiEndpointsByContentType = <String, String>{
+    regularContentType: '/api/wallpaper-list',
+    liveContentType: '/api/wallpapers/live',
+    matchingContentType: '/api/wallpapers/matching',
+    doubleContentType: '/api/wallpapers/double',
+    parallaxContentType: '/api/wallpapers/parallax',
+    profilePictureContentType: '/api/profile-pictures',
+  };
+  static const Map<String, String> _directApiSectionsByContentType = <String, String>{
+    regularContentType: 'regular',
+    liveContentType: 'live',
+    matchingContentType: 'matching',
+    doubleContentType: 'double',
+    parallaxContentType: 'parallax',
+    profilePictureContentType: 'profile_pictures',
+  };
 
   final LazyFileCache _catalogCache = LazyFileCache('prism_catalog_cache');
   final Map<String, Future<_PrismCatalogPage>> _pageFutures = <String, Future<_PrismCatalogPage>>{};
+  final Map<String, Future<_PrismCatalogPage?>> _directApiPageFutures = <String, Future<_PrismCatalogPage?>>{};
   final Map<String, Future<List<_PrismItem>>> _compactCatalogFutures = <String, Future<List<_PrismItem>>>{};
   final Map<String, Future<CategoryFeedPage?>> _fullCategoryFeedFutures = <String, Future<CategoryFeedPage?>>{};
   final Map<String, Future<CategoryFeedPage>> _searchAllFutures = <String, Future<CategoryFeedPage>>{};
@@ -141,10 +158,29 @@ class PrismCatalogDataSource {
     final scope = _scope(slug: slug, contentType: contentType);
 
     if (slug == 'for-you') {
+      final directFeed = await _fetchDirectApiPageFeed(
+        contentType: contentType,
+        slug: slug,
+        scope: scope,
+        refresh: refresh,
+      );
+      if (directFeed != null) {
+        return directFeed;
+      }
       return _fetchSequentialPageFeed(contentType: contentType, scope: scope, refresh: refresh);
     }
     if (slug == 'newest' || slug == 'new') {
       return _fetchNewestPageFeed(contentType: contentType, scope: scope, refresh: refresh);
+    }
+
+    final directFeed = await _fetchDirectApiPageFeed(
+      contentType: contentType,
+      slug: slug,
+      scope: scope,
+      refresh: refresh,
+    );
+    if (directFeed != null) {
+      return directFeed;
     }
 
     final categoryIds = await _categoryIdsFor(contentType, slug);
@@ -610,6 +646,132 @@ class PrismCatalogDataSource {
       }
       final item = (await _loadCatalogPage(contentType, page)).byId(trimmed);
       if (item != null) return item.toWallpaper();
+    }
+    return null;
+  }
+
+  Future<CategoryFeedPage?> _fetchDirectApiPageFeed({
+    required String contentType,
+    required String slug,
+    required String scope,
+    required bool refresh,
+  }) async {
+    if (!_directApiEndpointsByContentType.containsKey(contentType) || _hiddenContentTypes.contains(contentType)) {
+      return null;
+    }
+
+    final start = refresh ? 0 : (_offsets[scope] ?? 0);
+    var absoluteOffset = start;
+    var remaining = _pageSize;
+    var itemCount = 0;
+    var lastHasMore = true;
+    final items = <_PrismItem>[];
+
+    while (remaining > 0 && lastHasMore) {
+      final pageNumber = (absoluteOffset ~/ _catalogShardSize) + 1;
+      final localOffset = absoluteOffset % _catalogShardSize;
+      final directPage = await _loadDirectApiPage(
+        contentType: contentType,
+        slug: slug,
+        page: pageNumber,
+        refresh: refresh,
+      );
+      if (directPage == null) {
+        return items.isEmpty ? null : _toFeedPage(items, hasMore: false, nextOffset: absoluteOffset);
+      }
+
+      itemCount = directPage.itemCount;
+      lastHasMore = directPage.hasMore;
+      final pageItems = directPage.items.skip(localOffset).take(remaining).toList(growable: false);
+      if (pageItems.isEmpty) {
+        break;
+      }
+      items.addAll(pageItems);
+      absoluteOffset += pageItems.length;
+      remaining -= pageItems.length;
+    }
+
+    if (items.isEmpty) {
+      return null;
+    }
+
+    _offsets[scope] = absoluteOffset;
+    return _toFeedPage(
+      _dedupeItems(items),
+      hasMore: absoluteOffset < itemCount && (lastHasMore || items.isNotEmpty),
+      nextOffset: absoluteOffset,
+    );
+  }
+
+  Future<_PrismCatalogPage?> _loadDirectApiPage({
+    required String contentType,
+    required String slug,
+    required int page,
+    required bool refresh,
+  }) {
+    final cacheKey = '$contentType.$slug.$page';
+    if (refresh) {
+      _directApiPageFutures.remove(cacheKey);
+    }
+    return _directApiPageFutures[cacheKey] ??= _loadDirectApiPageInternal(contentType: contentType, slug: slug, page: page);
+  }
+
+  Future<_PrismCatalogPage?> _loadDirectApiPageInternal({
+    required String contentType,
+    required String slug,
+    required int page,
+  }) async {
+    final endpoint = _directApiEndpointsByContentType[contentType];
+    if (endpoint == null || page <= 0) {
+      return null;
+    }
+
+    for (final source in _directCatalogApiSources()) {
+      try {
+        final uri = _directApiUri(
+          baseUrl: source.baseUrl,
+          endpoint: endpoint,
+          page: page,
+          slug: slug,
+          pageSize: _catalogShardSize,
+        );
+        final response = await http.get(uri, headers: source.headers).timeout(_pageTimeout);
+        if (response.statusCode < 200 || response.statusCode >= 300 || !_looksLikeJson(response.body)) {
+          continue;
+        }
+        final payload = jsonDecode(response.body);
+        final rawItems = _directPayloadItems(payload);
+        if (rawItems.isEmpty) {
+          continue;
+        }
+        final section = _directApiSectionsByContentType[contentType] ?? contentType;
+        final items = _dedupeItems(
+          rawItems.asMap().entries.map((entry) {
+            final normalized = _normalizeDirectApiItem(
+              entry.value,
+              contentType: contentType,
+              sourceBase: source.baseUrl,
+              section: section,
+              endpoint: endpoint,
+              page: page,
+              index: entry.key,
+            );
+            return _PrismItem.fromJson(normalized, contentType);
+          }),
+        );
+        if (items.isEmpty) {
+          continue;
+        }
+        final lastPage = _directPayloadLastPage(payload);
+        final itemCount = _directPayloadItemCount(payload, page: page, pageSize: _catalogShardSize, itemCount: items.length);
+        return _PrismCatalogPage(
+          items: items,
+          itemCount: itemCount,
+          hasMore: lastPage == null ? items.length >= _catalogShardSize : page < lastPage,
+        );
+      } catch (_) {
+        continue;
+      }
     }
     return null;
   }
@@ -1788,10 +1950,335 @@ class _PrismItem {
         'catalogMatchingSides': matchingSides,
         'catalogPairedPreviewUrls': pairedPreviewUrls,
         'catalogPairedDownloadUrls': pairedDownloadUrls,
-        'catalogIsPremium': false,
+        'catalogIsPremium': isPremium,
       },
       remoteStoreDocumentId: 'prism-$id',
     );
+  }
+}
+
+
+class _DirectCatalogApiSource {
+  const _DirectCatalogApiSource({required this.baseUrl, required this.headers});
+
+  final String baseUrl;
+  final Map<String, String> headers;
+}
+
+List<_DirectCatalogApiSource> _directCatalogApiSources() {
+  final sources = <_DirectCatalogApiSource>[];
+  final wallPicsHeaders = _wallPicsApiHeaders();
+  final configuredWallPicsBase = Env.normalize(Env.wallPicsApiBaseUrl).replaceAll(RegExp(r'/+$'), '');
+  final hasWallPicsAuth = _hasConfiguredWallPicsAuth();
+  final wallPicsBase = configuredWallPicsBase.isNotEmpty
+      ? configuredWallPicsBase
+      : hasWallPicsAuth
+          ? 'https://backend.wallpics.app'
+          : '';
+  if (wallPicsBase.isNotEmpty) {
+    sources.add(_DirectCatalogApiSource(baseUrl: wallPicsBase, headers: wallPicsHeaders));
+  }
+
+  final scraperBase = Env.normalize(Env.prismScraperApiBaseUrl).replaceAll(RegExp(r'/+$'), '');
+  if (scraperBase.isNotEmpty && scraperBase != wallPicsBase) {
+    sources.add(_DirectCatalogApiSource(baseUrl: scraperBase, headers: _baseDirectApiHeaders()));
+  }
+  return sources;
+}
+
+bool _hasConfiguredWallPicsAuth() {
+  return Env.normalize(Env.wallPicsAuthHeader).isNotEmpty ||
+      Env.normalize(Env.wallPicsBearerToken).isNotEmpty ||
+      Env.normalize(Env.wallPicsXToken).isNotEmpty ||
+      Env.normalize(Env.wallPicsXAuth).isNotEmpty ||
+      Env.normalize(Env.wallPicsHhaa).isNotEmpty ||
+      Env.normalize(Env.wallPicsExtraHeadersJson).isNotEmpty;
+}
+
+Map<String, String> _baseDirectApiHeaders() {
+  return <String, String>{
+    'Accept': 'application/json',
+    'Content-Type': 'application/json',
+    'User-Agent': 'PrismCatalogDirect/1.0',
+  };
+}
+
+Map<String, String> _wallPicsApiHeaders() {
+  final headers = _baseDirectApiHeaders();
+  final rawAuthHeader = Env.normalize(Env.wallPicsAuthHeader);
+  if (rawAuthHeader.isNotEmpty) {
+    final separator = rawAuthHeader.indexOf(':');
+    if (separator > 0) {
+      final name = rawAuthHeader.substring(0, separator).trim();
+      final value = rawAuthHeader.substring(separator + 1).trim();
+      if (name.isNotEmpty && value.isNotEmpty) {
+        headers[name] = value;
+      }
+    } else {
+      headers['Authorization'] = rawAuthHeader;
+    }
+  }
+  final bearer = Env.normalize(Env.wallPicsBearerToken);
+  if (bearer.isNotEmpty && !headers.containsKey('Authorization')) {
+    headers['Authorization'] = bearer.startsWith('Bearer ') ? bearer : 'Bearer $bearer';
+  }
+  final xToken = Env.normalize(Env.wallPicsXToken);
+  if (xToken.isNotEmpty) {
+    headers['x-token'] = xToken;
+  }
+  final xAuth = Env.normalize(Env.wallPicsXAuth);
+  if (xAuth.isNotEmpty) {
+    headers['x-auth'] = xAuth;
+  }
+  final hhaa = Env.normalize(Env.wallPicsHhaa);
+  if (hhaa.isNotEmpty) {
+    headers['__hhaa__'] = hhaa;
+  }
+  final extraHeaders = Env.normalize(Env.wallPicsExtraHeadersJson);
+  if (extraHeaders.isNotEmpty) {
+    try {
+      final decoded = jsonDecode(extraHeaders);
+      if (decoded is Map) {
+        for (final entry in decoded.entries) {
+          final key = _string(entry.key).trim();
+          final value = _string(entry.value).trim();
+          if (key.isNotEmpty && value.isNotEmpty) {
+            headers[key] = value;
+          }
+        }
+      }
+    } catch (_) {
+      // Ignore malformed optional headers and keep the standard auth fields.
+    }
+  }
+  return headers;
+}
+
+Uri _directApiUri({
+  required String baseUrl,
+  required String endpoint,
+  required int page,
+  required String slug,
+  required int pageSize,
+}) {
+  final uri = Uri.parse('$baseUrl$endpoint');
+  final query = <String, String>{
+    'paginated': '1',
+    'page': '$page',
+    'per_page': '$pageSize',
+    'sortBy': 'recommended',
+    'nsfwContent': '1',
+  };
+  final cleanSlug = slug.trim();
+  if (cleanSlug.isNotEmpty && cleanSlug != 'for-you') {
+    query['categorySlug'] = cleanSlug;
+  }
+  return uri.replace(queryParameters: query);
+}
+
+List<Map<String, dynamic>> _directPayloadItems(Object? payload) {
+  final data = payload is Map ? payload['data'] : payload;
+  if (data is List) {
+    return data.whereType<Map>().map(_asMap).toList(growable: false);
+  }
+  final wallpapers = payload is Map ? payload['wallpapers'] : null;
+  if (wallpapers is List) {
+    return wallpapers.whereType<Map>().map(_asMap).toList(growable: false);
+  }
+  final items = payload is Map ? payload['items'] : null;
+  if (items is List) {
+    return items.whereType<Map>().map(_asMap).toList(growable: false);
+  }
+  return const <Map<String, dynamic>>[];
+}
+
+int? _directPayloadLastPage(Object? payload) {
+  if (payload is! Map) {
+    return null;
+  }
+  final info = _asMap(payload['info']);
+  return _int(info['last_page']) ?? _int(info['lastPage']) ?? _int(payload['last_page']) ?? _int(payload['lastPage']);
+}
+
+int _directPayloadItemCount(Object? payload, {required int page, required int pageSize, required int itemCount}) {
+  if (payload is Map) {
+    final info = _asMap(payload['info']);
+    final explicit = _int(info['total']) ??
+        _int(info['total_items']) ??
+        _int(info['totalItems']) ??
+        _int(info['item_count']) ??
+        _int(payload['total']) ??
+        _int(payload['item_count']);
+    if (explicit != null && explicit > 0) {
+      return explicit;
+    }
+  }
+  final lastPage = _directPayloadLastPage(payload);
+  if (lastPage == null || lastPage <= 0) {
+    return ((page - 1) * pageSize) + itemCount;
+  }
+  if (page >= lastPage) {
+    return ((page - 1) * pageSize) + itemCount;
+  }
+  return lastPage * pageSize;
+}
+
+Map<String, dynamic> _normalizeDirectApiItem(
+  Map<String, dynamic> raw, {
+  required String contentType,
+  required String sourceBase,
+  required String section,
+  required String endpoint,
+  required int page,
+  required int index,
+}) {
+  final item = Map<String, dynamic>.from(raw);
+  item['content_type'] = contentType;
+  item['source'] = sourceBase;
+  item['media_source'] = sourceBase;
+  item['source_section'] = section;
+  item['source_endpoint'] = endpoint;
+  item['source_page'] = page;
+  item['source_index'] = index;
+
+  void setIfEmpty(String key, Object? value) {
+    if (_string(item[key]).trim().isEmpty && value != null && _string(value).trim().isNotEmpty) {
+      item[key] = value;
+    }
+  }
+
+  switch (contentType) {
+    case PrismCatalogDataSource.regularContentType:
+      setIfEmpty('download_url', item['wallpaper']);
+      setIfEmpty('preview_image', _firstString(<Object?>[item['hq_thumbnail'], item['static_thumbnail'], item['thumbnail']]));
+      break;
+    case PrismCatalogDataSource.liveContentType:
+      setIfEmpty('download_url', _firstString(<Object?>[item['video_original '], item['video_original'], item['video']]));
+      setIfEmpty('preview_image', _firstString(<Object?>[item['first_frame_thumbnail'], item['static_thumbnail'], item['thumbnail']]));
+      break;
+    case PrismCatalogDataSource.matchingContentType:
+      _normalizeDirectPairList(item, fallbackRolePrefix: 'pair');
+      break;
+    case PrismCatalogDataSource.doubleContentType:
+      _normalizeDirectDoublePair(item);
+      break;
+    case PrismCatalogDataSource.parallaxContentType:
+      setIfEmpty('download_url', item['parallax_file']);
+      setIfEmpty('preview_image', _firstParallaxLayerUrl(item) ?? item['thumbnail']);
+      break;
+    case PrismCatalogDataSource.profilePictureContentType:
+      setIfEmpty('download_url', item['image']);
+      setIfEmpty('preview_image', item['thumbnail']);
+      break;
+  }
+
+  item['media_assets'] = _uniqueStrings(<String>[
+    ..._strings(item['media_assets']),
+    _string(item['download_url']),
+    _string(item['preview_image']),
+    _string(item['wallpaper']),
+    _string(item['image']),
+    _string(item['video_original ']),
+    _string(item['video_original']),
+    _string(item['video']),
+    _string(item['parallax_file']),
+    _string(item['thumbnail']),
+    _string(item['static_thumbnail']),
+    _string(item['first_frame_thumbnail']),
+  ].where((value) => value.trim().isNotEmpty));
+  return item;
+}
+
+void _normalizeDirectPairList(Map<String, dynamic> item, {required String fallbackRolePrefix}) {
+  final rawPairs = _maps(item['paired_wallpapers']).isNotEmpty ? _maps(item['paired_wallpapers']) : _maps(item['wallpapers']);
+  if (rawPairs.isEmpty) {
+    return;
+  }
+  final pairs = <Map<String, dynamic>>[];
+  final downloads = <String>[];
+  final previews = <String>[];
+  for (var index = 0; index < rawPairs.length; index++) {
+    final row = rawPairs[index];
+    final image = _firstString(<Object?>[row['download_url'], row['image'], row['wallpaper'], row['full_url'], row['url']]);
+    final thumbnail = _firstString(<Object?>[row['thumbnail'], row['preview_url'], image]);
+    pairs.add(<String, dynamic>{
+      ...row,
+      'role': _firstString(<Object?>[row['role'], '$fallbackRolePrefix_${index + 1}']),
+      'image': image,
+      'download_url': image,
+      'thumbnail': thumbnail,
+    });
+    if (image.isNotEmpty) {
+      downloads.add(image);
+    }
+    if (thumbnail.isNotEmpty) {
+      previews.add(thumbnail);
+    }
+  }
+  item['paired_wallpapers'] = pairs;
+  item['paired_download_urls'] = _uniqueStrings(downloads);
+  item['paired_preview_urls'] = _uniqueStrings(previews);
+  if (downloads.isNotEmpty) {
+    item['download_url'] = downloads.first;
+  }
+  if (previews.isNotEmpty) {
+    item['preview_image'] = previews.first;
+  }
+}
+
+void _normalizeDirectDoublePair(Map<String, dynamic> item) {
+  if (_maps(item['paired_wallpapers']).isNotEmpty || _maps(item['wallpapers']).isNotEmpty) {
+    _normalizeDirectPairList(item, fallbackRolePrefix: 'side');
+    return;
+  }
+  final lockImage = _firstString(<Object?>[item['lock_screen_wallpaper'], item['lockScreenWallpaper']]);
+  final homeImage = _firstString(<Object?>[item['wallpaper'], item['home_screen_wallpaper'], item['homeScreenWallpaper']]);
+  final pairs = <Map<String, dynamic>>[];
+  if (lockImage.isNotEmpty) {
+    pairs.add(<String, dynamic>{
+      'role': 'lock_screen',
+      'image': lockImage,
+      'download_url': lockImage,
+      'thumbnail': _firstString(<Object?>[item['lock_screen_thumbnail'], item['thumbnail']]),
+    });
+  }
+  if (homeImage.isNotEmpty) {
+    pairs.add(<String, dynamic>{
+      'role': 'home_screen',
+      'image': homeImage,
+      'download_url': homeImage,
+      'thumbnail': _firstString(<Object?>[item['home_screen_thumbnail'], item['thumbnail']]),
+    });
+  }
+  item['paired_wallpapers'] = pairs;
+  item['paired_download_urls'] = _uniqueStrings(pairs.map((pair) => _string(pair['download_url'])));
+  item['paired_preview_urls'] = _uniqueStrings(pairs.map((pair) => _string(pair['thumbnail'])));
+  if (homeImage.isNotEmpty) {
+    item['download_url'] = homeImage;
+  } else if (lockImage.isNotEmpty) {
+    item['download_url'] = lockImage;
+  }
+  setFirstNonEmpty(item, 'preview_image', <Object?>[item['thumbnail'], item['home_screen_thumbnail'], item['lock_screen_thumbnail']]);
+}
+
+String? _firstParallaxLayerUrl(Map<String, dynamic> item) {
+  final config = _asMap(item['thumbnail_config']);
+  for (final layer in _maps(config['layers'])) {
+    final url = _string(layer['url']).trim();
+    if (url.isNotEmpty) {
+      return url;
+    }
+  }
+  return null;
+}
+
+void setFirstNonEmpty(Map<String, dynamic> item, String key, Iterable<Object?> values) {
+  if (_string(item[key]).trim().isNotEmpty) {
+    return;
+  }
+  final value = _firstString(values.toList(growable: false));
+  if (value.isNotEmpty) {
+    item[key] = value;
   }
 }
 

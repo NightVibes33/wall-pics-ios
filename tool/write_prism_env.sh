@@ -20,6 +20,38 @@ if ! grep -q '^PRISM_MEDIA_BASE_URL=' .env && [ -n "${MEDIA_BASE_URL:-}" ]; then
   printf '%s\n' "PRISM_MEDIA_BASE_URL=$MEDIA_BASE_URL" >> .env
 fi
 
+if ! grep -q '^PRISM_SCRAPER_API_BASE_URL=' .env && [ -n "${PRISM_SCRAPER_API_BASE_URL:-}" ]; then
+  printf '%s\n' "PRISM_SCRAPER_API_BASE_URL=$PRISM_SCRAPER_API_BASE_URL" >> .env
+fi
+
+if ! grep -q '^WALLPICS_API_BASE_URL=' .env && [ -n "${WALLPICS_API_BASE_URL:-}" ]; then
+  printf '%s\n' "WALLPICS_API_BASE_URL=$WALLPICS_API_BASE_URL" >> .env
+fi
+
+if ! grep -q '^WALLPICS_AUTH_HEADER=' .env && [ -n "${WALLPICS_AUTH_HEADER:-}" ]; then
+  printf '%s\n' "WALLPICS_AUTH_HEADER=$WALLPICS_AUTH_HEADER" >> .env
+fi
+
+if ! grep -q '^WALLPICS_BEARER_TOKEN=' .env && [ -n "${WALLPICS_BEARER_TOKEN:-}" ]; then
+  printf '%s\n' "WALLPICS_BEARER_TOKEN=$WALLPICS_BEARER_TOKEN" >> .env
+fi
+
+if ! grep -q '^WALLPICS_X_TOKEN=' .env && [ -n "${WALLPICS_X_TOKEN:-}" ]; then
+  printf '%s\n' "WALLPICS_X_TOKEN=$WALLPICS_X_TOKEN" >> .env
+fi
+
+if ! grep -q '^WALLPICS_X_AUTH=' .env && [ -n "${WALLPICS_X_AUTH:-}" ]; then
+  printf '%s\n' "WALLPICS_X_AUTH=$WALLPICS_X_AUTH" >> .env
+fi
+
+if ! grep -q '^WALLPICS_HHAA=' .env && [ -n "${WALLPICS_HHAA:-}" ]; then
+  printf '%s\n' "WALLPICS_HHAA=$WALLPICS_HHAA" >> .env
+fi
+
+if ! grep -q '^WALLPICS_EXTRA_HEADERS_JSON=' .env && [ -n "${WALLPICS_EXTRA_HEADERS_JSON:-}" ]; then
+  printf '%s\n' "WALLPICS_EXTRA_HEADERS_JSON=$WALLPICS_EXTRA_HEADERS_JSON" >> .env
+fi
+
 if ! grep -q '^PRISM_CATALOG_BASE_URL=' .env; then
   API_BASE="$(awk -F= '$1 == "USER_STORE_API_BASE_URL" { sub(/^[^=]*=/, ""); print }' .env | tail -n 1)"
   if [ -n "$API_BASE" ]; then

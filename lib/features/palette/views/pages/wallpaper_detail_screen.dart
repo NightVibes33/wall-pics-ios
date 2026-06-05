@@ -373,6 +373,19 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     );
   }
 
+  bool _isPrismPremiumCatalogContent(WallpaperDetailEntity entity) {
+    return entity.when(
+      prism: (wallpaper) {
+        final raw = wallpaper.aiMetadata?['catalogIsPremium'];
+        if (raw is bool) return raw;
+        final value = raw?.toString().trim().toLowerCase() ?? '';
+        return value == '1' || value == 'true' || value == 'yes';
+      },
+      wallhaven: (_) => false,
+      pexels: (_) => false,
+    );
+  }
+
   bool _isPrismLivePhoto(WallpaperDetailEntity entity) {
     return _isPrismContentType(entity, PrismCatalogDataSource.liveContentType);
   }
@@ -1061,6 +1074,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
         child: DownloadButton(
           colorChanged: false,
           link: downloadUrl,
+          isPremiumContent: _isPrismPremiumCatalogContent(entity),
           sourceContext: _getSourceContext(state),
           isLivePhoto: isLivePhoto,
           livePhotoStillUrl: liveStillUrl,
@@ -1128,6 +1142,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
             label: _matchingDownloadLabel(index, sideUrls.length),
             url: sideUrls[index],
             sourceContext: _getSourceContext(state),
+            isPremiumContent: _isPrismPremiumCatalogContent(entity),
           ),
         ),
       _SheetActionTapScale(child: FavouriteWallpaperButton(wall: _toFavouriteWall(entity), trash: false)),
@@ -1497,11 +1512,17 @@ class _SheetActionTapScale extends StatefulWidget {
 }
 
 class _MatchingSideDownloadButton extends StatelessWidget {
-  const _MatchingSideDownloadButton({required this.label, required this.url, required this.sourceContext});
+  const _MatchingSideDownloadButton({
+    required this.label,
+    required this.url,
+    required this.sourceContext,
+    required this.isPremiumContent,
+  });
 
   final String label;
   final String url;
   final String sourceContext;
+  final bool isPremiumContent;
 
   @override
   Widget build(BuildContext context) {
@@ -1511,7 +1532,7 @@ class _MatchingSideDownloadButton extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          DownloadButton(colorChanged: false, link: url, sourceContext: sourceContext),
+          DownloadButton(colorChanged: false, link: url, isPremiumContent: isPremiumContent, sourceContext: sourceContext),
           const SizedBox(height: 6),
           Text(
             label,

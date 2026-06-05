@@ -23,6 +23,14 @@ class Env {
   static const String userStoreApiBaseUrl = String.fromEnvironment('USER_STORE_API_BASE_URL');
   static const String prismCatalogBaseUrl = String.fromEnvironment('PRISM_CATALOG_BASE_URL');
   static const String prismMediaBaseUrl = String.fromEnvironment('PRISM_MEDIA_BASE_URL');
+  static const String prismScraperApiBaseUrl = String.fromEnvironment('PRISM_SCRAPER_API_BASE_URL');
+  static const String wallPicsApiBaseUrl = String.fromEnvironment('WALLPICS_API_BASE_URL');
+  static const String wallPicsAuthHeader = String.fromEnvironment('WALLPICS_AUTH_HEADER');
+  static const String wallPicsBearerToken = String.fromEnvironment('WALLPICS_BEARER_TOKEN');
+  static const String wallPicsXToken = String.fromEnvironment('WALLPICS_X_TOKEN');
+  static const String wallPicsXAuth = String.fromEnvironment('WALLPICS_X_AUTH');
+  static const String wallPicsHhaa = String.fromEnvironment('WALLPICS_HHAA');
+  static const String wallPicsExtraHeadersJson = String.fromEnvironment('WALLPICS_EXTRA_HEADERS_JSON');
 
   // Pexels
   static const String pexelsApiKey = String.fromEnvironment('PEXELS_API_KEY');

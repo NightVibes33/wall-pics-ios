@@ -39,6 +39,14 @@ jobs:
           CATALOG_BASE_URL: ${{ secrets.PRISM_CATALOG_BASE_URL || secrets.WALL_PICS_CATALOG_BASE_URL || vars.PRISM_CATALOG_BASE_URL }}
           USER_STORE_API_BASE_URL: ${{ secrets.USER_STORE_API_BASE_URL || vars.USER_STORE_API_BASE_URL }}
           MEDIA_BASE_URL: ${{ secrets.PRISM_MEDIA_BASE_URL || vars.PRISM_MEDIA_BASE_URL }}
+          PRISM_SCRAPER_API_BASE_URL: ${{ secrets.PRISM_SCRAPER_API_BASE_URL || vars.PRISM_SCRAPER_API_BASE_URL }}
+          WALLPICS_API_BASE_URL: ${{ secrets.WALLPICS_API_BASE_URL || vars.WALLPICS_API_BASE_URL }}
+          WALLPICS_AUTH_HEADER: ${{ secrets.WALLPICS_AUTH_HEADER }}
+          WALLPICS_BEARER_TOKEN: ${{ secrets.WALLPICS_BEARER_TOKEN }}
+          WALLPICS_X_TOKEN: ${{ secrets.WALLPICS_X_TOKEN }}
+          WALLPICS_X_AUTH: ${{ secrets.WALLPICS_X_AUTH }}
+          WALLPICS_HHAA: ${{ secrets.WALLPICS_HHAA }}
+          WALLPICS_EXTRA_HEADERS_JSON: ${{ secrets.WALLPICS_EXTRA_HEADERS_JSON }}
         run: sh tool/write_prism_env.sh
 
       - name: Flutter pub get
