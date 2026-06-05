@@ -1640,6 +1640,14 @@ class _PrismItem {
       _fastTileOrOriginal(parallaxLayerPreview, width: 3840, quality: 98),
       fastFullSizeImage,
     ]);
+    final parallaxDisplayImage = isParallaxContent
+        ? _firstString(<Object?>[
+            fastFullSizeImage,
+            parallaxTileImage,
+            fastFullImage,
+            fullImage,
+          ])
+        : '';
     final tileImage = _firstString(<Object?>[
       isMatchingContent ? _firstString(<Object?>[...pairedDisplayUrls]) : '',
       fastFullImage,
@@ -1663,12 +1671,13 @@ class _PrismItem {
         : isLiveContent
             ? _firstString(<Object?>[fastVideo, fastAppDownloadVideo, fastCatalogDownloadVideo, fastWallpaperVideo, fullImage, livePoster])
             : isParallaxContent
-                ? _firstString(<Object?>[parallaxArchive, fullImage, thumb])
+                ? _firstString(<Object?>[parallaxDisplayImage, thumb])
                 : _firstString(<Object?>[fullImage, thumb]);
     final displayOnlyContent = contentType == PrismCatalogDataSource.diyTemplateContentType ||
-        contentType == PrismCatalogDataSource.liveDiyTemplateContentType ||
-        contentType == PrismCatalogDataSource.parallaxContentType;
-    final download = displayOnlyContent
+        contentType == PrismCatalogDataSource.liveDiyTemplateContentType;
+    final download = isParallaxContent
+        ? _firstString(<Object?>[fastFullSizeImage, imageDownload, fullImage, parallaxDisplayImage, thumb])
+        : displayOnlyContent
         ? _firstString(<Object?>[parallaxArchive, appDownloadUrl, fullImage, preview, thumb, template, fullMedia])
         : isMatchingContent
             ? _firstString(<Object?>[...pairedDownloadUrls, imageDownload, fullImage, ...pairedDisplayUrls])
@@ -1711,7 +1720,7 @@ class _PrismItem {
       videoUrl: fastVideo,
       thumbnailVideoUrl: fastThumbnailVideo,
       templateUrl: template.isNotEmpty ? template : catalogDownload,
-      parallaxFileUrl: parallaxArchive,
+      parallaxFileUrl: isParallaxContent && _isActualCatalogImageUrl(download) ? '' : parallaxArchive,
       mediaAssetUrls: mediaAssetUrls,
       pairedWallpapers: pairedWallpapers,
       matchingSides: normalizedMatchingSides,

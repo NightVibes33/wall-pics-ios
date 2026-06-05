@@ -438,6 +438,10 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
 
   String _catalogParallaxFileUrl(WallpaperDetailEntity entity) {
     if (!_isPrismParallax(entity)) return '';
+    final displayImage = _catalogDisplayImageUrl(entity);
+    if (displayImage.isNotEmpty && !_isVideoUrl(displayImage) && !_isArchiveUrl(displayImage)) {
+      return '';
+    }
     final explicit = _prismMetadataValue(entity, 'catalogParallaxFileUrl');
     if (explicit.isNotEmpty && _isArchiveUrl(explicit)) return explicit;
     final full = entity.fullUrl.trim();

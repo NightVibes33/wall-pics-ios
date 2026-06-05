@@ -503,7 +503,7 @@ class _MyAppState extends State<_MyApp> with WidgetsBindingObserver {
     await _syncAnalyticsIdentityFromAppState(sourceTag: 'startup_login_status');
     if (value) {
     }
-    app_state.persistPrismUser();
+    await app_state.persistPrismUser();
     await syncSentryUserScope(
       loggedIn: app_state.prismUser.loggedIn,
       id: app_state.prismUser.id,
