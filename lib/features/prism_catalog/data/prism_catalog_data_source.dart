@@ -1586,6 +1586,7 @@ class _PrismItem {
     required this.firstFrameThumbnailUrl,
     required this.videoUrl,
     required this.thumbnailVideoUrl,
+    required this.originalStillUrl,
     required this.templateUrl,
     required this.parallaxFileUrl,
     required this.mediaAssetUrls,
@@ -1617,6 +1618,7 @@ class _PrismItem {
   final String firstFrameThumbnailUrl;
   final String videoUrl;
   final String thumbnailVideoUrl;
+  final String originalStillUrl;
   final String templateUrl;
   final String parallaxFileUrl;
   final List<String> mediaAssetUrls;
@@ -1901,6 +1903,7 @@ class _PrismItem {
               : '',
       videoUrl: livePreviewVideo,
       thumbnailVideoUrl: liveThumbnailVideo,
+      originalStillUrl: livePoster,
       templateUrl: template.isNotEmpty ? template : catalogDownload,
       parallaxFileUrl: parallaxArchive,
       mediaAssetUrls: mediaAssetUrls,
@@ -1964,7 +1967,7 @@ class _PrismItem {
         'catalogFirstFrameThumbnailUrl': firstFrameThumbnailUrl,
         'catalogVideoUrl': videoUrl,
         'catalogOriginalVideoUrl': contentType == PrismCatalogDataSource.liveContentType ? downloadUrl : '',
-        'catalogOriginalStillUrl': contentType == PrismCatalogDataSource.liveContentType ? livePoster : '',
+        'catalogOriginalStillUrl': contentType == PrismCatalogDataSource.liveContentType ? originalStillUrl : '',
         'catalogThumbnailVideoUrl': thumbnailVideoUrl,
         'catalogLivePhotoTimeSeconds': livePhotoTimeSeconds,
         'catalogTemplateUrl': templateUrl,
