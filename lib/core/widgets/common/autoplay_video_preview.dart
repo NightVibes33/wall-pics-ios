@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:Prism/features/prism_catalog/data/prism_seed_media_store.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter/material.dart';
@@ -185,6 +186,16 @@ class _AutoplayVideoPreviewState extends State<AutoplayVideoPreview> {
     final poster = widget.posterUrl?.trim() ?? '';
     if (poster.isEmpty) {
       return const ColoredBox(color: Colors.black);
+    }
+    final seedBytes = PrismSeedMediaStore.instance.bytesForUrlSync(poster);
+    if (seedBytes != null) {
+      widget.onReady?.call();
+      return Image.memory(
+        seedBytes,
+        fit: widget.fit,
+        alignment: widget.alignment,
+        filterQuality: FilterQuality.high,
+      );
     }
     return CachedNetworkImage(
       imageUrl: poster,

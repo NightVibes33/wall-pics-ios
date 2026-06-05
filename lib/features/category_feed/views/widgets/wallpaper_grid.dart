@@ -11,6 +11,7 @@ import 'package:Prism/features/category_feed/domain/entities/feed_item_entity.da
 import 'package:Prism/features/category_feed/views/category_feed_bloc_adapter.dart';
 import 'package:Prism/features/category_feed/views/widgets/wallpaper_tile.dart';
 import 'package:Prism/features/prism_catalog/data/prism_catalog_data_source.dart';
+import 'package:Prism/features/prism_catalog/data/prism_seed_media_store.dart';
 import 'package:Prism/features/theme_mode/views/theme_mode_bloc_utils.dart';
 import 'package:Prism/logger/logger.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -99,7 +100,7 @@ class _WallpaperGridState extends State<WallpaperGrid> {
   Future<void> _precacheThumbnailUrls(BuildContext context, Iterable<String> urls, {required Duration timeout}) async {
     final futures = <Future<void>>[];
     for (final url in urls) {
-      if (!_prefetchedThumbnailUrls.add(url)) {
+      if (PrismSeedMediaStore.instance.hasUrlSync(url) || !_prefetchedThumbnailUrls.add(url)) {
         continue;
       }
       futures.add(
@@ -131,8 +132,7 @@ class _WallpaperGridState extends State<WallpaperGrid> {
   List<String> _thumbnailUrls(Iterable<PrismFeedItem> items) {
     return items
         .map((item) {
-          final poster = WallpaperTile.posterUrlForItem(item).trim();
-          return poster.isNotEmpty ? poster : item.thumbnailUrl.trim();
+          return WallpaperTile.imageUrlForItem(item).trim();
         })
         .where((url) => url.isNotEmpty)
         .toList(growable: false);

@@ -15,6 +15,7 @@ import 'package:Prism/features/navigation/views/widgets/offline_banner.dart';
 import 'package:Prism/features/palette/domain/entities/wallpaper_detail_entity.dart';
 import 'package:Prism/features/palette/domain/entities/wallpaper_detail_gallery_store.dart';
 import 'package:Prism/features/prism_catalog/data/prism_catalog_data_source.dart';
+import 'package:Prism/features/prism_catalog/data/prism_seed_media_store.dart';
 import 'package:Prism/features/user_search/views/pages/search_screen.dart';
 import 'package:Prism/theme/jam_icons_icons.dart';
 import 'package:auto_route/auto_route.dart';
@@ -22,6 +23,27 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:internet_connection_checker/internet_connection_checker.dart';
+
+Widget? _seededCatalogImage(
+  String rawUrl, {
+  required BoxFit fit,
+  Alignment alignment = Alignment.center,
+  int? cacheWidth,
+  int? cacheHeight,
+}) {
+  final seedBytes = PrismSeedMediaStore.instance.bytesForUrlSync(rawUrl.trim());
+  if (seedBytes == null) {
+    return null;
+  }
+  return Image.memory(
+    seedBytes,
+    fit: fit,
+    alignment: alignment,
+    filterQuality: FilterQuality.high,
+    cacheWidth: cacheWidth,
+    cacheHeight: cacheHeight,
+  );
+}
 
 @RoutePage()
 class HomeTabPage extends StatefulWidget {
@@ -451,6 +473,9 @@ class _HomeTabPageState extends State<HomeTabPage> {
         return;
       }
       for (final url in imageUrls) {
+        if (PrismSeedMediaStore.instance.hasUrlSync(url)) {
+          continue;
+        }
         unawaited(precacheImage(CachedNetworkImageProvider(url), context).catchError((Object _) {}));
       }
       for (final url in videoUrls) {
@@ -661,15 +686,16 @@ class _HeroBanner extends StatelessWidget {
             fit: StackFit.expand,
             children: <Widget>[
               if (url.isNotEmpty)
-                CachedNetworkImage(
-                  imageUrl: url,
-                  fit: BoxFit.cover,
-                  alignment: Alignment.center,
-                  fadeInDuration: Duration.zero,
-                  fadeOutDuration: Duration.zero,
-                  placeholder: (_, _) => const ColoredBox(color: Color(0xFF050506)),
-                  errorWidget: (_, _, _) => const ColoredBox(color: Color(0xFF050506)),
-                )
+                _seededCatalogImage(url, fit: BoxFit.cover) ??
+                    CachedNetworkImage(
+                      imageUrl: url,
+                      fit: BoxFit.cover,
+                      alignment: Alignment.center,
+                      fadeInDuration: Duration.zero,
+                      fadeOutDuration: Duration.zero,
+                      placeholder: (_, _) => const ColoredBox(color: Color(0xFF050506)),
+                      errorWidget: (_, _, _) => const ColoredBox(color: Color(0xFF050506)),
+                    )
               else
                 const ColoredBox(color: Color(0xFF050506)),
               DecoratedBox(
@@ -1039,6 +1065,10 @@ class _HomeWallpaperCard extends StatelessWidget {
     final pixelRatio = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 3.0);
     final cacheWidth = math.max(720, ((size.width / 3) * pixelRatio).ceil());
     final cacheHeight = isProfile ? cacheWidth : (cacheWidth * 2).ceil();
+    final seedImage = _seededCatalogImage(url, fit: BoxFit.cover, cacheWidth: cacheWidth, cacheHeight: cacheHeight);
+    if (seedImage != null) {
+      return seedImage;
+    }
     return CachedNetworkImage(
       imageUrl: url,
       fit: BoxFit.cover,
@@ -1369,6 +1399,9 @@ class _MatchingCatalogScreenState extends State<_MatchingCatalogScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       for (final url in urls) {
+        if (PrismSeedMediaStore.instance.hasUrlSync(url)) {
+          continue;
+        }
         unawaited(precacheImage(CachedNetworkImageProvider(url), context).catchError((Object _) {}));
       }
     });
@@ -1664,6 +1697,10 @@ class _MatchingCatalogImage extends StatelessWidget {
   Widget build(BuildContext context) {
     if (url.trim().isEmpty) {
       return const ColoredBox(color: Color(0xFF111114));
+    }
+    final seedImage = _seededCatalogImage(url, fit: BoxFit.cover, cacheWidth: cacheWidth, cacheHeight: cacheHeight);
+    if (seedImage != null) {
+      return seedImage;
     }
     return CachedNetworkImage(
       imageUrl: url,

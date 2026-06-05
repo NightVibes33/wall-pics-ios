@@ -38,6 +38,7 @@ import 'package:Prism/features/favourite_walls/favourite_walls.dart';
 import 'package:Prism/features/in_app_notifications/biz/bloc/in_app_notifications_bloc.j.dart';
 import 'package:Prism/features/palette/domain/bloc/wallpaper_detail_bloc.dart';
 import 'package:Prism/features/prism_catalog/data/prism_catalog_data_source.dart';
+import 'package:Prism/features/prism_catalog/data/prism_seed_media_store.dart';
 import 'package:Prism/features/palette/palette.dart';
 import 'package:Prism/features/profile_setups/profile_setups.dart';
 import 'package:Prism/features/session/domain/entities/session_entity.dart';
@@ -160,7 +161,11 @@ Future<void> main() async {
       final SentryConfig sentryConfig = _resolveSentryConfig();
 
       // Only truly-blocking tasks remain on the critical path.
-      await Future.wait(<Future<Object?>>[PersistenceBootstrap.initialize(), _initializeMonitoring(sentryConfig)]);
+      await Future.wait(<Future<Object?>>[
+        PersistenceBootstrap.initialize(),
+        _initializeMonitoring(sentryConfig),
+        PrismSeedMediaStore.instance.warm(),
+      ]);
 
       unawaited(
         PrismCatalogDataSource.instance.warmHomeBootstrapCache().catchError((Object e, StackTrace s) {

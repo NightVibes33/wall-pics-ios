@@ -46,6 +46,12 @@ jobs:
           WALLPICS_EXTRA_HEADERS_JSON: ${{ secrets.WALLPICS_EXTRA_HEADERS_JSON }}
         run: sh tool/write_prism_env.sh
 
+      - name: Generate encrypted seed media
+        env:
+          PRISM_SEED_MEDIA_LIMIT: 120
+          PRISM_SEED_MEDIA_MAX_BYTES: 30000000
+        run: python3 tool/generate_prism_seed_media.py
+
       - name: Flutter pub get
         run: flutter pub get
 
