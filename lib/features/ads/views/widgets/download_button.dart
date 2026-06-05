@@ -127,6 +127,7 @@ class _DownloadButtonState extends State<DownloadButton> {
         context,
         contentId: contentId,
         sourceContext: sourceContext,
+        isPremiumContent: widget.isPremiumContent,
       );
       if (!canDownload) {
         return false;

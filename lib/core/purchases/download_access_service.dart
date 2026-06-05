@@ -17,10 +17,22 @@ class DownloadAccessService {
   Future<bool> ensureCanStartDownload(
     BuildContext context, {
     String? sourceContext,
+    bool isPremiumContent = false,
   }) async {
     await PurchasesService.instance.checkAndPersistPremium();
     if (app_state.prismUser.premium) {
       return true;
+    }
+
+    if (isPremiumContent) {
+      if (context.mounted) {
+        await PaywallOrchestrator.instance.present(
+          context,
+          placement: PaywallPlacement.premiumWallpaperDownload,
+          source: sourceContext ?? 'premium_wallpaper_download',
+        );
+      }
+      return app_state.prismUser.premium;
     }
 
     if (!app_state.prismUser.loggedIn || app_state.prismUser.id.trim().isEmpty) {
@@ -112,8 +124,13 @@ class DownloadAccessService {
     BuildContext context, {
     String? contentId,
     String? sourceContext,
+    bool isPremiumContent = false,
   }) async {
-    final canStart = await ensureCanStartDownload(context, sourceContext: sourceContext);
+    final canStart = await ensureCanStartDownload(
+      context,
+      sourceContext: sourceContext,
+      isPremiumContent: isPremiumContent,
+    );
     if (!canStart) {
       return false;
     }

@@ -16,6 +16,7 @@ class PaywallPlacement {
   static const String uploadLimitReached = 'upload_limit_reached';
   static const String onboardingCompletion = 'onboarding_completion';
   static const String freeDownloadLimit = 'free_download_limit';
+  static const String premiumWallpaperDownload = 'premium_wallpaper_download';
 }
 
 class PaywallOrchestrator {
