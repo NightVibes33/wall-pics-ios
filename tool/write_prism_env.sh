@@ -16,6 +16,16 @@ if ! grep -q '^PRISM_CATALOG_BASE_URL=' .env && [ -n "${CATALOG_BASE_URL:-}" ]; 
   printf '%s\n' "PRISM_CATALOG_BASE_URL=$CATALOG_BASE_URL" >> .env
 fi
 
+if ! grep -q '^USER_STORE_API_BASE_URL=' .env && [ -n "${CATALOG_BASE_URL:-}" ]; then
+  DERIVED_USER_STORE_API_BASE_URL="${CATALOG_BASE_URL%/}"
+  case "$DERIVED_USER_STORE_API_BASE_URL" in
+    */v1/catalog)
+      DERIVED_USER_STORE_API_BASE_URL="${DERIVED_USER_STORE_API_BASE_URL%/v1/catalog}"
+      printf '%s\n' "USER_STORE_API_BASE_URL=$DERIVED_USER_STORE_API_BASE_URL" >> .env
+      ;;
+  esac
+fi
+
 if ! grep -q '^PRISM_MEDIA_BASE_URL=' .env && [ -n "${MEDIA_BASE_URL:-}" ]; then
   printf '%s\n' "PRISM_MEDIA_BASE_URL=$MEDIA_BASE_URL" >> .env
 fi
