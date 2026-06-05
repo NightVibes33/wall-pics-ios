@@ -446,6 +446,14 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     return path.endsWith('.zip');
   }
 
+  bool _isCatalogPreviewUrl(String url) {
+    return PrismCatalogDataSource.isCatalogPreviewAssetUrl(url);
+  }
+
+  bool _isSafeImageUrl(String url) {
+    return url.trim().isNotEmpty && !_isVideoUrl(url) && !_isArchiveUrl(url) && !_isCatalogPreviewUrl(url);
+  }
+
   String _firstNonEmpty(Iterable<String> values) {
     for (final value in values) {
       final trimmed = value.trim();
@@ -455,18 +463,16 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
   }
 
   String _catalogDisplayImageUrl(WallpaperDetailEntity entity) {
-    final pairedImageUrls = _catalogPairedImageUrlsForEntity(entity);
+    final pairedImageUrls = _catalogPairedImageUrlsForEntity(entity).where(_isSafeImageUrl).toList(growable: false);
     if (pairedImageUrls.isNotEmpty) return pairedImageUrls.first;
 
     final full = entity.fullUrl.trim();
-    if (full.isNotEmpty && !_isVideoUrl(full) && !_isArchiveUrl(full)) return full;
-    final firstFrameStill = _prismMetadataValue(entity, 'catalogFirstFrameThumbnailUrl');
-    if (firstFrameStill.isNotEmpty) return firstFrameStill;
-    final staticStill = _prismMetadataValue(entity, 'catalogStaticThumbnailUrl');
-    if (staticStill.isNotEmpty) return staticStill;
+    if (_isSafeImageUrl(full)) return full;
+    final originalStill = _prismMetadataValue(entity, 'catalogOriginalStillUrl');
+    if (_isSafeImageUrl(originalStill)) return originalStill;
     final thumb = entity.thumbnailUrl.trim();
-    if (thumb.isNotEmpty && !_isVideoUrl(thumb) && !_isArchiveUrl(thumb)) return thumb;
-    return thumb;
+    if (_isSafeImageUrl(thumb)) return thumb;
+    return '';
   }
 
   String _catalogParallaxFileUrl(WallpaperDetailEntity entity) {
@@ -482,7 +488,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     return _firstNonEmpty(
       <String>[
         _prismMetadataValue(entity, 'catalogOriginalStillUrl'),
-      ].where((url) => url.isNotEmpty && !_isVideoUrl(url) && !_isArchiveUrl(url)),
+      ].where(_isSafeImageUrl),
     );
   }
 
@@ -490,15 +496,9 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     final full = entity.fullUrl.trim();
     return _firstNonEmpty(<String>[
       _prismMetadataValue(entity, 'catalogOriginalVideoUrl'),
-      _isVideoUrl(full) ? full : '',
+      _isVideoUrl(full) && !_isCatalogPreviewUrl(full) ? full : '',
       _prismMetadataValue(entity, 'catalogVideoUrl'),
-      _prismMetadataValue(entity, 'catalogThumbnailVideoUrl'),
-    ]);
-  }
-
-  double _catalogPreviewSpeed(WallpaperDetailEntity entity) {
-    final speed = _prismMetadataDouble(entity, 'catalogPreviewSpeed');
-    return speed != null && speed.isFinite && speed > 0 ? speed : 1.0;
+    ].where((url) => url.trim().isNotEmpty && _isVideoUrl(url) && !_isCatalogPreviewUrl(url)));
   }
 
   List<String> _catalogPairedImageUrlsForEntity(WallpaperDetailEntity entity) {
@@ -751,7 +751,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
 
   Widget _buildColorBar(BuildContext context, WallpaperDetailLoaded state) {
     final colors = state.colors;
-    final thumbnailUrl = state.entity.thumbnailUrl.trim();
+    final thumbnailUrl = _catalogDisplayImageUrl(state.entity).trim();
     final colorCount = colors?.length ?? 0;
 
     // Build the default (no-filter) swatch + one swatch per palette color.
@@ -1348,7 +1348,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     if (parallaxArchiveUrl.isNotEmpty) {
       imageLayer = ParallaxArchiveImage(
         archiveUrl: parallaxArchiveUrl,
-        fallbackUrl: thumb.isNotEmpty ? thumb : _catalogDisplayImageUrl(entity),
+        fallbackUrl: _catalogDisplayImageUrl(entity),
         fit: BoxFit.contain,
         onReady: onWallpaperDisplayReady,
         onCompositeReady: (path) => _handleParallaxCompositeReady(entity, path),
@@ -1356,9 +1356,9 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     } else if (pairedImageUrls.length < 2 && full.isNotEmpty && _isVideoUrl(full)) {
       imageLayer = AutoplayVideoPreview(
         videoUrl: full,
-        posterUrl: isLivePhoto ? (thumb.isNotEmpty ? thumb : _catalogLiveStillUrl(entity)) : null,
+        posterUrl: isLivePhoto ? _catalogLiveStillUrl(entity) : null,
         fit: BoxFit.contain,
-        playbackSpeed: isLivePhoto ? _catalogPreviewSpeed(entity) : 1.0,
+        playbackSpeed: 1.0,
         onReady: onWallpaperDisplayReady,
       );
     } else if (pairedImageUrls.length >= 2) {

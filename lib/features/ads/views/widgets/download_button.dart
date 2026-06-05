@@ -94,11 +94,6 @@ class _DownloadButtonState extends State<DownloadButton> {
     await _performDownload();
   }
 
-  bool _isLivePhotoVideo(String link) {
-    final path = Uri.tryParse(link)?.path.toLowerCase() ?? link.toLowerCase();
-    return path.endsWith('.mp4') || path.endsWith('.mov');
-  }
-
   bool _isLocalMediaPath(String link) {
     return link.startsWith('/') || link.startsWith('file://') || link.contains('com.hash.prism');
   }
@@ -125,19 +120,24 @@ class _DownloadButtonState extends State<DownloadButton> {
     try {
       final sourceContext = widget.sourceContext ?? 'download_button';
       final contentId = widget.contentId ?? _filenameBaseFromUrl(link);
-      final canDownload = await DownloadAccessService.instance.ensureCanDownload(
+      if (widget.isLivePhoto && (widget.livePhotoStillUrl?.trim().isEmpty ?? true)) {
+        PrismHaptics.failure();
+        toasts.error('This source is missing an original Live Photo still.');
+        return false;
+      }
+
+      final canStartDownload = await DownloadAccessService.instance.ensureCanStartDownload(
         context,
-        contentId: contentId,
         sourceContext: sourceContext,
         isPremiumContent: widget.isPremiumContent,
       );
-      if (!canDownload) {
+      if (!canStartDownload) {
         return false;
       }
 
       var savedLivePhoto = false;
       logger.d(link);
-      final shouldSaveLivePhoto = widget.isLivePhoto || _isLivePhotoVideo(link);
+      final shouldSaveLivePhoto = widget.isLivePhoto;
       if (shouldSaveLivePhoto) {
         final stillUrl = widget.livePhotoStillUrl?.trim();
         final message = await PrismLivePhotoSaver.save(
@@ -177,6 +177,14 @@ class _DownloadButtonState extends State<DownloadButton> {
           toasts.error(result.message ?? "Couldn't download! Please retry.");
           return false;
         }
+      }
+
+      final claimed = await DownloadAccessService.instance.claimSuccessfulFreeDownload(
+        contentId: contentId,
+        sourceContext: sourceContext,
+      );
+      if (!claimed) {
+        return false;
       }
 
       analytics.track(

@@ -32,6 +32,14 @@ class PrismCatalogDataSource {
     return _fastVideoUrl(url);
   }
 
+  static bool isCatalogPreviewAssetUrl(String url) {
+    return _isCatalogPreviewAssetUrl(url);
+  }
+
+  static bool isActualCatalogImageUrl(String url) {
+    return _isActualCatalogImageUrl(url);
+  }
+
   static const int _pageSize = 144;
   static const int _catalogShardSize = 100;
   static const Duration _metadataTimeout = Duration(seconds: 10);
@@ -1793,29 +1801,33 @@ class _PrismItem {
       parallaxFile,
     ]);
     final liveOriginalStill = _firstString(<Object?>[
+      ...<String>[
+        url(json['photo']),
+        url(json['photo_url']),
+        url(json['still']),
+        url(json['still_url']),
+        url(json['still_image']),
+        url(json['still_image_url']),
+        url(json['original_photo']),
+        url(json['original_photo_url']),
+        url(json['original_still']),
+        url(json['original_still_url']),
+      ].where(isActualImageUrl),
       isActualImageUrl(wallpaper) ? wallpaper : '',
       isActualImageUrl(image) ? image : '',
       isActualImageUrl(appDownloadUrl) ? appDownloadUrl : '',
       isActualImageUrl(catalogDownload) ? catalogDownload : '',
     ]);
-    final livePoster = _firstString(<Object?>[
-      liveOriginalStill,
-      isActualImageUrl(fullImage) ? fullImage : '',
-      isActualImageUrl(firstFrameThumbnail) ? firstFrameThumbnail : '',
-      isActualImageUrl(staticThumbnail) ? staticThumbnail : '',
-      isActualImageUrl(hqThumbnail) ? hqThumbnail : '',
-      isActualImageUrl(thumbnail) ? thumbnail : '',
-      isActualImageUrl(previewImage) ? previewImage : '',
-    ]);
-    final rawLivePreviewSpeed = _double(json['preview_speed']) ?? 1.0;
-    final livePreviewSpeed = isLiveContent && rawLivePreviewSpeed > 0 ? rawLivePreviewSpeed : 1.0;
+    final livePoster = liveOriginalStill;
+    const livePreviewSpeed = 1.0;
     final livePhotoTimeSeconds = isLiveContent ? (_double(json['cm_time']) ?? 0) / 1000.0 : 0.0;
+    bool isOriginalVideoUrl(String value) => isVideoUrl(value) && !_isCatalogPreviewAssetUrl(value);
     final liveOriginalVideo = _firstString(<Object?>[
-      isVideoUrl(originalVideo) ? originalVideo : '',
-      isVideoUrl(appDownloadUrl) ? appDownloadUrl : '',
-      isVideoUrl(catalogDownload) ? catalogDownload : '',
-      isVideoUrl(video) ? video : '',
-      isVideoUrl(wallpaper) ? wallpaper : '',
+      isOriginalVideoUrl(originalVideo) ? originalVideo : '',
+      isOriginalVideoUrl(appDownloadUrl) ? appDownloadUrl : '',
+      isOriginalVideoUrl(catalogDownload) ? catalogDownload : '',
+      isOriginalVideoUrl(url(json['video'])) ? url(json['video']) : '',
+      isOriginalVideoUrl(wallpaper) ? wallpaper : '',
     ]);
     final livePreviewVideo = isLiveContent ? liveOriginalVideo : fastVideo;
     final liveThumbnailVideo = isLiveContent ? liveOriginalVideo : fastThumbnailVideo;
@@ -1824,11 +1836,11 @@ class _PrismItem {
     final fastFullSizeImage = _fastTileOrOriginal(fullImage, width: 3840, quality: 98);
     final fastLivePoster = _fastTileOrOriginal(liveOriginalStill);
     final previewThumbImage = _firstString(<Object?>[
-      isImageUrl(previewImage) ? previewImage : '',
-      isImageUrl(staticThumbnail) ? staticThumbnail : '',
-      isImageUrl(hqThumbnail) ? hqThumbnail : '',
-      isImageUrl(thumbnail) ? thumbnail : '',
-      isImageUrl(firstFrameThumbnail) ? firstFrameThumbnail : '',
+      isActualImageUrl(previewImage) ? previewImage : '',
+      isActualImageUrl(staticThumbnail) ? staticThumbnail : '',
+      isActualImageUrl(hqThumbnail) ? hqThumbnail : '',
+      isActualImageUrl(thumbnail) ? thumbnail : '',
+      isActualImageUrl(firstFrameThumbnail) ? firstFrameThumbnail : '',
     ]);
     final fastPreviewThumbImage = _fastTileOrOriginal(previewThumbImage);
     final fastParallaxLayerPreview = _fastTileOrOriginal(parallaxLayerPreview, width: 1920, quality: 94);
@@ -1862,9 +1874,9 @@ class _PrismItem {
         : isParallaxContent
             ? _firstString(<Object?>[fastPreviewThumbImage, thumb, fastParallaxLayerPreview])
             : _firstString(<Object?>[
-                isImageUrl(staticThumbnail) ? _fastTileOrOriginal(staticThumbnail) : '',
-                isImageUrl(hqThumbnail) ? _fastTileOrOriginal(hqThumbnail) : '',
-                isImageUrl(previewImage) ? _fastTileOrOriginal(previewImage) : '',
+                isActualImageUrl(staticThumbnail) ? _fastTileOrOriginal(staticThumbnail) : '',
+                isActualImageUrl(hqThumbnail) ? _fastTileOrOriginal(hqThumbnail) : '',
+                isActualImageUrl(previewImage) ? _fastTileOrOriginal(previewImage) : '',
                 thumb,
                 fastFullImage,
               ]);
@@ -1907,7 +1919,7 @@ class _PrismItem {
       staticThumbnailUrl: staticThumb,
       firstFrameThumbnailUrl: isLiveContent
           ? fastLivePoster
-          : isImageUrl(firstFrameThumbnail)
+          : isActualImageUrl(firstFrameThumbnail)
               ? _fastTileOrOriginal(firstFrameThumbnail)
               : '',
       videoUrl: livePreviewVideo,
@@ -2188,11 +2200,24 @@ Map<String, dynamic> _normalizeDirectApiItem(
   switch (contentType) {
     case PrismCatalogDataSource.regularContentType:
       setIfEmpty('download_url', item['wallpaper']);
-      setIfEmpty('preview_image', _firstString(<Object?>[item['hq_thumbnail'], item['static_thumbnail'], item['thumbnail']]));
+      setIfEmpty('preview_image', _firstString(<Object?>[item['wallpaper'], item['image'], item['download_url']]));
       break;
     case PrismCatalogDataSource.liveContentType:
-      setIfEmpty('download_url', _firstString(<Object?>[item['video_original '], item['video_original'], item['video']]));
-      setIfEmpty('preview_image', _firstString(<Object?>[item['first_frame_thumbnail'], item['static_thumbnail'], item['thumbnail']]));
+      setIfEmpty('download_url', _firstString(<Object?>[item['video_original '], item['video_original'], item['app_download_url'], item['download_url'], item['video']]));
+      setIfEmpty('preview_image', _firstString(<Object?>[
+        item['photo'],
+        item['photo_url'],
+        item['still'],
+        item['still_url'],
+        item['still_image'],
+        item['still_image_url'],
+        item['original_photo'],
+        item['original_photo_url'],
+        item['original_still'],
+        item['original_still_url'],
+        item['wallpaper'],
+        item['image'],
+      ]));
       break;
     case PrismCatalogDataSource.matchingContentType:
       _normalizeDirectPairList(item, fallbackRolePrefix: 'pair');
@@ -2202,11 +2227,11 @@ Map<String, dynamic> _normalizeDirectApiItem(
       break;
     case PrismCatalogDataSource.parallaxContentType:
       setIfEmpty('download_url', item['parallax_file']);
-      setIfEmpty('preview_image', _firstParallaxLayerUrl(item) ?? item['thumbnail']);
+      setIfEmpty('preview_image', _firstParallaxLayerUrl(item) ?? item['image'] ?? item['wallpaper']);
       break;
     case PrismCatalogDataSource.profilePictureContentType:
       setIfEmpty('download_url', item['image']);
-      setIfEmpty('preview_image', item['thumbnail']);
+      setIfEmpty('preview_image', _firstString(<Object?>[item['image'], item['download_url']]));
       break;
   }
 
@@ -2238,7 +2263,7 @@ void _normalizeDirectPairList(Map<String, dynamic> item, {required String fallba
   for (var index = 0; index < rawPairs.length; index++) {
     final row = rawPairs[index];
     final image = _firstString(<Object?>[row['download_url'], row['image'], row['wallpaper'], row['full_url'], row['url']]);
-    final thumbnail = _firstString(<Object?>[row['thumbnail'], row['preview_url'], image]);
+    final thumbnail = image;
     pairs.add(<String, dynamic>{
       ...row,
       'role': _firstString(<Object?>[row['role'], '${fallbackRolePrefix}_${index + 1}']),
@@ -2277,7 +2302,7 @@ void _normalizeDirectDoublePair(Map<String, dynamic> item) {
       'role': 'lock_screen',
       'image': lockImage,
       'download_url': lockImage,
-      'thumbnail': _firstString(<Object?>[item['lock_screen_thumbnail'], item['thumbnail']]),
+      'thumbnail': lockImage,
     });
   }
   if (homeImage.isNotEmpty) {
@@ -2285,7 +2310,7 @@ void _normalizeDirectDoublePair(Map<String, dynamic> item) {
       'role': 'home_screen',
       'image': homeImage,
       'download_url': homeImage,
-      'thumbnail': _firstString(<Object?>[item['home_screen_thumbnail'], item['thumbnail']]),
+      'thumbnail': homeImage,
     });
   }
   item['paired_wallpapers'] = pairs;
@@ -2296,14 +2321,14 @@ void _normalizeDirectDoublePair(Map<String, dynamic> item) {
   } else if (lockImage.isNotEmpty) {
     item['download_url'] = lockImage;
   }
-  setFirstNonEmpty(item, 'preview_image', <Object?>[item['thumbnail'], item['home_screen_thumbnail'], item['lock_screen_thumbnail']]);
+  setFirstNonEmpty(item, 'preview_image', <Object?>[homeImage, lockImage]);
 }
 
 String? _firstParallaxLayerUrl(Map<String, dynamic> item) {
   final config = _asMap(item['thumbnail_config']);
   for (final layer in _maps(config['layers'])) {
     final url = _string(layer['url']).trim();
-    if (url.isNotEmpty) {
+    if (url.isNotEmpty && !_isCatalogPreviewAssetUrl(url)) {
       return url;
     }
   }
@@ -2385,7 +2410,7 @@ String _resolveCatalogUrl(Object? value, {required String sourceBase}) {
 
 String _fastTileImageUrl(String rawUrl, {int width = 1920, int quality = 96}) {
   final source = rawUrl.trim();
-  if (!_isProxyableCatalogImageUrl(source)) {
+  if (!_isProxyableCatalogImageUrl(source) || _isCatalogPreviewAssetUrl(source)) {
     return '';
   }
   final base = _workerMediaBaseUrl();
@@ -2406,18 +2431,26 @@ String _fastTileImageUrl(String rawUrl, {int width = 1920, int quality = 96}) {
 }
 
 String _fastTileOrOriginal(String rawUrl, {int width = 1080, int quality = 90}) {
-  final fastUrl = _fastTileImageUrl(rawUrl, width: width, quality: quality);
-  return fastUrl.isNotEmpty ? fastUrl : rawUrl.trim();
+  final source = rawUrl.trim();
+  if (_isCatalogPreviewAssetUrl(source)) {
+    return '';
+  }
+  final fastUrl = _fastTileImageUrl(source, width: width, quality: quality);
+  return fastUrl.isNotEmpty ? fastUrl : source;
 }
 
 String _fastVideoOrOriginal(String rawUrl) {
-  final fastUrl = _fastVideoUrl(rawUrl);
-  return fastUrl.isNotEmpty ? fastUrl : rawUrl.trim();
+  final source = rawUrl.trim();
+  if (_isCatalogPreviewAssetUrl(source)) {
+    return '';
+  }
+  final fastUrl = _fastVideoUrl(source);
+  return fastUrl.isNotEmpty ? fastUrl : source;
 }
 
 String _fastVideoUrl(String rawUrl) {
   final source = rawUrl.trim();
-  if (!_isProxyableCatalogVideoUrl(source)) {
+  if (!_isProxyableCatalogVideoUrl(source) || _isCatalogPreviewAssetUrl(source)) {
     return '';
   }
   final base = _workerMediaBaseUrl();
@@ -2487,8 +2520,12 @@ bool _isCatalogPreviewAssetUrl(String value) {
       decoded.contains('/thumbnail') ||
       decoded.contains('/thumb') ||
       decoded.contains('first_frame') ||
+      decoded.contains('app_display') ||
+      decoded.contains('display_url') ||
       decoded.contains('poster') ||
-      decoded.contains('watermark');
+      decoded.contains('watermark') ||
+      decoded.contains('brand') ||
+      decoded.contains('logo');
 }
 
 bool _isProxyableCatalogVideoUrl(String value) {

@@ -43,35 +43,20 @@ final class PrismLivePhotoSaver: NSObject {
     return nil
   }
 
-  private func save(videoUrl: String, stillUrl: String?, photoTimeSeconds: Double?, completion: @escaping ([String: Any]) -> Void) {
+  private func save(videoUrl: String, stillUrl: String?, photoTimeSeconds _: Double?, completion: @escaping ([String: Any]) -> Void) {
     queue.async {
       do {
         try self.ensurePhotoPermission()
-        let assetId = UUID().uuidString
         let workDir = try self.makeWorkDirectory()
-        let rawVideo = try self.fetchFile(urlString: videoUrl, fallbackExtension: "mp4", directory: workDir)
-        let fetchedStill: URL?
-        if let stillUrl = stillUrl?.trimmingCharacters(in: .whitespacesAndNewlines), !stillUrl.isEmpty {
-          fetchedStill = try? self.fetchFile(urlString: stillUrl, fallbackExtension: "jpg", directory: workDir)
-        } else {
-          fetchedStill = nil
+        let rawVideo = try self.fetchFile(urlString: videoUrl, fallbackExtension: "mov", directory: workDir)
+        guard let stillUrl = stillUrl?.trimmingCharacters(in: .whitespacesAndNewlines), !stillUrl.isEmpty else {
+          throw LivePhotoError.missingOriginalPair
         }
-        if let fetchedStill, self.validateLivePhotoResourcePair(photo: fetchedStill, video: rawVideo) {
-          try self.savePairedAsset(photo: fetchedStill, video: rawVideo)
-          try? FileManager.default.removeItem(at: workDir)
-          DispatchQueue.main.async { completion(["success": true]) }
-          return
-        }
-        let photoTime = self.livePhotoStillTime(seconds: photoTimeSeconds, video: rawVideo)
-        let rawStill = try self.compatibleStillImage(fetchedStill, video: rawVideo, photoTime: photoTime, directory: workDir)
-        let pairedPhoto = workDir.appendingPathComponent("live-photo.jpg")
-        let pairedVideo = workDir.appendingPathComponent("live-video.mov")
-        try self.writePairedPhoto(input: rawStill, output: pairedPhoto, assetId: assetId)
-        try self.writePairedVideo(input: rawVideo, output: pairedVideo, assetId: assetId, photoTime: photoTime)
-        guard self.validateLivePhotoResourcePair(photo: pairedPhoto, video: pairedVideo) else {
+        let fetchedStill = try self.fetchFile(urlString: stillUrl, fallbackExtension: "jpg", directory: workDir)
+        guard self.validateLivePhotoResourcePair(photo: fetchedStill, video: rawVideo) else {
           throw LivePhotoError.livePhotoValidationFailed
         }
-        try self.savePairedAsset(photo: pairedPhoto, video: pairedVideo)
+        try self.savePairedAsset(photo: fetchedStill, video: rawVideo)
         try? FileManager.default.removeItem(at: workDir)
         DispatchQueue.main.async { completion(["success": true]) }
       } catch {
@@ -502,6 +487,7 @@ private enum LivePhotoError: LocalizedError {
   case videoTrackMissing
   case metadataWriteFailed
   case photoSaveFailed
+  case missingOriginalPair
   case livePhotoValidationFailed
   case photoPermissionDenied
 
@@ -527,8 +513,10 @@ private enum LivePhotoError: LocalizedError {
       return "Live Photo pairing metadata could not be written."
     case .photoSaveFailed:
       return "Live Photo could not be saved."
+    case .missingOriginalPair:
+      return "This source is missing an original Live Photo JPG/MOV pair."
     case .livePhotoValidationFailed:
-      return "iOS could not validate this Live Photo pair."
+      return "iOS could not validate this original Live Photo pair."
     case .photoPermissionDenied:
       return "Photo Library permission was denied."
     }

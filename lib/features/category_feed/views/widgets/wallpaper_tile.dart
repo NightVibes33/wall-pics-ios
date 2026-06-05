@@ -93,11 +93,10 @@ class WallpaperTile extends StatelessWidget {
         final metadata = wallpaper.aiMetadata ?? const <String, Object?>{};
         final fullUrl = wallpaper.core.fullUrl.trim();
         return _firstStringValue(<Object?>[
-          metadata['catalogVideoUrl'],
           metadata['catalogOriginalVideoUrl'],
-          metadata['catalogThumbnailVideoUrl'],
-          _isVideoUrl(fullUrl) ? fullUrl : '',
-        ]);
+          metadata['catalogVideoUrl'],
+          _isVideoUrl(fullUrl) && !PrismCatalogDataSource.isCatalogPreviewAssetUrl(fullUrl) ? fullUrl : '',
+        ], excludeCatalogPreviews: true);
       },
       wallhaven: (_, _) => '',
       pexels: (_, _) => '',
@@ -125,15 +124,21 @@ class WallpaperTile extends StatelessWidget {
             metadata['catalogOriginalStillUrl'],
             wallpaper.core.thumbnailUrl,
             wallpaper.core.fullUrl,
-            metadata['catalogStaticThumbnailUrl'],
-            metadata['catalogFirstFrameThumbnailUrl'],
-            metadata['catalogPreviewUrl'],
           ],
           imageOnly: true,
+          excludeCatalogPreviews: true,
         );
         final fast = PrismCatalogDataSource.fastImageTileUrl(preferred);
         return fast.isNotEmpty ? fast : preferred;
       },
+      wallhaven: (_, wallpaper) => wallpaper.thumbnailUrl,
+      pexels: (_, wallpaper) => wallpaper.thumbnailUrl,
+    );
+  }
+
+  static String imageUrlForItem(FeedItemEntity item) {
+    return item.when(
+      prism: (_, __) => posterUrlForItem(item),
       wallhaven: (_, wallpaper) => wallpaper.thumbnailUrl,
       pexels: (_, wallpaper) => wallpaper.thumbnailUrl,
     );
@@ -279,13 +284,20 @@ class WallpaperTile extends StatelessWidget {
     return path.endsWith('.mp4') || path.endsWith('.mov');
   }
 
-  static String _firstStringValue(Iterable<Object?> values, {bool imageOnly = false}) {
+  static String _firstStringValue(
+    Iterable<Object?> values, {
+    bool imageOnly = false,
+    bool excludeCatalogPreviews = false,
+  }) {
     for (final value in values) {
       final text = value?.toString().trim() ?? '';
       if (text.isEmpty) {
         continue;
       }
       if (imageOnly && (_isVideoUrl(text) || _isArchiveUrl(text))) {
+        continue;
+      }
+      if (excludeCatalogPreviews && PrismCatalogDataSource.isCatalogPreviewAssetUrl(text)) {
         continue;
       }
       return text;
@@ -303,7 +315,7 @@ class WallpaperTile extends StatelessWidget {
     required int cacheWidth,
     required int cacheHeight,
   }) {
-    if (_isArchiveUrl(url)) {
+    if (url.trim().isEmpty || _isArchiveUrl(url)) {
       return ColoredBox(color: Theme.of(context).colorScheme.surfaceContainerHighest);
     }
     return CachedNetworkImage(
@@ -331,12 +343,10 @@ class WallpaperTile extends StatelessWidget {
     final cacheWidth = (width * pixelRatio).ceil();
     final cacheHeight = (height * pixelRatio).ceil();
     final videoUrl = videoUrlForItem(item);
-    final videoSpeed = videoSpeedForItem(item);
     final shouldPlayVideo = videoUrl.isNotEmpty || playVideoPreview;
-    final posterUrl = posterUrlForItem(item);
-    final tileImageUrl = posterUrl.isNotEmpty ? posterUrl : item.thumbnailUrl;
+    final tileImageUrl = imageUrlForItem(item);
     final image = shouldPlayVideo && videoUrl.isNotEmpty
-        ? AutoplayVideoPreview(videoUrl: videoUrl, posterUrl: tileImageUrl, playing: true, playbackSpeed: videoSpeed)
+        ? AutoplayVideoPreview(videoUrl: videoUrl, posterUrl: tileImageUrl, playing: true)
         : _cachedTileImage(context, tileImageUrl, cacheWidth: cacheWidth, cacheHeight: cacheHeight);
     return Material(
       color: Colors.transparent,

@@ -38,7 +38,7 @@ class DownloadAccessService {
       return app_state.prismUser.premium;
     }
 
-    if (!app_state.prismUser.loggedIn || app_state.prismUser.id.trim().isEmpty) {
+    if (!app_state.prismUser.loggedIn || _quotaIdentity().isEmpty) {
       toasts.error('Sign in to download wallpapers.');
       return false;
     }
@@ -48,6 +48,9 @@ class DownloadAccessService {
     }
 
     try {
+      if (app_state.prismUser.id.trim().isEmpty) {
+        return false;
+      }
       final quota = await _userStore.getDownloadQuota();
       if (quota != null && (quota.isPremium || quota.remaining > 0)) {
         return true;
@@ -89,7 +92,7 @@ class DownloadAccessService {
     if (app_state.prismUser.premium) {
       return true;
     }
-    if (!app_state.prismUser.loggedIn || app_state.prismUser.id.trim().isEmpty) {
+    if (!app_state.prismUser.loggedIn || _quotaIdentity().isEmpty) {
       return false;
     }
 
@@ -97,7 +100,9 @@ class DownloadAccessService {
     if (!claimed) {
       return false;
     }
-    unawaited(_syncRemoteFreeDownloadClaim(contentId: contentId, sourceContext: sourceContext));
+    if (app_state.prismUser.id.trim().isNotEmpty) {
+      unawaited(_syncRemoteFreeDownloadClaim(contentId: contentId, sourceContext: sourceContext));
+    }
     return true;
   }
 
@@ -171,9 +176,17 @@ class DownloadAccessService {
 
   String _todayUtc() => DateTime.now().toUtc().toIso8601String().split('T').first;
 
-  String _quotaPrefsPrefix() {
+  String _quotaIdentity() {
     final userId = app_state.prismUser.id.trim();
-    return 'prism_local_download_quota_${userId.isEmpty ? 'anonymous' : userId}';
+    if (userId.isNotEmpty) {
+      return userId;
+    }
+    return app_state.prismUser.email.trim().toLowerCase();
+  }
+
+  String _quotaPrefsPrefix() {
+    final identity = _quotaIdentity();
+    return 'prism_local_download_quota_${identity.isEmpty ? 'anonymous' : identity}';
   }
 
   Future<_LocalDownloadQuota> _readLocalQuota() async {

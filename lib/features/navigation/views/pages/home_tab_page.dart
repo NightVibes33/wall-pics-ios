@@ -425,8 +425,7 @@ class _HomeTabPageState extends State<HomeTabPage> {
         .toList(growable: false);
     final imageUrls = displayItems
         .map((item) {
-          final posterUrl = WallpaperTile.posterUrlForItem(item).trim();
-          final thumbnailUrl = posterUrl.isNotEmpty ? posterUrl : item.thumbnailUrl.trim();
+          final thumbnailUrl = WallpaperTile.imageUrlForItem(item).trim();
           final thumbnailPath = Uri.tryParse(thumbnailUrl)?.path.toLowerCase() ?? thumbnailUrl.toLowerCase();
           if (thumbnailUrl.isEmpty || thumbnailPath.endsWith('.zip')) {
             return '';
@@ -970,8 +969,7 @@ class _HomeWallpaperCard extends StatelessWidget {
         section.title.toLowerCase().startsWith('profile') ||
         WallpaperTile.isProfilePictureItem(item);
     final videoUrl = WallpaperTile.videoUrlForItem(item);
-    final posterUrl = WallpaperTile.posterUrlForItem(item);
-    final imageUrl = posterUrl.isNotEmpty ? posterUrl : item.thumbnailUrl;
+    final imageUrl = WallpaperTile.imageUrlForItem(item);
     final rawImage = videoUrl.isNotEmpty
         ? AutoplayVideoPreview(videoUrl: videoUrl, posterUrl: imageUrl, playing: true)
         : _image(context, imageUrl, isProfile: isProfile);
@@ -1637,8 +1635,7 @@ class _MatchingCatalogSide extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final galleryIndex = galleryItems.indexWhere((candidate) => candidate.id == item.id);
-    final posterUrl = WallpaperTile.posterUrlForItem(item).trim();
-    final imageUrl = posterUrl.isNotEmpty ? posterUrl : item.thumbnailUrl;
+    final imageUrl = WallpaperTile.imageUrlForItem(item);
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1665,6 +1662,9 @@ class _MatchingCatalogImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (url.trim().isEmpty) {
+      return const ColoredBox(color: Color(0xFF111114));
+    }
     return CachedNetworkImage(
       imageUrl: url,
       fit: BoxFit.cover,
@@ -1813,8 +1813,7 @@ class _HomeDashboardData {
   String get firstPreviewUrl {
     for (final section in sections) {
       for (final item in section.items) {
-        final posterUrl = WallpaperTile.posterUrlForItem(item).trim();
-        final url = posterUrl.isNotEmpty ? posterUrl : item.thumbnailUrl.trim();
+        final url = WallpaperTile.imageUrlForItem(item).trim();
         if (url.isNotEmpty) {
           return url;
         }
