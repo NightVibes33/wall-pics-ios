@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:Prism/analytics/analytics_service.dart';
 import 'package:Prism/core/analytics/events/events.dart';
@@ -10,7 +11,6 @@ import 'package:Prism/core/purchases/download_access_service.dart';
 import 'package:Prism/core/widgets/animated/loader.dart';
 import 'package:Prism/core/widgets/menuButton/setWallpaperButton.dart';
 import 'package:Prism/features/palette/views/pages/custom_filters.dart';
-import 'package:Prism/features/theme_mode/views/theme_mode_bloc_utils.dart';
 import 'package:Prism/logger/logger.dart';
 import 'package:Prism/theme/jam_icons_icons.dart';
 import 'package:Prism/theme/toasts.dart' as toasts;
@@ -40,7 +40,10 @@ class WallpaperFilterScreen extends StatefulWidget {
 class _WallpaperFilterScreenState extends State<WallpaperFilterScreen> {
   String? filename;
   String? finalFilename;
-  Map<String, List<int>?> cachedFilters = {};
+  final Map<String, Uint8List> _thumbnailFilterCache = <String, Uint8List>{};
+  final Map<String, Uint8List> _fullFilterCache = <String, Uint8List>{};
+  final Map<String, Future<Uint8List>> _thumbnailFilterFutures = <String, Future<Uint8List>>{};
+  final Map<String, Future<Uint8List>> _fullFilterFutures = <String, Future<Uint8List>>{};
   Filter? _filter;
   imagelib.Image? image;
   imagelib.Image? finalImage;
@@ -401,52 +404,46 @@ class _WallpaperFilterScreenState extends State<WallpaperFilterScreen> {
   }
 
   Widget _buildFilterThumbnail(Filter filter, imagelib.Image? image, String? filename) {
-    final String filterName = filter.name;
-    if (cachedFilters[filterName] == null) {
-      return FutureBuilder<List<int>>(
-        future: compute(_applyFilter, <String, dynamic>{"filter": filter, "image": image, "filename": filename}),
-        builder: (BuildContext context, AsyncSnapshot<List<int>> snapshot) {
-          switch (snapshot.connectionState) {
-            case ConnectionState.none:
-            case ConnectionState.active:
-            case ConnectionState.waiting:
-              return ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Container(
-                  width: 90.0,
-                  height: MediaQuery.of(context).size.height * 0.15,
-                  color: Theme.of(context).primaryColor,
-                  child: Center(child: Loader()),
-                ),
-              );
-            case ConnectionState.done:
-              if (snapshot.hasError) {
-                return Center(child: Text('Error: ${snapshot.error}'));
-              }
-              cachedFilters[filterName] = snapshot.data;
-              return ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Container(
-                  width: 90.0,
-                  height: MediaQuery.of(context).size.height * 0.15,
-                  color: Theme.of(context).primaryColor,
-                  child: Image(image: MemoryImage((snapshot.data as Uint8List?)!), fit: BoxFit.cover),
-                ),
-              );
-          }
-        },
-      );
-    } else {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          width: 90.0,
-          height: MediaQuery.of(context).size.height * 0.15,
-          color: Theme.of(context).primaryColor,
-          child: Image(image: MemoryImage(cachedFilters[filterName]! as Uint8List), fit: BoxFit.cover),
-        ),
-      );
+    if (image == null) {
+      return _thumbnailShell(Center(child: Loader()));
     }
+    final cacheKey = _filterCacheKey('thumb', filter, image, filename);
+    final cached = _thumbnailFilterCache[cacheKey];
+    if (cached != null) {
+      return _thumbnailShell(Image(image: MemoryImage(cached), fit: BoxFit.cover));
+    }
+    return FutureBuilder<Uint8List>(
+      future: _thumbnailFilterFutures.putIfAbsent(
+        cacheKey,
+        () => _computeFilteredBytes(filter: filter, image: image, filename: filename).then((bytes) {
+          _thumbnailFilterCache[cacheKey] = bytes;
+          return bytes;
+        }),
+      ),
+      builder: (BuildContext context, AsyncSnapshot<Uint8List> snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return _thumbnailShell(Center(child: Loader()));
+        }
+        if (snapshot.hasError || snapshot.data == null) {
+          return _thumbnailShell(const Center(child: Icon(Icons.error_outline)));
+        }
+        final bytes = snapshot.data!;
+        _thumbnailFilterCache[cacheKey] = bytes;
+        return _thumbnailShell(Image(image: MemoryImage(bytes), fit: BoxFit.cover));
+      },
+    );
+  }
+
+  Widget _thumbnailShell(Widget child) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        width: 90.0,
+        height: MediaQuery.of(context).size.height * 0.15,
+        color: Theme.of(context).primaryColor,
+        child: child,
+      ),
+    );
   }
 
   Future<String> get _localPath async {
@@ -457,119 +454,104 @@ class _WallpaperFilterScreenState extends State<WallpaperFilterScreen> {
 
   Future<File> get _localFile async {
     final path = await _localPath;
-    return File('$path/filtered_${_filter?.name ?? "_"}_$finalFilename');
+    final targetName = finalFilename?.trim().isNotEmpty == true ? finalFilename!.trim() : 'wallpaper.jpg';
+    return File('$path/filtered_${_safeFilePart(_filter?.name ?? "_")}_${_safeFilePart(targetName)}');
   }
 
   Future<File> saveFilteredImage() async {
     final imageFile = await _localFile;
-    final List<int> finalFilterImageBytes = await compute(_applyFilter, <String, dynamic>{
-      "filter": _filter,
-      "image": finalImage,
-      "filename": finalFilename,
-    });
-    await imageFile.writeAsBytes(finalFilterImageBytes);
+    final selectedFilter = _filter;
+    final image = finalImage;
+    if (image == null) {
+      throw StateError('No full-size wallpaper image available for filtering.');
+    }
+    final Uint8List finalFilterImageBytes = await _fullFilterBytes(selectedFilter, image, finalFilename);
+    await imageFile.writeAsBytes(finalFilterImageBytes, flush: true);
     return imageFile;
   }
 
   Widget _buildFilteredImage(Filter? filter, imagelib.Image? image, String? filename) {
-    return FutureBuilder<List<int>>(
-      future: compute(_applyFilter, <String, dynamic>{"filter": filter, "image": image, "filename": filename}),
-      builder: (BuildContext context, AsyncSnapshot<List<int>> snapshot) {
-        switch (snapshot.connectionState) {
-          case ConnectionState.none:
-            return cachedFilters[filter?.name ?? "_"] == null
-                ? Center(child: Loader())
-                : Stack(
-                    children: [
-                      PhotoView(
-                        imageProvider: MemoryImage((cachedFilters[filter?.name ?? "_"] as Uint8List?)!),
-                        backgroundDecoration: BoxDecoration(color: Theme.of(context).primaryColor),
-                      ),
-                      Positioned(
-                        right: 10,
-                        top: 10,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            SizedBox(
-                              height: 25,
-                              width: 25,
-                              child: CircularProgressIndicator(
-                                valueColor: AlwaysStoppedAnimation(
-                                  context.prismModeStyleForContext() == "Dark" && context.prismIsAmoledDark()
-                                      ? Theme.of(context).colorScheme.error == Colors.black
-                                            ? Theme.of(context).colorScheme.secondary
-                                            : Theme.of(context).colorScheme.error
-                                      : Theme.of(context).colorScheme.error,
-                                ),
-                              ),
-                            ),
-                            Icon(Icons.high_quality_rounded, color: Theme.of(context).colorScheme.secondary),
-                          ],
-                        ),
-                      ),
-                    ],
-                  );
-          case ConnectionState.active:
-          case ConnectionState.waiting:
-            return cachedFilters[filter?.name ?? "_"] == null
-                ? Center(child: Loader())
-                : Stack(
-                    children: [
-                      PhotoView(
-                        imageProvider: MemoryImage((cachedFilters[filter?.name ?? "_"] as Uint8List?)!),
-                        backgroundDecoration: BoxDecoration(color: Theme.of(context).primaryColor),
-                      ),
-                      Positioned(
-                        right: 10,
-                        top: 10,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            SizedBox(
-                              height: 25,
-                              width: 25,
-                              child: CircularProgressIndicator(
-                                valueColor: AlwaysStoppedAnimation(
-                                  context.prismModeStyleForContext() == "Dark" && context.prismIsAmoledDark()
-                                      ? Theme.of(context).colorScheme.error == Colors.black
-                                            ? Theme.of(context).colorScheme.secondary
-                                            : Theme.of(context).colorScheme.error
-                                      : Theme.of(context).colorScheme.error,
-                                ),
-                              ),
-                            ),
-                            Icon(Icons.high_quality_rounded, color: Theme.of(context).colorScheme.secondary),
-                          ],
-                        ),
-                      ),
-                    ],
-                  );
-          case ConnectionState.done:
-            if (snapshot.hasError) {
-              return Center(child: Text('Error: ${snapshot.error}'));
-            }
-            cachedFilters[filter?.name ?? "_"] = snapshot.data;
-            return PhotoView(
-              imageProvider: MemoryImage((snapshot.data as Uint8List?)!),
-              backgroundDecoration: BoxDecoration(color: Theme.of(context).primaryColor),
-            );
+    if (image == null) {
+      return Center(child: Loader());
+    }
+    final cacheKey = _filterCacheKey('full', filter, image, filename);
+    final cached = _fullFilterCache[cacheKey];
+    if (cached != null) {
+      return _buildFilteredPhoto(cached);
+    }
+    return FutureBuilder<Uint8List>(
+      future: _fullFilterFutures.putIfAbsent(
+        cacheKey,
+        () => _computeFilteredBytes(filter: filter, image: image, filename: filename).then((bytes) {
+          _fullFilterCache[cacheKey] = bytes;
+          return bytes;
+        }),
+      ),
+      builder: (BuildContext context, AsyncSnapshot<Uint8List> snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return Center(child: Loader());
         }
+        if (snapshot.hasError || snapshot.data == null) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+        final bytes = snapshot.data!;
+        _fullFilterCache[cacheKey] = bytes;
+        return _buildFilteredPhoto(bytes);
       },
     );
+  }
+
+  Widget _buildFilteredPhoto(Uint8List bytes) {
+    return PhotoView(
+      imageProvider: MemoryImage(bytes),
+      backgroundDecoration: BoxDecoration(color: Theme.of(context).primaryColor),
+    );
+  }
+
+  Future<Uint8List> _fullFilterBytes(Filter? filter, imagelib.Image image, String? filename) {
+    final cacheKey = _filterCacheKey('full', filter, image, filename);
+    final cached = _fullFilterCache[cacheKey];
+    if (cached != null) {
+      return Future<Uint8List>.value(cached);
+    }
+    return _fullFilterFutures.putIfAbsent(
+      cacheKey,
+      () => _computeFilteredBytes(filter: filter, image: image, filename: filename).then((bytes) {
+        _fullFilterCache[cacheKey] = bytes;
+        return bytes;
+      }),
+    );
+  }
+
+  Future<Uint8List> _computeFilteredBytes({required Filter? filter, required imagelib.Image image, required String? filename}) {
+    return compute(_applyFilter, <String, dynamic>{'filter': filter, 'image': image, 'filename': filename});
+  }
+
+  String _filterCacheKey(String scope, Filter? filter, imagelib.Image? image, String? filename) {
+    return <String>[
+      scope,
+      filter?.name ?? '_',
+      '${image?.width ?? 0}x${image?.height ?? 0}',
+      filename ?? '',
+    ].join('|');
+  }
+
+  String _safeFilePart(String value) {
+    return value.trim().replaceAll(RegExp(r'[^A-Za-z0-9._-]+'), '_');
   }
 }
 
 ///The global applyfilter function
-List<int> _applyFilter(Map<String, dynamic> params) {
-  final Filter? filter = params["filter"] as Filter?;
-  final imagelib.Image image = params["image"] as imagelib.Image;
-  final String filename = params["filename"] as String;
-  List<int> bytes = image.getBytes();
-  if (filter != null) {
-    filter.apply(bytes as Uint8List, image.width, image.height);
+Uint8List _applyFilter(Map<String, dynamic> params) {
+  final Filter? filter = params['filter'] as Filter?;
+  final imagelib.Image? image = params['image'] as imagelib.Image?;
+  final String filename = params['filename']?.toString() ?? 'filtered.jpg';
+  if (image == null) {
+    throw StateError('No image supplied for filtering.');
   }
-  final imagelib.Image image0 = imagelib.Image.fromBytes(image.width, image.height, bytes);
-
-  return bytes = imagelib.encodeNamedImage(image0, filename)!;
+  final Uint8List bytes = Uint8List.fromList(image.getBytes());
+  filter?.apply(bytes, image.width, image.height);
+  final imagelib.Image filteredImage = imagelib.Image.fromBytes(image.width, image.height, bytes);
+  final List<int> encoded = imagelib.encodeNamedImage(filteredImage, filename) ?? imagelib.encodeJpg(filteredImage, quality: 100);
+  return Uint8List.fromList(encoded);
 }
