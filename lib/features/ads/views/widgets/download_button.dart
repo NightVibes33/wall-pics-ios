@@ -120,12 +120,6 @@ class _DownloadButtonState extends State<DownloadButton> {
     try {
       final sourceContext = widget.sourceContext ?? 'download_button';
       final contentId = widget.contentId ?? _filenameBaseFromUrl(link);
-      if (widget.isLivePhoto && (widget.livePhotoStillUrl?.trim().isEmpty ?? true)) {
-        PrismHaptics.failure();
-        toasts.error('This source is missing an original Live Photo still.');
-        return false;
-      }
-
       final canStartDownload = await DownloadAccessService.instance.ensureCanStartDownload(
         context,
         sourceContext: sourceContext,
