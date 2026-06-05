@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import base64
 import hashlib
 import json
 import os
@@ -114,16 +113,24 @@ def _crypt(data: bytes) -> bytes:
     return bytes(out)
 
 
-def _write_pack(media: dict[str, str]) -> None:
+def _write_pack(media: dict[str, bytes]) -> int:
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "version": 1,
+    entries: list[dict[str, Any]] = []
+    blobs = bytearray()
+    for key, data in media.items():
+        offset = len(blobs)
+        blobs.extend(data)
+        entries.append({"key": key, "offset": offset, "length": len(data)})
+    index = {
+        "version": 2,
         "generated_at": int(time.time()),
-        "count": len(media),
-        "media": media,
+        "count": len(entries),
+        "entries": entries,
     }
-    plain = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+    index_bytes = json.dumps(index, separators=(",", ":"), sort_keys=True).encode()
+    plain = b"PSMBIN2\n" + len(index_bytes).to_bytes(4, "big") + index_bytes + bytes(blobs)
     OUT_PATH.write_bytes(MAGIC + _crypt(plain))
+    return len(plain)
 
 
 def _request_json(url: str, headers: dict[str, str]) -> Any | None:
@@ -326,7 +333,7 @@ def main() -> int:
         if len(selected) >= limit:
             break
 
-    media: dict[str, str] = {}
+    media: dict[str, bytes] = {}
     total_bytes = 0
     image_headers = {"Accept": "image/*", "User-Agent": "PrismSeedMediaBuilder/1.0"}
     for original_url in selected:
@@ -338,13 +345,16 @@ def main() -> int:
             continue
         if len(data) < 128 or not _looks_like_image(data):
             continue
+        if total_bytes + len(data) > max_bytes:
+            continue
+        media[_sha_url(original_url)] = data
         total_bytes += len(data)
-        if total_bytes > max_bytes:
-            break
-        media[_sha_url(original_url)] = base64.b64encode(data).decode("ascii")
 
-    _write_pack(media)
-    print(f"Prism seed media pack: {len(media)} images, {total_bytes} bytes, output={OUT_PATH}")
+    pack_bytes = _write_pack(media)
+    print(
+        f"Prism seed media pack: {len(media)} images, {total_bytes} media bytes, "
+        f"{pack_bytes} packed bytes, output={OUT_PATH}"
+    )
     return 0
 
 

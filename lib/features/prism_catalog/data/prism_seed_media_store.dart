@@ -11,6 +11,7 @@ class PrismSeedMediaStore {
 
   static const String _assetPath = 'assets/catalog/prism_seed_media.dbx';
   static const List<int> _magic = <int>[0x50, 0x53, 0x4d, 0x45, 0x44, 0x49, 0x41, 0x31, 0x0a];
+  static const List<int> _binaryMagic = <int>[0x50, 0x53, 0x4d, 0x42, 0x49, 0x4e, 0x32, 0x0a];
   static const List<int> _keyParts = <int>[
     0x2a, 0x28, 0x33, 0x29, 0x37, 0x77, 0x39, 0x3b, 0x2e, 0x3b, 0x36, 0x35, 0x3d, 0x77, 0x29, 0x3f,
     0x3f, 0x3e, 0x77, 0x37, 0x3f, 0x3e, 0x33, 0x3b, 0x77, 0x2c, 0x6b,
@@ -59,28 +60,10 @@ class PrismSeedMediaStore {
       }
       final encrypted = raw.sublist(_magic.length);
       final plain = _crypt(encrypted);
-      final decoded = jsonDecode(utf8.decode(plain));
-      if (decoded is! Map) {
-        _loaded = true;
-        return;
-      }
-      final media = decoded['media'];
-      if (media is Map) {
-        for (final entry in media.entries) {
-          final key = entry.key.toString().trim();
-          final value = entry.value?.toString().trim() ?? '';
-          if (key.isEmpty || value.isEmpty) {
-            continue;
-          }
-          try {
-            final bytes = base64Decode(value);
-            if (bytes.isNotEmpty) {
-              _mediaByKey[key] = Uint8List.fromList(bytes);
-            }
-          } catch (_) {
-            // Ignore corrupt seed rows; network fallback remains available.
-          }
-        }
+      if (_hasBinaryMagic(plain)) {
+        _loadBinaryPack(plain);
+      } else {
+        _loadJsonPack(plain);
       }
     } catch (_) {
       // Seed packs are optional. Missing or unreadable seed data falls back to the network cache.
@@ -89,12 +72,96 @@ class PrismSeedMediaStore {
     }
   }
 
+  void _loadBinaryPack(Uint8List plain) {
+    const headerLength = 8;
+    const indexLengthBytes = 4;
+    if (plain.length < headerLength + indexLengthBytes) {
+      return;
+    }
+    final byteData = ByteData.sublistView(plain);
+    final indexLength = byteData.getUint32(headerLength, Endian.big);
+    final indexStart = headerLength + indexLengthBytes;
+    final indexEnd = indexStart + indexLength;
+    if (indexLength <= 0 || indexEnd > plain.length) {
+      return;
+    }
+    final decoded = jsonDecode(utf8.decode(Uint8List.sublistView(plain, indexStart, indexEnd)));
+    if (decoded is! Map) {
+      return;
+    }
+    final entries = decoded['entries'];
+    if (entries is! List) {
+      return;
+    }
+    final blobStart = indexEnd;
+    for (final entry in entries) {
+      if (entry is! Map) {
+        continue;
+      }
+      final key = entry['key']?.toString().trim() ?? '';
+      final offset = _intValue(entry['offset']);
+      final length = _intValue(entry['length']);
+      if (key.isEmpty || offset == null || length == null || offset < 0 || length <= 0) {
+        continue;
+      }
+      final start = blobStart + offset;
+      final end = start + length;
+      if (start < blobStart || end > plain.length) {
+        continue;
+      }
+      _mediaByKey[key] = Uint8List.sublistView(plain, start, end);
+    }
+  }
+
+  void _loadJsonPack(Uint8List plain) {
+    final decoded = jsonDecode(utf8.decode(plain));
+    if (decoded is! Map) {
+      return;
+    }
+    final media = decoded['media'];
+    if (media is Map) {
+      for (final entry in media.entries) {
+        final key = entry.key.toString().trim();
+        final value = entry.value?.toString().trim() ?? '';
+        if (key.isEmpty || value.isEmpty) {
+          continue;
+        }
+        try {
+          final bytes = base64Decode(value);
+          if (bytes.isNotEmpty) {
+            _mediaByKey[key] = Uint8List.fromList(bytes);
+          }
+        } catch (_) {
+          // Ignore corrupt seed rows; network fallback remains available.
+        }
+      }
+    }
+  }
+
+  int? _intValue(Object? value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    return int.tryParse(value?.toString() ?? '');
+  }
+
   bool _hasMagic(Uint8List raw) {
-    if (raw.length < _magic.length) {
+    return _startsWith(raw, _magic);
+  }
+
+  bool _hasBinaryMagic(Uint8List raw) {
+    return _startsWith(raw, _binaryMagic);
+  }
+
+  bool _startsWith(Uint8List raw, List<int> prefix) {
+    if (raw.length < prefix.length) {
       return false;
     }
-    for (var index = 0; index < _magic.length; index++) {
-      if (raw[index] != _magic[index]) {
+    for (var index = 0; index < prefix.length; index++) {
+      if (raw[index] != prefix[index]) {
         return false;
       }
     }
