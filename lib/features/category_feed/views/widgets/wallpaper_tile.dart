@@ -123,11 +123,11 @@ class WallpaperTile extends StatelessWidget {
         final preferred = _firstStringValue(
           <Object?>[
             metadata['catalogOriginalStillUrl'],
+            wallpaper.core.thumbnailUrl,
+            wallpaper.core.fullUrl,
             metadata['catalogStaticThumbnailUrl'],
             metadata['catalogFirstFrameThumbnailUrl'],
             metadata['catalogPreviewUrl'],
-            wallpaper.core.thumbnailUrl,
-            wallpaper.core.fullUrl,
           ],
           imageOnly: true,
         );

@@ -1775,7 +1775,6 @@ class _PrismItem {
         : '';
     final imageDownload = _firstString(<Object?>[
       isActualImageUrl(appDownloadUrl) ? appDownloadUrl : '',
-      isActualImageUrl(appDisplayUrl) ? appDisplayUrl : '',
       isActualImageUrl(catalogDownload) ? catalogDownload : '',
     ]);
     final fullImage = _firstString(<Object?>[
@@ -1786,7 +1785,6 @@ class _PrismItem {
     ]);
     final fullMedia = _firstString(<Object?>[
       appDownloadUrl,
-      appDisplayUrl,
       catalogDownload,
       video,
       wallpaper,
@@ -1824,7 +1822,7 @@ class _PrismItem {
     final parallaxLayerPreview = firstParallaxLayerImage();
     final fastFullImage = _fastTileOrOriginal(fullImage);
     final fastFullSizeImage = _fastTileOrOriginal(fullImage, width: 3840, quality: 98);
-    final fastLivePoster = _fastTileOrOriginal(livePoster);
+    final fastLivePoster = _fastTileOrOriginal(liveOriginalStill);
     final previewThumbImage = _firstString(<Object?>[
       isImageUrl(previewImage) ? previewImage : '',
       isImageUrl(staticThumbnail) ? staticThumbnail : '',

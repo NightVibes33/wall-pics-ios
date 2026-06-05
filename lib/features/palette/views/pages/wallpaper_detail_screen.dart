@@ -482,10 +482,6 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     return _firstNonEmpty(
       <String>[
         _prismMetadataValue(entity, 'catalogOriginalStillUrl'),
-        _prismMetadataValue(entity, 'catalogFirstFrameThumbnailUrl'),
-        _prismMetadataValue(entity, 'catalogStaticThumbnailUrl'),
-        _prismMetadataValue(entity, 'catalogPreviewUrl'),
-        entity.thumbnailUrl,
       ].where((url) => url.isNotEmpty && !_isVideoUrl(url) && !_isArchiveUrl(url)),
     );
   }
