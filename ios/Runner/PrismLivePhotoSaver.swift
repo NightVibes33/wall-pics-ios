@@ -29,13 +29,21 @@ final class PrismLivePhotoSaver: NSObject {
         return
       }
       let stillUrl = args["stillUrl"] as? String
-      saver.save(videoUrl: videoUrl, stillUrl: stillUrl) { saveResult in
+      let photoTimeSeconds = PrismLivePhotoSaver.doubleArgument(args["photoTimeSeconds"])
+      saver.save(videoUrl: videoUrl, stillUrl: stillUrl, photoTimeSeconds: photoTimeSeconds) { saveResult in
         result(saveResult)
       }
     }
   }
 
-  private func save(videoUrl: String, stillUrl: String?, completion: @escaping ([String: Any]) -> Void) {
+  private static func doubleArgument(_ value: Any?) -> Double? {
+    if let value = value as? Double { return value }
+    if let value = value as? NSNumber { return value.doubleValue }
+    if let value = value as? String { return Double(value.trimmingCharacters(in: .whitespacesAndNewlines)) }
+    return nil
+  }
+
+  private func save(videoUrl: String, stillUrl: String?, photoTimeSeconds: Double?, completion: @escaping ([String: Any]) -> Void) {
     queue.async {
       do {
         try self.ensurePhotoPermission()
@@ -48,11 +56,12 @@ final class PrismLivePhotoSaver: NSObject {
         } else {
           fetchedStill = nil
         }
-        let rawStill = try self.compatibleStillImage(fetchedStill, video: rawVideo, directory: workDir)
+        let photoTime = self.livePhotoStillTime(seconds: photoTimeSeconds, video: rawVideo)
+        let rawStill = try self.compatibleStillImage(fetchedStill, video: rawVideo, photoTime: photoTime, directory: workDir)
         let pairedPhoto = workDir.appendingPathComponent("live-photo.jpg")
         let pairedVideo = workDir.appendingPathComponent("live-video.mov")
         try self.writePairedPhoto(input: rawStill, output: pairedPhoto, assetId: assetId)
-        try self.writePairedVideo(input: rawVideo, output: pairedVideo, assetId: assetId)
+        try self.writePairedVideo(input: rawVideo, output: pairedVideo, assetId: assetId, photoTime: photoTime)
         try self.savePairedAsset(photo: pairedPhoto, video: pairedVideo)
         try? FileManager.default.removeItem(at: workDir)
         DispatchQueue.main.async { completion(["success": true]) }
@@ -118,13 +127,14 @@ final class PrismLivePhotoSaver: NSObject {
     return fetchedData
   }
 
-  private func makeStillFrame(from video: URL, directory: URL) throws -> URL {
+  private func makeStillFrame(from video: URL, photoTime: CMTime, directory: URL) throws -> URL {
     let asset = AVURLAsset(url: video)
     let generator = AVAssetImageGenerator(asset: asset)
     generator.appliesPreferredTrackTransform = true
-    generator.requestedTimeToleranceBefore = .zero
-    generator.requestedTimeToleranceAfter = .zero
-    let frameTime = CMTime.zero
+    let frameTolerance = CMTime(value: 1, timescale: 30)
+    generator.requestedTimeToleranceBefore = frameTolerance
+    generator.requestedTimeToleranceAfter = frameTolerance
+    let frameTime = photoTime.isNumeric ? photoTime : .zero
     let image = try generator.copyCGImage(at: frameTime, actualTime: nil)
     let output = directory.appendingPathComponent("generated-live-still.jpg")
     let type: CFString
@@ -142,11 +152,11 @@ final class PrismLivePhotoSaver: NSObject {
     return output
   }
 
-  private func compatibleStillImage(_ still: URL?, video: URL, directory: URL) throws -> URL {
+  private func compatibleStillImage(_ still: URL?, video: URL, photoTime: CMTime, directory: URL) throws -> URL {
     if let still, isStillImageCompatible(still, video: video) {
       return still
     }
-    return try makeStillFrame(from: video, directory: directory)
+    return try makeStillFrame(from: video, photoTime: photoTime, directory: directory)
   }
 
   private func isStillImageCompatible(_ still: URL, video: URL) -> Bool {
@@ -188,6 +198,20 @@ final class PrismLivePhotoSaver: NSObject {
     return CGSize(width: width, height: height)
   }
 
+  private func livePhotoStillTime(seconds: Double?, video: URL) -> CMTime {
+    guard let seconds, seconds.isFinite, seconds >= 0 else { return .zero }
+    let asset = AVURLAsset(url: video)
+    let duration = asset.duration
+    var boundedSeconds = seconds
+    if duration.isNumeric {
+      let durationSeconds = duration.seconds
+      if durationSeconds.isFinite && durationSeconds > 0 {
+        boundedSeconds = min(seconds, max(durationSeconds - 0.001, 0))
+      }
+    }
+    return CMTime(seconds: max(boundedSeconds, 0), preferredTimescale: 600)
+  }
+
   private func writePairedPhoto(input: URL, output: URL, assetId: String) throws {
     guard let source = CGImageSourceCreateWithURL(input as CFURL, nil) else { throw LivePhotoError.invalidImage }
     let type: CFString
@@ -207,7 +231,7 @@ final class PrismLivePhotoSaver: NSObject {
     guard CGImageDestinationFinalize(destination) else { throw LivePhotoError.imageWriteFailed }
   }
 
-  private func writePairedVideo(input: URL, output: URL, assetId: String) throws {
+  private func writePairedVideo(input: URL, output: URL, assetId: String, photoTime: CMTime) throws {
     let asset = AVURLAsset(url: input)
     try? FileManager.default.removeItem(at: output)
 
@@ -253,7 +277,7 @@ final class PrismLivePhotoSaver: NSObject {
     }
     writer.startSession(atSourceTime: .zero)
 
-    try appendStillImageTimeMetadata(adaptor: metadataAdaptor, input: metadataInput)
+    try appendStillImageTimeMetadata(adaptor: metadataAdaptor, input: metadataInput, photoTime: photoTime)
 
     let copyQueue = DispatchQueue(label: "com.nightvibes.prism.live-photo.copy")
     let group = DispatchGroup()
@@ -323,7 +347,8 @@ final class PrismLivePhotoSaver: NSObject {
 
   private func appendStillImageTimeMetadata(
     adaptor: AVAssetWriterInputMetadataAdaptor,
-    input: AVAssetWriterInput
+    input: AVAssetWriterInput,
+    photoTime: CMTime
   ) throws {
     let stillTime = AVMutableMetadataItem()
     stillTime.keySpace = .quickTimeMetadata
@@ -331,9 +356,10 @@ final class PrismLivePhotoSaver: NSObject {
     stillTime.value = NSNumber(value: Int8(0))
     stillTime.dataType = kCMMetadataBaseDataType_SInt8 as String
 
+    let metadataTime = photoTime.isNumeric ? photoTime : .zero
     let group = AVTimedMetadataGroup(
       items: [stillTime],
-      timeRange: CMTimeRange(start: .zero, duration: CMTime(value: 1, timescale: 100))
+      timeRange: CMTimeRange(start: metadataTime, duration: CMTime(value: 1, timescale: 100))
     )
     guard adaptor.append(group) else { throw LivePhotoError.metadataWriteFailed }
     input.markAsFinished()

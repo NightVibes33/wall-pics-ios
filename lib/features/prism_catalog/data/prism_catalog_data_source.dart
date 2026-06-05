@@ -1597,6 +1597,7 @@ class _PrismItem {
     required this.authorId,
     required this.createdAt,
     required this.isPremium,
+    required this.livePhotoTimeSeconds,
     required this.categoryNames,
     required this.categorySlugs,
     required this.tags,
@@ -1627,6 +1628,7 @@ class _PrismItem {
   final String? authorId;
   final DateTime? createdAt;
   final bool isPremium;
+  final double livePhotoTimeSeconds;
   final List<String> categoryNames;
   final List<String> categorySlugs;
   final List<String> tags;
@@ -1796,6 +1798,7 @@ class _PrismItem {
       isActualImageUrl(wallpaper) ? wallpaper : '',
       isActualImageUrl(image) ? image : '',
     ]);
+    final livePhotoTimeSeconds = isLiveContent ? (_double(json['cm_time']) ?? 0) / 1000.0 : 0.0;
     final liveOriginalVideo = _firstString(<Object?>[
       isVideoUrl(originalVideo) ? originalVideo : '',
       isVideoUrl(appDownloadUrl) ? appDownloadUrl : '',
@@ -1911,6 +1914,7 @@ class _PrismItem {
       authorId: _string(author['id']).isEmpty ? null : _string(author['id']),
       createdAt: DateTime.tryParse(_string(json['created_at']))?.toUtc(),
       isPremium: _int(json['is_premium']) == 1,
+      livePhotoTimeSeconds: livePhotoTimeSeconds,
       categoryNames: categories.map((category) => _string(category['name'])).where((name) => name.isNotEmpty).toList(),
       categorySlugs: categories.map((category) => _string(category['slug'])).where((slug) => slug.isNotEmpty).toList(),
       tags: tagRows.map((tag) => _string(tag['name'])).where((tag) => tag.isNotEmpty).toList(),
@@ -1960,7 +1964,9 @@ class _PrismItem {
         'catalogFirstFrameThumbnailUrl': firstFrameThumbnailUrl,
         'catalogVideoUrl': videoUrl,
         'catalogOriginalVideoUrl': contentType == PrismCatalogDataSource.liveContentType ? downloadUrl : '',
+        'catalogOriginalStillUrl': contentType == PrismCatalogDataSource.liveContentType ? livePoster : '',
         'catalogThumbnailVideoUrl': thumbnailVideoUrl,
+        'catalogLivePhotoTimeSeconds': livePhotoTimeSeconds,
         'catalogTemplateUrl': templateUrl,
         'catalogParallaxFileUrl': parallaxFileUrl,
         'catalogMediaAssetUrls': mediaAssetUrls,
@@ -2759,4 +2765,9 @@ String _firstString(List<Object?> values) {
 int? _int(Object? value) {
   if (value is num) return value.toInt();
   return int.tryParse(_string(value));
+}
+
+double? _double(Object? value) {
+  if (value is num) return value.toDouble();
+  return double.tryParse(_string(value));
 }

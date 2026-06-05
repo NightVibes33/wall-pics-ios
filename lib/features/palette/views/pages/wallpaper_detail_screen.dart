@@ -424,6 +424,18 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     );
   }
 
+  double? _prismMetadataDouble(WallpaperDetailEntity entity, String key) {
+    return entity.when(
+      prism: (wallpaper) {
+        final raw = wallpaper.aiMetadata?[key];
+        if (raw is num) return raw.toDouble();
+        return double.tryParse(raw?.toString().trim() ?? '');
+      },
+      wallhaven: (_) => null,
+      pexels: (_) => null,
+    );
+  }
+
   bool _isVideoUrl(String url) {
     final path = Uri.tryParse(url)?.path.toLowerCase() ?? url.toLowerCase();
     return path.endsWith('.mp4') || path.endsWith('.mov');
@@ -469,6 +481,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
   String _catalogLiveStillUrl(WallpaperDetailEntity entity) {
     return _firstNonEmpty(
       <String>[
+        _prismMetadataValue(entity, 'catalogOriginalStillUrl'),
         _prismMetadataValue(entity, 'catalogFirstFrameThumbnailUrl'),
         _prismMetadataValue(entity, 'catalogStaticThumbnailUrl'),
         _prismMetadataValue(entity, 'catalogPreviewUrl'),
@@ -1063,6 +1076,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
 
     final isParallax = _isPrismParallax(entity);
     final liveStillUrl = isLivePhoto ? _catalogLiveStillUrl(entity) : null;
+    final livePhotoTimeSeconds = isLivePhoto ? _prismMetadataDouble(entity, 'catalogLivePhotoTimeSeconds') : null;
     final parallaxCompositePath = isParallax ? _parallaxCompositePathFor(entity) : null;
     final downloadUrl = isLivePhoto
         ? _catalogLiveVideoUrl(entity)
@@ -1080,6 +1094,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
           sourceContext: _getSourceContext(state),
           isLivePhoto: isLivePhoto,
           livePhotoStillUrl: liveStillUrl,
+          livePhotoTimeSeconds: livePhotoTimeSeconds,
         ),
       ),
       if (!hideSetWallpaperUi && !isLivePhoto)

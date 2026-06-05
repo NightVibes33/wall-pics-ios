@@ -22,6 +22,7 @@ class DownloadButton extends StatefulWidget {
     this.sourceContext,
     this.isLivePhoto = false,
     this.livePhotoStillUrl,
+    this.livePhotoTimeSeconds,
     super.key,
   });
 
@@ -32,6 +33,7 @@ class DownloadButton extends StatefulWidget {
   final String? sourceContext;
   final bool isLivePhoto;
   final String? livePhotoStillUrl;
+  final double? livePhotoTimeSeconds;
 
   @override
   State<DownloadButton> createState() => _DownloadButtonState();
@@ -141,6 +143,7 @@ class _DownloadButtonState extends State<DownloadButton> {
         final message = await PrismLivePhotoSaver.save(
           videoUrl: link,
           stillUrl: stillUrl,
+          photoTimeSeconds: widget.livePhotoTimeSeconds,
         ).timeout(const Duration(seconds: 180));
         if (message != null) {
           PrismHaptics.failure();
