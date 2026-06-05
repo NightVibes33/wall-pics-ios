@@ -14,6 +14,7 @@ class AutoplayVideoPreview extends StatefulWidget {
     this.alignment = Alignment.center,
     this.muted = true,
     this.playing = true,
+    this.playbackSpeed = 1.0,
     this.onReady,
     super.key,
   });
@@ -24,6 +25,7 @@ class AutoplayVideoPreview extends StatefulWidget {
   final Alignment alignment;
   final bool muted;
   final bool playing;
+  final double playbackSpeed;
   final VoidCallback? onReady;
 
   @override
@@ -87,6 +89,15 @@ class _AutoplayVideoPreviewState extends State<AutoplayVideoPreview> {
     }
   }
 
+  Future<void> _applyPlaybackSpeed(VideoPlayerController controller) async {
+    final speed = widget.playbackSpeed.isFinite && widget.playbackSpeed > 0 ? widget.playbackSpeed : 1.0;
+    try {
+      await controller.setPlaybackSpeed(speed);
+    } catch (_) {
+      // Some platform player backends do not support speed changes. Keep playback active.
+    }
+  }
+
   Future<void> _load() async {
     final rawUrl = widget.videoUrl.trim();
     final generation = ++_loadGeneration;
@@ -119,6 +130,7 @@ class _AutoplayVideoPreviewState extends State<AutoplayVideoPreview> {
       if (widget.muted) {
         await controller.setVolume(0);
       }
+      await _applyPlaybackSpeed(controller);
       if (!mounted || generation != _loadGeneration) {
         await controller.dispose();
         return;
@@ -143,6 +155,7 @@ class _AutoplayVideoPreviewState extends State<AutoplayVideoPreview> {
     if (widget.muted) {
       await controller.setVolume(0);
     }
+    await _applyPlaybackSpeed(controller);
     if (widget.playing) {
       if (!controller.value.isPlaying) {
         await controller.play();

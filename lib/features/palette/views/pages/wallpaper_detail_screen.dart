@@ -500,6 +500,11 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     ]);
   }
 
+  double _catalogPreviewSpeed(WallpaperDetailEntity entity) {
+    final speed = _prismMetadataDouble(entity, 'catalogPreviewSpeed');
+    return speed != null && speed.isFinite && speed > 0 ? speed : 1.0;
+  }
+
   List<String> _catalogPairedImageUrlsForEntity(WallpaperDetailEntity entity) {
     return entity.when(
       prism: _catalogPairedImageUrls,
@@ -1331,9 +1336,14 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     VoidCallback? onWallpaperDisplayReady,
   }) {
     final bool previewOnly = _isPrismDiyTemplate(entity);
+    final bool isLivePhoto = _isPrismLivePhoto(entity);
     final String thumb = entity.thumbnailUrl.trim();
     final String entityFull = entity.fullUrl.trim();
-    final String full = previewOnly && !_isVideoUrl(entityFull) ? _catalogDisplayImageUrl(entity) : entityFull;
+    final String full = isLivePhoto
+        ? _catalogLiveVideoUrl(entity)
+        : previewOnly && !_isVideoUrl(entityFull)
+            ? _catalogDisplayImageUrl(entity)
+            : entityFull;
     final bool useProgressive = thumb.isNotEmpty && full.isNotEmpty && full != thumb && !_isVideoUrl(full) && !_isArchiveUrl(full);
     final pairedImageUrls = _catalogPairedImageUrlsForEntity(entity);
     final parallaxArchiveUrl = _catalogParallaxFileUrl(entity);
@@ -1350,7 +1360,9 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     } else if (pairedImageUrls.length < 2 && full.isNotEmpty && _isVideoUrl(full)) {
       imageLayer = AutoplayVideoPreview(
         videoUrl: full,
+        posterUrl: isLivePhoto ? (thumb.isNotEmpty ? thumb : _catalogLiveStillUrl(entity)) : null,
         fit: BoxFit.contain,
+        playbackSpeed: isLivePhoto ? _catalogPreviewSpeed(entity) : 1.0,
         onReady: onWallpaperDisplayReady,
       );
     } else if (pairedImageUrls.length >= 2) {

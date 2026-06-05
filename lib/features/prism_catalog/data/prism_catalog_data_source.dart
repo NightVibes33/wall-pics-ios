@@ -1587,6 +1587,7 @@ class _PrismItem {
     required this.videoUrl,
     required this.thumbnailVideoUrl,
     required this.originalStillUrl,
+    required this.livePreviewSpeed,
     required this.templateUrl,
     required this.parallaxFileUrl,
     required this.mediaAssetUrls,
@@ -1619,6 +1620,7 @@ class _PrismItem {
   final String videoUrl;
   final String thumbnailVideoUrl;
   final String originalStillUrl;
+  final double livePreviewSpeed;
   final String templateUrl;
   final String parallaxFileUrl;
   final List<String> mediaAssetUrls;
@@ -1792,14 +1794,23 @@ class _PrismItem {
       sticker,
       parallaxFile,
     ]);
-    final livePoster = _firstString(<Object?>[
-      isActualImageUrl(fullImage) ? fullImage : '',
-      isActualImageUrl(appDisplayUrl) ? appDisplayUrl : '',
-      isActualImageUrl(appDownloadUrl) ? appDownloadUrl : '',
-      isActualImageUrl(catalogDownload) ? catalogDownload : '',
+    final liveOriginalStill = _firstString(<Object?>[
       isActualImageUrl(wallpaper) ? wallpaper : '',
       isActualImageUrl(image) ? image : '',
+      isActualImageUrl(appDownloadUrl) ? appDownloadUrl : '',
+      isActualImageUrl(catalogDownload) ? catalogDownload : '',
     ]);
+    final livePoster = _firstString(<Object?>[
+      liveOriginalStill,
+      isActualImageUrl(fullImage) ? fullImage : '',
+      isActualImageUrl(firstFrameThumbnail) ? firstFrameThumbnail : '',
+      isActualImageUrl(staticThumbnail) ? staticThumbnail : '',
+      isActualImageUrl(hqThumbnail) ? hqThumbnail : '',
+      isActualImageUrl(thumbnail) ? thumbnail : '',
+      isActualImageUrl(previewImage) ? previewImage : '',
+    ]);
+    final rawLivePreviewSpeed = _double(json['preview_speed']) ?? 1.0;
+    final livePreviewSpeed = isLiveContent && rawLivePreviewSpeed > 0 ? rawLivePreviewSpeed : 1.0;
     final livePhotoTimeSeconds = isLiveContent ? (_double(json['cm_time']) ?? 0) / 1000.0 : 0.0;
     final liveOriginalVideo = _firstString(<Object?>[
       isVideoUrl(originalVideo) ? originalVideo : '',
@@ -1903,7 +1914,8 @@ class _PrismItem {
               : '',
       videoUrl: livePreviewVideo,
       thumbnailVideoUrl: liveThumbnailVideo,
-      originalStillUrl: livePoster,
+      originalStillUrl: liveOriginalStill,
+      livePreviewSpeed: livePreviewSpeed,
       templateUrl: template.isNotEmpty ? template : catalogDownload,
       parallaxFileUrl: parallaxArchive,
       mediaAssetUrls: mediaAssetUrls,
@@ -1969,6 +1981,7 @@ class _PrismItem {
         'catalogOriginalVideoUrl': contentType == PrismCatalogDataSource.liveContentType ? downloadUrl : '',
         'catalogOriginalStillUrl': contentType == PrismCatalogDataSource.liveContentType ? originalStillUrl : '',
         'catalogThumbnailVideoUrl': thumbnailVideoUrl,
+        'catalogPreviewSpeed': livePreviewSpeed,
         'catalogLivePhotoTimeSeconds': livePhotoTimeSeconds,
         'catalogTemplateUrl': templateUrl,
         'catalogParallaxFileUrl': parallaxFileUrl,

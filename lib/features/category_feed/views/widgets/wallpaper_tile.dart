@@ -94,6 +94,7 @@ class WallpaperTile extends StatelessWidget {
         final fullUrl = wallpaper.core.fullUrl.trim();
         return _firstStringValue(<Object?>[
           metadata['catalogVideoUrl'],
+          metadata['catalogOriginalVideoUrl'],
           metadata['catalogThumbnailVideoUrl'],
           _isVideoUrl(fullUrl) ? fullUrl : '',
         ]);
@@ -103,12 +104,25 @@ class WallpaperTile extends StatelessWidget {
     );
   }
 
+  static double videoSpeedForItem(FeedItemEntity item) {
+    return item.when(
+      prism: (_, wallpaper) {
+        final raw = wallpaper.aiMetadata?['catalogPreviewSpeed'];
+        final speed = raw is num ? raw.toDouble() : double.tryParse(raw?.toString().trim() ?? '');
+        return speed != null && speed.isFinite && speed > 0 ? speed : 1.0;
+      },
+      wallhaven: (_, _) => 1.0,
+      pexels: (_, _) => 1.0,
+    );
+  }
+
   static String posterUrlForItem(FeedItemEntity item) {
     return item.when(
       prism: (_, wallpaper) {
         final metadata = wallpaper.aiMetadata ?? const <String, Object?>{};
         final preferred = _firstStringValue(
           <Object?>[
+            metadata['catalogOriginalStillUrl'],
             metadata['catalogStaticThumbnailUrl'],
             metadata['catalogFirstFrameThumbnailUrl'],
             metadata['catalogPreviewUrl'],
@@ -317,11 +331,12 @@ class WallpaperTile extends StatelessWidget {
     final cacheWidth = (width * pixelRatio).ceil();
     final cacheHeight = (height * pixelRatio).ceil();
     final videoUrl = videoUrlForItem(item);
+    final videoSpeed = videoSpeedForItem(item);
     final shouldPlayVideo = videoUrl.isNotEmpty || playVideoPreview;
     final posterUrl = posterUrlForItem(item);
     final tileImageUrl = posterUrl.isNotEmpty ? posterUrl : item.thumbnailUrl;
     final image = shouldPlayVideo && videoUrl.isNotEmpty
-        ? AutoplayVideoPreview(videoUrl: videoUrl, posterUrl: tileImageUrl, playing: true)
+        ? AutoplayVideoPreview(videoUrl: videoUrl, posterUrl: tileImageUrl, playing: true, playbackSpeed: videoSpeed)
         : _cachedTileImage(context, tileImageUrl, cacheWidth: cacheWidth, cacheHeight: cacheHeight);
     return Material(
       color: Colors.transparent,

@@ -56,12 +56,21 @@ final class PrismLivePhotoSaver: NSObject {
         } else {
           fetchedStill = nil
         }
+        if let fetchedStill, self.validateLivePhotoResourcePair(photo: fetchedStill, video: rawVideo) {
+          try self.savePairedAsset(photo: fetchedStill, video: rawVideo)
+          try? FileManager.default.removeItem(at: workDir)
+          DispatchQueue.main.async { completion(["success": true]) }
+          return
+        }
         let photoTime = self.livePhotoStillTime(seconds: photoTimeSeconds, video: rawVideo)
         let rawStill = try self.compatibleStillImage(fetchedStill, video: rawVideo, photoTime: photoTime, directory: workDir)
         let pairedPhoto = workDir.appendingPathComponent("live-photo.jpg")
         let pairedVideo = workDir.appendingPathComponent("live-video.mov")
         try self.writePairedPhoto(input: rawStill, output: pairedPhoto, assetId: assetId)
         try self.writePairedVideo(input: rawVideo, output: pairedVideo, assetId: assetId, photoTime: photoTime)
+        guard self.validateLivePhotoResourcePair(photo: pairedPhoto, video: pairedVideo) else {
+          throw LivePhotoError.livePhotoValidationFailed
+        }
         try self.savePairedAsset(photo: pairedPhoto, video: pairedVideo)
         try? FileManager.default.removeItem(at: workDir)
         DispatchQueue.main.async { completion(["success": true]) }
@@ -212,6 +221,37 @@ final class PrismLivePhotoSaver: NSObject {
     return CMTime(seconds: max(boundedSeconds, 0), preferredTimescale: 600)
   }
 
+  private func validateLivePhotoResourcePair(photo: URL, video: URL) -> Bool {
+    let semaphore = DispatchSemaphore(value: 0)
+    var isValid = false
+    var didSignal = false
+
+    func signalOnce() {
+      if !didSignal {
+        didSignal = true
+        semaphore.signal()
+      }
+    }
+
+    PHLivePhoto.request(
+      withResourceFileURLs: [photo, video],
+      placeholderImage: nil,
+      targetSize: .zero,
+      contentMode: .aspectFit
+    ) { livePhoto, info in
+      if livePhoto != nil {
+        isValid = true
+      }
+      let degraded = (info?[PHLivePhotoInfoIsDegradedKey] as? NSNumber)?.boolValue ?? false
+      if !degraded {
+        signalOnce()
+      }
+    }
+
+    _ = semaphore.wait(timeout: .now() + .seconds(10))
+    return isValid
+  }
+
   private func writePairedPhoto(input: URL, output: URL, assetId: String) throws {
     guard let source = CGImageSourceCreateWithURL(input as CFURL, nil) else { throw LivePhotoError.invalidImage }
     let type: CFString
@@ -353,7 +393,7 @@ final class PrismLivePhotoSaver: NSObject {
     let stillTime = AVMutableMetadataItem()
     stillTime.keySpace = .quickTimeMetadata
     stillTime.key = "com.apple.quicktime.still-image-time" as NSString
-    stillTime.value = NSNumber(value: Int8(0))
+    stillTime.value = NSNumber(value: Int8(-1))
     stillTime.dataType = kCMMetadataBaseDataType_SInt8 as String
 
     let metadataTime = photoTime.isNumeric ? photoTime : .zero
@@ -373,12 +413,11 @@ final class PrismLivePhotoSaver: NSObject {
         let request = PHAssetCreationRequest.forAsset()
         let photoOptions = PHAssetResourceCreationOptions()
         let videoOptions = PHAssetResourceCreationOptions()
-        if #available(iOS 14.0, *) {
-          photoOptions.uniformTypeIdentifier = UTType.jpeg.identifier
-          videoOptions.uniformTypeIdentifier = UTType.quickTimeMovie.identifier
-        } else {
-          photoOptions.uniformTypeIdentifier = kUTTypeJPEG as String
-          videoOptions.uniformTypeIdentifier = kUTTypeQuickTimeMovie as String
+        if let photoType = self.photoTypeIdentifier(for: photo) {
+          photoOptions.uniformTypeIdentifier = photoType
+        }
+        if let videoType = self.pairedVideoTypeIdentifier(for: video) {
+          videoOptions.uniformTypeIdentifier = videoType
         }
         request.addResource(with: .photo, fileURL: photo, options: photoOptions)
         request.addResource(with: .pairedVideo, fileURL: video, options: videoOptions)
@@ -390,6 +429,29 @@ final class PrismLivePhotoSaver: NSObject {
     )
     semaphore.wait()
     if let saveError { throw saveError }
+  }
+
+  private func photoTypeIdentifier(for url: URL) -> String? {
+    switch url.pathExtension.lowercased() {
+    case "jpg", "jpeg":
+      if #available(iOS 14.0, *) { return UTType.jpeg.identifier }
+      return kUTTypeJPEG as String
+    case "png":
+      if #available(iOS 14.0, *) { return UTType.png.identifier }
+      return kUTTypePNG as String
+    default:
+      return nil
+    }
+  }
+
+  private func pairedVideoTypeIdentifier(for url: URL) -> String? {
+    switch url.pathExtension.lowercased() {
+    case "mov", "qt":
+      if #available(iOS 14.0, *) { return UTType.quickTimeMovie.identifier }
+      return kUTTypeQuickTimeMovie as String
+    default:
+      return nil
+    }
   }
 
   private func ensurePhotoPermission() throws {
@@ -440,6 +502,7 @@ private enum LivePhotoError: LocalizedError {
   case videoTrackMissing
   case metadataWriteFailed
   case photoSaveFailed
+  case livePhotoValidationFailed
   case photoPermissionDenied
 
   var errorDescription: String? {
@@ -464,6 +527,8 @@ private enum LivePhotoError: LocalizedError {
       return "Live Photo pairing metadata could not be written."
     case .photoSaveFailed:
       return "Live Photo could not be saved."
+    case .livePhotoValidationFailed:
+      return "iOS could not validate this Live Photo pair."
     case .photoPermissionDenied:
       return "Photo Library permission was denied."
     }
