@@ -240,6 +240,12 @@ class _HomeTabPageState extends State<HomeTabPage> {
 
     final activeContentType = activeTab.contentType ?? PrismCatalogDataSource.regularContentType;
     final activeSlug = activeTab.slug ?? 'for-you';
+    final activeSectionFound = sections.any(
+      (section) => section.contentType == activeContentType && section.slug == activeSlug,
+    );
+    if (!activeSectionFound) {
+      return null;
+    }
     sections.sort((a, b) {
       final aActive = a.contentType == activeContentType && a.slug == activeSlug ? 0 : 1;
       final bActive = b.contentType == activeContentType && b.slug == activeSlug ? 0 : 1;

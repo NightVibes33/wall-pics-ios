@@ -1720,7 +1720,7 @@ class _PrismItem {
       videoUrl: fastVideo,
       thumbnailVideoUrl: fastThumbnailVideo,
       templateUrl: template.isNotEmpty ? template : catalogDownload,
-      parallaxFileUrl: isParallaxContent && _isActualCatalogImageUrl(download) ? '' : parallaxArchive,
+      parallaxFileUrl: parallaxArchive,
       mediaAssetUrls: mediaAssetUrls,
       pairedWallpapers: pairedWallpapers,
       matchingSides: normalizedMatchingSides,

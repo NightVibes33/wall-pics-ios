@@ -20,6 +20,7 @@ class DownloadButton extends StatefulWidget {
     this.isPremiumContent = false,
     this.contentId,
     this.sourceContext,
+    this.isLivePhoto = false,
     this.livePhotoStillUrl,
     super.key,
   });
@@ -29,6 +30,7 @@ class DownloadButton extends StatefulWidget {
   final bool isPremiumContent;
   final String? contentId;
   final String? sourceContext;
+  final bool isLivePhoto;
   final String? livePhotoStillUrl;
 
   @override
@@ -132,7 +134,8 @@ class _DownloadButtonState extends State<DownloadButton> {
 
       var savedLivePhoto = false;
       logger.d(link);
-      if (_isLivePhotoVideo(link)) {
+      final shouldSaveLivePhoto = widget.isLivePhoto || _isLivePhotoVideo(link);
+      if (shouldSaveLivePhoto) {
         final stillUrl = widget.livePhotoStillUrl?.trim();
         final message = await PrismLivePhotoSaver.save(
           videoUrl: link,

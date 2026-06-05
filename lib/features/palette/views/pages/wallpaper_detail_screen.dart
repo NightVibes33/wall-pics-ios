@@ -421,6 +421,14 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     return path.endsWith('.zip');
   }
 
+  String _firstNonEmpty(Iterable<String> values) {
+    for (final value in values) {
+      final trimmed = value.trim();
+      if (trimmed.isNotEmpty) return trimmed;
+    }
+    return '';
+  }
+
   String _catalogDisplayImageUrl(WallpaperDetailEntity entity) {
     final pairedImageUrls = _catalogPairedImageUrlsForEntity(entity);
     if (pairedImageUrls.isNotEmpty) return pairedImageUrls.first;
@@ -438,15 +446,30 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
 
   String _catalogParallaxFileUrl(WallpaperDetailEntity entity) {
     if (!_isPrismParallax(entity)) return '';
-    final displayImage = _catalogDisplayImageUrl(entity);
-    if (displayImage.isNotEmpty && !_isVideoUrl(displayImage) && !_isArchiveUrl(displayImage)) {
-      return '';
-    }
     final explicit = _prismMetadataValue(entity, 'catalogParallaxFileUrl');
     if (explicit.isNotEmpty && _isArchiveUrl(explicit)) return explicit;
     final full = entity.fullUrl.trim();
     if (_isArchiveUrl(full)) return full;
     return '';
+  }
+
+  String _catalogLiveStillUrl(WallpaperDetailEntity entity) {
+    return _firstNonEmpty(
+      <String>[
+        _prismMetadataValue(entity, 'catalogFirstFrameThumbnailUrl'),
+        _prismMetadataValue(entity, 'catalogStaticThumbnailUrl'),
+        _prismMetadataValue(entity, 'catalogPreviewUrl'),
+        entity.thumbnailUrl,
+      ].where((url) => url.isNotEmpty && !_isVideoUrl(url) && !_isArchiveUrl(url)),
+    );
+  }
+
+  String _catalogLiveVideoUrl(WallpaperDetailEntity entity) {
+    return _firstNonEmpty(<String>[
+      _prismMetadataValue(entity, 'catalogVideoUrl'),
+      _prismMetadataValue(entity, 'catalogThumbnailVideoUrl'),
+      entity.fullUrl,
+    ]);
   }
 
   List<String> _catalogPairedImageUrlsForEntity(WallpaperDetailEntity entity) {
@@ -1024,9 +1047,11 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     }
 
     final isParallax = _isPrismParallax(entity);
-    const String? liveStillUrl = null;
+    final liveStillUrl = isLivePhoto ? _catalogLiveStillUrl(entity) : null;
     final parallaxCompositePath = isParallax ? _parallaxCompositePathFor(entity) : null;
-    final downloadUrl = parallaxCompositePath ?? (isParallax ? _catalogDisplayImageUrl(entity) : entity.fullUrl);
+    final downloadUrl = isLivePhoto
+        ? _catalogLiveVideoUrl(entity)
+        : parallaxCompositePath ?? (isParallax ? _catalogDisplayImageUrl(entity) : entity.fullUrl);
     final setWallpaperUrl =
         !isLivePhoto && state.colorChanged && state.screenshotTaken && state.imageFile != null
             ? state.imageFile!.path
@@ -1037,6 +1062,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
           colorChanged: false,
           link: downloadUrl,
           sourceContext: _getSourceContext(state),
+          isLivePhoto: isLivePhoto,
           livePhotoStillUrl: liveStillUrl,
         ),
       ),
