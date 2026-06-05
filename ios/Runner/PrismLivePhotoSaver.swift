@@ -212,9 +212,6 @@ final class PrismLivePhotoSaver: NSObject {
     try? FileManager.default.removeItem(at: output)
 
     let reader = try AVAssetReader(asset: asset)
-    if let timeRange = livePhotoCompatibleTimeRange(for: asset.duration) {
-      reader.timeRange = timeRange
-    }
     let writer = try AVAssetWriter(outputURL: output, fileType: .mov)
     writer.shouldOptimizeForNetworkUse = false
     writer.metadata = asset.metadata + [contentIdentifierMetadataItem(assetId: assetId)]
@@ -296,15 +293,6 @@ final class PrismLivePhotoSaver: NSObject {
       throw writer.error ?? LivePhotoError.videoExportFailed
     }
   }
-
-  private func livePhotoCompatibleTimeRange(for duration: CMTime) -> CMTimeRange? {
-    guard duration.isValid, duration.seconds.isFinite, duration.seconds > 0 else {
-      return nil
-    }
-    let cappedSeconds = min(duration.seconds, 4.8)
-    return CMTimeRange(start: .zero, duration: CMTime(seconds: cappedSeconds, preferredTimescale: 600))
-  }
-
   private func contentIdentifierMetadataItem(assetId: String) -> AVMetadataItem {
     let item = AVMutableMetadataItem()
     if #available(iOS 10.0, *) {
