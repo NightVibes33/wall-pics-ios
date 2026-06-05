@@ -26,7 +26,6 @@ import 'package:Prism/core/router/deep_link_navigation.dart';
 import 'package:Prism/core/router/deep_link_parser.dart';
 import 'package:Prism/core/router/notification_route_mapper.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
-import 'package:Prism/core/state/auth_runtime.dart';
 import 'package:Prism/core/utils/edge_to_edge_overlay_style.dart';
 import 'package:Prism/core/utils/status.dart';
 import 'package:Prism/core/utils/url_launcher_compat.dart' as launcher_compat;
@@ -34,16 +33,22 @@ import 'package:Prism/data/notifications/notifications.dart';
 import 'package:Prism/env/env.dart';
 import 'package:Prism/features/category_feed/category_feed.dart';
 import 'package:Prism/features/deep_link/domain/entities/deep_link_action_entity.dart';
+import 'package:Prism/features/favourite_setups/favourite_setups.dart';
 import 'package:Prism/features/favourite_walls/favourite_walls.dart';
 import 'package:Prism/features/in_app_notifications/biz/bloc/in_app_notifications_bloc.j.dart';
 import 'package:Prism/features/palette/domain/bloc/wallpaper_detail_bloc.dart';
 import 'package:Prism/features/prism_catalog/data/prism_catalog_data_source.dart';
 import 'package:Prism/features/palette/palette.dart';
+import 'package:Prism/features/profile_setups/profile_setups.dart';
 import 'package:Prism/features/session/domain/entities/session_entity.dart';
 import 'package:Prism/features/session/session.dart';
+import 'package:Prism/features/setups/setups.dart';
 import 'package:Prism/features/startup/startup.dart';
-import 'package:Prism/features/theme_mode/views/theme_mode_bloc_utils.dart';
+import 'package:Prism/features/theme_dark/theme_dark.dart';
+import 'package:Prism/features/theme_light/theme_light.dart';
+import 'package:Prism/features/theme_mode/theme_mode.dart';
 import 'package:Prism/features/user_search/user_search.dart';
+import 'package:Prism/features/wall_of_the_day/biz/bloc/wotd_bloc.j.dart';
 import 'package:Prism/logger/logger.dart';
 import 'package:Prism/notifications/localNotification.dart';
 import 'package:Prism/theme/toasts.dart' as toasts;
@@ -111,41 +116,22 @@ int _colorValueFromPrefs(dynamic rawValue, {required int fallback}) {
   return fallback;
 }
 
-int _intValueFromPrefs(dynamic rawValue, {required int fallback}) {
-  if (rawValue == null) return fallback;
-  if (rawValue is int) return rawValue;
-  if (rawValue is num) return rawValue.round();
-
-  final raw = rawValue.toString().trim();
-  if (raw.isEmpty) return fallback;
-  return int.tryParse(raw) ?? fallback;
-}
-
 Future<void> main() async {
-  var realAppStarted = false;
-
   await runZonedGuarded<Future<void>>(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
-      logger.i('Flutter binding initialized.', tag: 'Startup');
-      runApp(const _PrismBootFrame());
-      logger.i('Boot frame rendered.', tag: 'Startup');
-      if (Env.sideloadBuild) {
-        logger.i('Sideload launch isolation enabled; skipping package-info startup read.', tag: 'Startup');
-      } else {
-        unawaited(
-          app_state.initializeRuntimeAppVersion().catchError((Object e, StackTrace s) {
-            logger.w(
-              'Unable to read runtime app version; falling back to static constants.',
-              tag: 'AppVersion',
-              error: e,
-              stackTrace: s,
-            );
-          }),
-        );
-      }
+      unawaited(
+        app_state.initializeRuntimeAppVersion().catchError((Object e, StackTrace s) {
+          logger.w(
+            'Unable to read runtime app version; falling back to static constants.',
+            tag: 'AppVersion',
+            error: e,
+            stackTrace: s,
+          );
+        }),
+      );
       Bloc.observer = const BlocDebugObserver();
-      localNotification = LocalNotification(initializeImmediately: !Env.sideloadBuild);
+      localNotification = LocalNotification();
 
       PlatformDispatcher.instance.onError = (Object error, StackTrace stackTrace) {
         logger.e('Uncaught platform error', tag: 'PlatformError', error: error, stackTrace: stackTrace);
@@ -173,18 +159,24 @@ Future<void> main() async {
 
       final SentryConfig sentryConfig = _resolveSentryConfig();
 
-      // Persistence is the only native-plugin bootstrap that must finish before
-      // the app reads prefs. Monitoring should never hold the first frame.
-      logger.i('Persistence bootstrap starting.', tag: 'Startup');
-      await PersistenceBootstrap.initialize();
-      logger.i('Persistence bootstrap complete.', tag: 'Startup');
-      unawaited(_initializeMonitoring(sentryConfig));
+      // Only truly-blocking tasks remain on the critical path.
+      await Future.wait(<Future<Object?>>[PersistenceBootstrap.initialize(), _initializeMonitoring(sentryConfig)]);
 
-      if (!Env.sideloadBuild) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          unawaited(_deferredStartup());
-        });
-      }
+      unawaited(
+        PrismCatalogDataSource.instance.warmHomeBootstrapCache().catchError((Object e, StackTrace s) {
+          logger.w('Unable to warm Prism catalog bootstrap.', tag: 'PrismCatalog', error: e, stackTrace: s);
+        }),
+      );
+      unawaited(
+        PurchasesService.instance.configureEarly().catchError((Object e, StackTrace s) {
+          logger.w('Unable to initialize Apple StoreKit listener.', tag: 'Purchases', error: e, stackTrace: s);
+        }),
+      );
+
+      // Defer analytics wiring to after first frame.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_deferredStartup());
+      });
 
       await MonitoringRuntime.reporter.addBreadcrumb(
         message: 'Startup stage reached',
@@ -193,7 +185,7 @@ Future<void> main() async {
       );
       DebugFlags.instance.loadFromStore();
       localPrefs = PrefsCompat.fromRuntime();
-      logger.d('Runtime prefs attached.', tag: 'Startup');
+      logger.d("Persistence initialized");
 
       // Read all prefs first, then batch writes in parallel.
       final systemOverlayColorValue = _colorValueFromPrefs(localPrefs.get("systemOverlayColor"), fallback: 0xFFE57697);
@@ -205,8 +197,8 @@ Future<void> main() async {
       final darkAccentValue = _colorValueFromPrefs(localPrefs.get('darkAccent'), fallback: 0xFFE57697);
       darkAccent = Color(darkAccentValue);
       optimisedWallpapers = localPrefs.get('optimisedWallpapers') == true;
-      categories = _intValueFromPrefs(localPrefs.get('WHcategories'), fallback: 100);
-      purity = _intValueFromPrefs(localPrefs.get('WHpurity'), fallback: 100);
+      categories = localPrefs.get('WHcategories') as int? ?? 100;
+      purity = localPrefs.get('WHpurity') as int? ?? 100;
 
       await Future.wait(<Future<void>>[
         localPrefs.put("systemOverlayColor", systemOverlayColorValue),
@@ -221,7 +213,6 @@ Future<void> main() async {
       ]);
 
       configureDependencies();
-      logger.i('Dependency injection configured.', tag: 'Startup');
       await Future.wait(<Future<void>>[
         SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge),
         SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]),
@@ -240,11 +231,20 @@ Future<void> main() async {
                 BlocProvider<UserSearchBloc>(create: (_) => getIt<UserSearchBloc>()),
                 BlocProvider<CategoryFeedBloc>(create: (_) => getIt<CategoryFeedBloc>()),
                 BlocProvider<FavouriteWallsBloc>(create: (_) => getIt<FavouriteWallsBloc>()),
+                BlocProvider<FavouriteSetupsBloc>(create: (_) => getIt<FavouriteSetupsBloc>()),
+                BlocProvider<ProfileSetupsBloc>(create: (_) => getIt<ProfileSetupsBloc>()),
+                BlocProvider<SetupsBloc>(create: (_) => getIt<SetupsBloc>()),
                 BlocProvider<SessionBloc>(create: (_) => getIt<SessionBloc>()..add(const SessionEvent.started())),
                 BlocProvider<StartupBloc>(
                   create: (_) =>
                       getIt<StartupBloc>()..add(StartupEvent.started(currentVersion: app_state.currentAppVersion)),
                 ),
+                BlocProvider<ThemeLightBloc>(
+                  create: (_) => getIt<ThemeLightBloc>()..add(const ThemeLightEvent.started()),
+                ),
+                BlocProvider<ThemeDarkBloc>(create: (_) => getIt<ThemeDarkBloc>()..add(const ThemeDarkEvent.started())),
+                BlocProvider<ThemeModeBloc>(create: (_) => getIt<ThemeModeBloc>()..add(const ThemeModeEvent.started())),
+                BlocProvider<WotdBloc>(create: (_) => getIt<WotdBloc>()..add(const WotdEvent.started())),
               ],
               child: _MyApp(),
             ),
@@ -252,117 +252,18 @@ Future<void> main() async {
         ),
         // ),  // SentryWidget closing
       );
-      logger.i('Root app rendered.', tag: 'Startup');
-      realAppStarted = true;
-      if (Env.sideloadBuild) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          unawaited(_deferredStartup());
-        });
-      }
     },
     (obj, stacktrace) {
       logger.e('Uncaught zone error', tag: 'ZoneError', error: obj, stackTrace: stacktrace);
       try {
         unawaited(analytics.track(const AppCrashFatalEvent()));
       } catch (_) {}
-      if (!realAppStarted) {
-        runApp(_PrismStartupFailureFrame(error: obj));
-      }
     },
   );
 }
 
-class _PrismBootFrame extends StatelessWidget {
-  const _PrismBootFrame();
-
-  @override
-  Widget build(BuildContext context) {
-    return const MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: Scaffold(
-        backgroundColor: Colors.black,
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Text(
-                '▲ prism',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 34,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0,
-                ),
-              ),
-              SizedBox(height: 18),
-              SizedBox(
-                width: 30,
-                height: 30,
-                child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PrismStartupFailureFrame extends StatelessWidget {
-  const _PrismStartupFailureFrame({required this.error});
-
-  final Object error;
-
-  @override
-  Widget build(BuildContext context) {
-    final message = error.toString();
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: Scaffold(
-        backgroundColor: Colors.black,
-        body: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                const Text(
-                  'prism startup failed',
-                  style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  message.length > 700 ? '${message.substring(0, 700)}...' : message,
-                  style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.35),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 Future<void> _deferredStartup() async {
   await _configureAnalyticsRuntime();
-
-  if (Env.sideloadBuild) {
-    logger.i('Skipping optional native startup warmups for sideload build.', tag: 'Startup');
-    return;
-  }
-
-  unawaited(
-    PrismCatalogDataSource.instance.warmHomeBootstrapCache().catchError((Object e, StackTrace s) {
-      logger.w('Unable to warm Prism catalog bootstrap.', tag: 'PrismCatalog', error: e, stackTrace: s);
-    }),
-  );
-  unawaited(
-    PurchasesService.instance.configureEarly().catchError((Object e, StackTrace s) {
-      logger.w('Unable to initialize Apple StoreKit listener.', tag: 'Purchases', error: e, stackTrace: s);
-    }),
-  );
 }
 
 SentryConfig _resolveSentryConfig() {
@@ -376,12 +277,6 @@ SentryConfig _resolveSentryConfig() {
 }
 
 Future<void> _initializeMonitoring(SentryConfig config) async {
-  if (Env.sideloadBuild) {
-    MonitoringRuntime.reset();
-    logger.i('Skipping Sentry initialization for sideload build.', tag: 'Startup');
-    return;
-  }
-
   if (!config.enabled) {
     MonitoringRuntime.reset();
     return;
@@ -471,12 +366,6 @@ Future<void> _initializeMonitoring(SentryConfig config) async {
 // }
 
 Future<void> _configureAnalyticsRuntime() async {
-  if (Env.sideloadBuild) {
-    AnalyticsRuntime.reset();
-    logger.i('Using no-op analytics provider for sideload build.', tag: 'Analytics');
-    return;
-  }
-
   final bool mixpanelEnabled = _isMixpanelEnabled();
   logger.i(
     'Analytics startup configuration resolved.',
@@ -614,8 +503,7 @@ class _MyAppState extends State<_MyApp> with WidgetsBindingObserver {
     await _syncAnalyticsIdentityFromAppState(sourceTag: 'startup_login_status');
     if (value) {
     }
-    await app_state.persistPrismUser();
-    completeAuthBootstrap();
+    app_state.persistPrismUser();
     await syncSentryUserScope(
       loggedIn: app_state.prismUser.loggedIn,
       id: app_state.prismUser.id,
@@ -776,10 +664,10 @@ class _MyAppState extends State<_MyApp> with WidgetsBindingObserver {
       case ShortCodeIntent():
         await _resolveAndNavigateShortCode(action.code);
       case ChargingAnimationIntent():
-        _appRouter.push(const NotFoundRoute());
+        _appRouter.push(const ChargingAnimationPlayerRoute());
         unawaited(
           analytics.track(
-            const DeepLinkNavigationResultEvent(targetType: TargetTypeValue.unknown, result: EventResultValue.failure),
+            const DeepLinkNavigationResultEvent(targetType: TargetTypeValue.unknown, result: EventResultValue.navigated),
           ),
         );
       case UnknownIntent():
@@ -951,23 +839,15 @@ class _MyAppState extends State<_MyApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _appRouter = AppRouter(/* navigatorKey: _sentryFeedbackNavigatorKey */);
     _analyticsIdentitySync = AnalyticsIdentitySync(analytics: AnalyticsRuntime.instance);
-    if (Env.sideloadBuild) {
-      logger.i('Skipping optional auth and notification startup for sideload build.', tag: 'Startup');
-      completeAuthBootstrap();
-    } else {
-      unawaited(_configureLocalNotificationChannels());
-      unawaited(getLoginStatus().whenComplete(completeAuthBootstrap));
-      unawaited(localNotification.fetchNotificationData(context));
-    }
+    unawaited(_configureLocalNotificationChannels());
+    unawaited(getLoginStatus());
+    unawaited(localNotification.fetchNotificationData(context));
     unawaited(_listenForPushMessages());
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      if (Env.sideloadBuild) {
-        return;
-      }
       final now = DateTime.now();
       if (_lastGetNotifsResume == null || now.difference(_lastGetNotifsResume!) >= _getNotifsResumeThrottle) {
         _lastGetNotifsResume = now;

@@ -5,7 +5,15 @@ class DeepLinkParser {
   const DeepLinkParser();
 
   static const Set<String> _shareRoots = <String>{'share'};
+  static const Set<String> _userRoots = <String>{'user', 'fprofile', 'follower-profile', 'profile'};
+  static const Set<String> _setupRoots = <String>{'setup', 'share-setup'};
+  static const Set<String> _referRoots = <String>{'refer', 'referral'};
   static const Set<String> _shortCodeRoots = <String>{'l'};
+  static const Set<String> _chargingAnimationRoots = <String>{
+    'charging',
+    'charging-animation',
+    'charging-animation-player',
+  };
 
   Uri transform(Uri uri) {
     final List<String> segments = _segments(uri);
@@ -56,8 +64,52 @@ class DeepLinkParser {
       );
     }
 
+    if (_userRoots.contains(root)) {
+      final String profileIdentifier = _firstNonEmpty(<String?>[
+        segments.safeAt(1),
+        uri.queryParameters['identifier'],
+        uri.queryParameters['username'],
+        uri.queryParameters['user'],
+        uri.queryParameters['email'],
+      ]);
+      if (profileIdentifier.isEmpty) {
+        return UnknownIntent(rawUri: uri.toString());
+      }
+      return UserLinkIntent(profileIdentifier: profileIdentifier, rawUri: uri.toString());
+    }
 
+    if (_setupRoots.contains(root)) {
+      final String setupName = _firstNonEmpty(<String?>[
+        segments.safeAt(1),
+        uri.queryParameters['name'],
+        uri.queryParameters['setupName'],
+        uri.queryParameters['setup_name'],
+      ]);
+      final String thumbnailUrl = _firstNonEmpty(<String?>[
+        uri.queryParameters['thumb'],
+        uri.queryParameters['thumbUrl'],
+        uri.queryParameters['thumbnail'],
+      ]);
+      if (setupName.isEmpty) {
+        return UnknownIntent(rawUri: uri.toString());
+      }
+      return SetupLinkIntent(setupName: setupName, thumbnailUrl: thumbnailUrl, rawUri: uri.toString());
+    }
 
+    if (_referRoots.contains(root)) {
+      final String inviterId = _firstNonEmpty(<String?>[
+        segments.safeAt(1),
+        uri.queryParameters['inviterId'],
+        uri.queryParameters['userID'],
+        uri.queryParameters['userId'],
+        uri.queryParameters['userid'],
+        uri.queryParameters['id'],
+      ]);
+      if (inviterId.isEmpty) {
+        return UnknownIntent(rawUri: uri.toString());
+      }
+      return ReferLinkIntent(inviterId: inviterId, rawUri: uri.toString());
+    }
 
     if (_shortCodeRoots.contains(root)) {
       final String code = _firstNonEmpty(<String?>[segments.safeAt(1), uri.queryParameters['code']]);
@@ -67,6 +119,9 @@ class DeepLinkParser {
       return ShortCodeIntent(code: code, rawUri: uri.toString());
     }
 
+    if (_chargingAnimationRoots.contains(root)) {
+      return ChargingAnimationIntent(rawUri: uri.toString());
+    }
 
     return UnknownIntent(rawUri: uri.toString());
   }

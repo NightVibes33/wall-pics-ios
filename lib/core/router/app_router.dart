@@ -6,18 +6,23 @@ import 'package:Prism/core/router/route_guards.dart';
 import 'package:Prism/core/wallpaper/wallpaper_source.dart';
 import 'package:Prism/features/admin_review/views/pages/remote_store_telemetry_screen.dart';
 import 'package:Prism/features/category_feed/views/pages/collection_view_screen.dart';
+import 'package:Prism/features/charging_animations/views/pages/charging_animation_player_screen.dart';
 import 'package:Prism/features/debug_panel/views/pages/debug_panel_page.dart';
+import 'package:Prism/features/favourite_walls/views/pages/favourite_wall_screen.dart';
 import 'package:Prism/features/navigation/views/pages/collection_tab_page.dart';
 import 'package:Prism/features/navigation/views/pages/dashboard_page.dart';
 import 'package:Prism/features/navigation/views/pages/home_tab_page.dart';
 import 'package:Prism/features/navigation/views/pages/search_tab_page.dart';
 import 'package:Prism/features/onboarding_v2/src/views/onboarding_v2_shell.dart';
 import 'package:Prism/features/palette/domain/entities/wallpaper_detail_entity.dart';
+import 'package:Prism/features/palette/views/pages/download_screen.dart';
+import 'package:Prism/features/palette/views/pages/download_wallpaper_screen.dart';
 import 'package:Prism/features/palette/views/pages/wallpaper_detail_screen.dart';
 import 'package:Prism/features/palette/views/pages/wallpaper_filter_screen.dart';
 import 'package:Prism/features/session/views/pages/about_screen.dart';
 import 'package:Prism/features/session/views/pages/settings_screen.dart';
 import 'package:Prism/features/startup/views/pages/splash_widget.dart';
+import 'package:Prism/features/theme_mode/views/pages/theme_view_page.dart';
 import 'package:Prism/features/user_search/views/pages/search_screen.dart';
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/foundation.dart';
@@ -55,10 +60,15 @@ class AppRouter extends RootStackRouter {
 
     // Global routes (pushed over entire shell as full-screen dialogs)
     AutoRoute(path: '/wallpaper-detail', page: WallpaperDetailRoute.page),
-    AutoRoute(path: '/wallpaper-filter', page: WallpaperFilterRoute.page),
     RedirectRoute(path: '/share', redirectTo: '/wallpaper-detail'), // Replaces ShareWallpaperViewRoute
+    AutoRoute(path: '/download-wallpaper', page: DownloadWallpaperRoute.page),
+    AutoRoute(path: '/wallpaper-filter', page: WallpaperFilterRoute.page),
     AutoRoute(path: '/settings', page: SettingsRoute.page),
     AutoRoute(path: '/about', page: AboutRoute.page),
+    AutoRoute(path: '/fav-walls', page: FavouriteWallpaperRoute.page),
+    AutoRoute(path: '/downloads', page: DownloadRoute.page),
+    AutoRoute(path: '/theme', page: ThemeViewRoute.page),
+    AutoRoute(path: '/charging-animation', page: ChargingAnimationPlayerRoute.page),
     AutoRoute(path: '/collection-view', page: CollectionViewRoute.page),
     AutoRoute(path: '/admin-remote-store-telemetry', page: RemoteStoreTelemetryRoute.page, guards: [_adminGuard]),
     AutoRoute(path: '/debug-panel', page: DebugPanelRoute.page, guards: [_adminGuard]),

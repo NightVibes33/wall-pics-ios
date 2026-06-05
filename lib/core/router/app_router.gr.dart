@@ -37,7 +37,7 @@ class ChargingAnimationPlayerRoute extends PageRouteInfo<void> {
   static PageInfo page = PageInfo(
     name,
     builder: (data) {
-      return const NotFoundPage();
+      return const ChargingAnimationPlayerScreen();
     },
   );
 }
@@ -154,7 +154,7 @@ class DownloadRoute extends PageRouteInfo<void> {
   static PageInfo page = PageInfo(
     name,
     builder: (data) {
-      return const NotFoundPage();
+      return DownloadScreen();
     },
   );
 }
@@ -179,7 +179,11 @@ class DownloadWallpaperRoute extends PageRouteInfo<DownloadWallpaperRouteArgs> {
     name,
     builder: (data) {
       final args = data.argsAs<DownloadWallpaperRouteArgs>();
-      return const NotFoundPage();
+      return DownloadWallpaperScreen(
+        key: args.key,
+        source: args.source,
+        file: args.file,
+      );
     },
   );
 }
@@ -224,7 +228,7 @@ class FavouriteWallpaperRoute extends PageRouteInfo<void> {
   static PageInfo page = PageInfo(
     name,
     builder: (data) {
-      return const NotFoundPage();
+      return const FavouriteWallpaperScreen();
     },
   );
 }
@@ -875,7 +879,7 @@ class ThemeViewRoute extends PageRouteInfo<void> {
   static PageInfo page = PageInfo(
     name,
     builder: (data) {
-      return const NotFoundPage();
+      return ThemeView();
     },
   );
 }
