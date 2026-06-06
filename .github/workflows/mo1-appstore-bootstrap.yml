@@ -42,7 +42,7 @@ jobs:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           DOPI_BUNDLE_ID: app.mo1.player
-          DOPI_APP_NAME: dopI
+          DOPI_APP_NAME: 𝚍𝚘𝚙𝙸
           DOPI_SKU: DOPI-APP-MO1-PLAYER
         run: |
           set -euo pipefail
