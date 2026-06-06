@@ -97,12 +97,28 @@ app_attrs = attributes(app)
 puts "App: #{app_attrs['name'] || '(unknown)'} (#{BUNDLE_ID})"
 
 builds = request(:get, "/v1/apps/#{app_id}/builds", query: {
-  'fields[builds]' => 'version,uploadedDate,expired,processingState,usesNonExemptEncryption',
   'limit' => '200'
 })
 sorted_builds = builds.fetch('data', []).sort_by do |build|
   Time.parse(attributes(build)['uploadedDate'].to_s) rescue Time.at(0)
 end.reverse
+
+puts 'Recent builds:'
+sorted_builds.take(8).each do |build|
+  attrs = attributes(build)
+  summary = attrs.slice(
+    'version',
+    'uploadedDate',
+    'expired',
+    'processingState',
+    'usesNonExemptEncryption',
+    'betaReviewState',
+    'externalBuildState',
+    'internalBuildState'
+  )
+  puts "- #{JSON.generate(summary)}"
+end
+
 latest_valid_build = sorted_builds.find do |build|
   attrs = attributes(build)
   !attrs['expired'] && attrs['processingState'].to_s.upcase == 'VALID'
