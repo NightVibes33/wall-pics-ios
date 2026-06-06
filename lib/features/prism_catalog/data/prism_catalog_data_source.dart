@@ -1764,6 +1764,10 @@ class _PrismItem {
       return _isPotentialCatalogImageUrl(value) && !_isCatalogPreviewAssetUrl(value);
     }
 
+    bool isDisplayImageUrl(String value) {
+      return _isPotentialCatalogImageUrl(value) && !_isCatalogBrandedAssetUrl(value);
+    }
+
     bool isActualImageUrl(String value) => isPotentialImageUrl(value) && _isActualCatalogImageUrl(value);
 
     final thumbnailVideo = url(json['thumbnail_video']);
@@ -1774,7 +1778,7 @@ class _PrismItem {
       final thumbnailConfig = _asMap(json['thumbnail_config']);
       for (final layer in _maps(thumbnailConfig['layers'])) {
         final candidate = url(layer['url']);
-        if (isPotentialImageUrl(candidate) && !_isCatalogPreviewAssetUrl(candidate)) {
+        if (isDisplayImageUrl(candidate)) {
           return candidate;
         }
       }
@@ -1857,11 +1861,11 @@ class _PrismItem {
     ]);
     final parallaxFallbackThumbImage = isParallaxContent
         ? _firstString(<Object?>[
-            isPotentialImageUrl(previewImage) ? previewImage : '',
-            isPotentialImageUrl(staticThumbnail) ? staticThumbnail : '',
-            isPotentialImageUrl(hqThumbnail) ? hqThumbnail : '',
-            isPotentialImageUrl(thumbnail) ? thumbnail : '',
-            isPotentialImageUrl(firstFrameThumbnail) ? firstFrameThumbnail : '',
+            isDisplayImageUrl(previewImage) ? previewImage : '',
+            isDisplayImageUrl(staticThumbnail) ? staticThumbnail : '',
+            isDisplayImageUrl(hqThumbnail) ? hqThumbnail : '',
+            isDisplayImageUrl(thumbnail) ? thumbnail : '',
+            isDisplayImageUrl(firstFrameThumbnail) ? firstFrameThumbnail : '',
           ])
         : '';
     final fastPreviewThumbImage = _fastTileOrOriginal(previewThumbImage);
@@ -1914,7 +1918,7 @@ class _PrismItem {
     final displayOnlyContent = contentType == PrismCatalogDataSource.diyTemplateContentType ||
         contentType == PrismCatalogDataSource.liveDiyTemplateContentType;
     final download = isParallaxContent
-        ? _firstString(<Object?>[parallaxDisplayImage, imageDownload, fullImage, fastFullSizeImage, thumb])
+        ? _firstString(<Object?>[imageDownload, fullImage, fastFullSizeImage, parallaxArchive, parallaxDisplayImage, thumb])
         : displayOnlyContent
         ? _firstString(<Object?>[parallaxArchive, appDownloadUrl, fullImage, preview, thumb, template, fullMedia])
         : isMatchingContent
@@ -2352,7 +2356,7 @@ String? _firstParallaxLayerUrl(Map<String, dynamic> item) {
   final config = _asMap(item['thumbnail_config']);
   for (final layer in _maps(config['layers'])) {
     final url = _string(layer['url']).trim();
-    if (_isPotentialCatalogImageUrl(url) && !_isCatalogPreviewAssetUrl(url)) {
+    if (_isPotentialCatalogImageUrl(url) && !_isCatalogBrandedAssetUrl(url)) {
       return url;
     }
   }
@@ -2577,6 +2581,17 @@ bool _isCatalogPreviewAssetUrl(String value) {
       previewProbe.contains('watermark') ||
       previewProbe.contains('brand') ||
       previewProbe.contains('logo');
+}
+
+bool _isCatalogBrandedAssetUrl(String value) {
+  final raw = value.trim();
+  if (raw.isEmpty) return false;
+  final uri = Uri.tryParse(raw);
+  final decoded = Uri.decodeComponent(<String>[
+    uri?.path ?? raw,
+    uri?.query ?? '',
+  ].join('?')).toLowerCase();
+  return decoded.contains('watermark') || decoded.contains('brand') || decoded.contains('logo');
 }
 
 bool _isProxyableCatalogVideoUrl(String value) {
