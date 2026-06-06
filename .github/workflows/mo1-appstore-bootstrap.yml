@@ -36,6 +36,22 @@ jobs:
             exit 1
           fi
 
+      - name: Copy TestFlight secrets to mo1
+        env:
+          GH_TOKEN: ${{ secrets.MO1_SECRET_ADMIN_TOKEN }}
+          APP_STORE_CONNECT_API_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$APP_STORE_CONNECT_API_KEY_P8" | gh secret set APP_STORE_CONNECT_API_KEY_P8 -R NightVibes33/mo1
+          printf '%s' "$APP_STORE_CONNECT_KEY_ID" | gh secret set APP_STORE_CONNECT_KEY_ID -R NightVibes33/mo1
+          printf '%s' "$APP_STORE_CONNECT_ISSUER_ID" | gh secret set APP_STORE_CONNECT_ISSUER_ID -R NightVibes33/mo1
+          printf '%s' "$APPLE_TEAM_ID" | gh secret set APPLE_TEAM_ID -R NightVibes33/mo1
+          printf '%s' "app.mo1.player" | gh secret set APP_BUNDLE_ID -R NightVibes33/mo1
+          echo "Copied App Store Connect/TestFlight secrets into NightVibes33/mo1"
+
       - name: Create/check App Store Connect records
         env:
           APP_STORE_CONNECT_API_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
@@ -159,7 +175,7 @@ jobs:
               print(f"Created Bundle ID for {BUNDLE_ID}")
 
           try:
-              caps = request("GET", f"/bundleIds/{bundle_resource_id}/bundleIdCapabilities?limit=200")
+              caps = request("GET", f"/bundleIds/{bundle_resource_id}/bundleIdCapabilities")
               has_music = any(item.get("attributes", {}).get("capabilityType") == "MUSIC_KIT" for item in caps.get("data", []))
               if has_music:
                   print("MusicKit capability already enabled")
@@ -194,22 +210,10 @@ jobs:
                       },
                   }
               }
-              request("POST", "/apps", body)
-              print(f"Created App Store Connect app {APP_NAME}")
+              try:
+                  request("POST", "/apps", body)
+                  print(f"Created App Store Connect app {APP_NAME}")
+              except Exception as error:
+                  print(f"::warning::App Store Connect app record was not created: {error}")
+                  print("::warning::Create the app record manually in App Store Connect if it does not already exist, then rerun the mo1 TestFlight workflow.")
           PY
-
-      - name: Copy TestFlight secrets to mo1
-        env:
-          GH_TOKEN: ${{ secrets.MO1_SECRET_ADMIN_TOKEN }}
-          APP_STORE_CONNECT_API_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
-          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          set -euo pipefail
-          printf '%s' "$APP_STORE_CONNECT_API_KEY_P8" | gh secret set APP_STORE_CONNECT_API_KEY_P8 -R NightVibes33/mo1
-          printf '%s' "$APP_STORE_CONNECT_KEY_ID" | gh secret set APP_STORE_CONNECT_KEY_ID -R NightVibes33/mo1
-          printf '%s' "$APP_STORE_CONNECT_ISSUER_ID" | gh secret set APP_STORE_CONNECT_ISSUER_ID -R NightVibes33/mo1
-          printf '%s' "$APPLE_TEAM_ID" | gh secret set APPLE_TEAM_ID -R NightVibes33/mo1
-          printf '%s' "app.mo1.player" | gh secret set APP_BUNDLE_ID -R NightVibes33/mo1
-          echo "Copied App Store Connect/TestFlight secrets into NightVibes33/mo1"
