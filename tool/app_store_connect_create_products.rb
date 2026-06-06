@@ -124,6 +124,38 @@ def create_optional(path, body, label)
   end
 end
 
+def territory_linkages
+  @territory_linkages ||= list_all('/v1/territories', query: {
+    'fields[territories]' => 'currency'
+  }).map { |territory| { type: 'territories', id: territory.fetch('id') } }
+end
+
+def create_subscription_availability(subscription_id, product_id)
+  create_optional('/v1/subscriptionAvailabilities', {
+    data: {
+      type: 'subscriptionAvailabilities',
+      attributes: { availableInNewTerritories: true },
+      relationships: {
+        subscription: { data: { type: 'subscriptions', id: subscription_id } },
+        availableTerritories: { data: territory_linkages }
+      }
+    }
+  }, "subscription availability #{product_id}")
+end
+
+def create_iap_availability(iap_id, product_id)
+  create_optional('/v1/inAppPurchaseAvailabilities', {
+    data: {
+      type: 'inAppPurchaseAvailabilities',
+      attributes: { availableInNewTerritories: true },
+      relationships: {
+        inAppPurchase: { data: { type: 'inAppPurchases', id: iap_id } },
+        availableTerritories: { data: territory_linkages }
+      }
+    }
+  }, "IAP availability #{product_id}")
+end
+
 apps = list_all('/v1/apps', query: {
   'filter[bundleId]' => BUNDLE_ID,
   'fields[apps]' => 'name,bundleId,sku'
@@ -188,6 +220,7 @@ SUBSCRIPTIONS.each do |spec|
   next unless sub
 
   puts "Using subscription #{spec[:product_id]} id=#{sub.fetch('id')} state=#{attributes(sub)['state']}"
+  create_subscription_availability(sub.fetch('id'), spec[:product_id])
   created_or_existing_subs << [spec, sub]
   create_optional('/v1/subscriptionLocalizations', {
     data: {
@@ -218,6 +251,7 @@ unless iap
 end
 if iap
   puts "Using IAP #{LIFETIME[:product_id]} id=#{iap.fetch('id')} state=#{attributes(iap)['state']}"
+  create_iap_availability(iap.fetch('id'), LIFETIME[:product_id])
   create_optional('/v1/inAppPurchaseLocalizations', {
     data: {
       type: 'inAppPurchaseLocalizations',
