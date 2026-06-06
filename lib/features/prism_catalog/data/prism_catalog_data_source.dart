@@ -1355,7 +1355,7 @@ class PrismCatalogDataSource {
   }
 
   Future<void> _warmCatalogJsonFiles() async {
-    const files = <String>[
+    final files = <String>[
       'prism_index.json',
       'prism_category_lite.json',
       'prism_category_trees.json',
@@ -1378,9 +1378,8 @@ class PrismCatalogDataSource {
       'prism_parallax_page_001.json',
       'prism_parallax_page_002.json',
       'prism_parallax_page_003.json',
-      'prism_profile_pictures_page_001.json',
-      'prism_profile_pictures_page_002.json',
-      'prism_profile_pictures_page_003.json',
+      for (var page = 1; page <= 30; page++)
+        'prism_profile_pictures_page_${page.toString().padLeft(3, "0")}.json',
       'prism_search_index.json',
     ];
     const batchSize = 4;

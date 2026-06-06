@@ -109,12 +109,26 @@ class _CategoryFeedContent extends StatefulWidget {
 }
 
 class _CategoryFeedContentState extends State<_CategoryFeedContent> {
-  late Future<List<FeedItemEntity>> _itemsFuture;
+  final ScrollController _scrollController = ScrollController();
+  final List<FeedItemEntity> _rawItems = <FeedItemEntity>[];
+  int _generation = 0;
+  bool _loadingInitial = true;
+  bool _loadingMore = false;
+  bool _hasMore = true;
+  Object? _error;
 
   @override
   void initState() {
     super.initState();
-    _itemsFuture = _loadItems();
+    _scrollController.addListener(_onScroll);
+    _loadInitial();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
   }
 
   @override
@@ -122,13 +136,67 @@ class _CategoryFeedContentState extends State<_CategoryFeedContent> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.category.catalogSlug != widget.category.catalogSlug ||
         oldWidget.category.catalogContentType != widget.category.catalogContentType) {
-      _itemsFuture = _loadItems();
+      _loadInitial();
     }
   }
 
-  Future<List<FeedItemEntity>> _loadItems() async {
-    final page = await PrismCatalogDataSource.instance.fetchCategoryFeed(category: widget.category, refresh: true);
-    return _uniqueItems(page?.items ?? const <FeedItemEntity>[]);
+  void _onScroll() {
+    if (!_scrollController.hasClients || _loadingInitial || _loadingMore || !_hasMore) {
+      return;
+    }
+    final remaining = _scrollController.position.maxScrollExtent - _scrollController.position.pixels;
+    if (remaining < 1800) {
+      _loadMore();
+    }
+  }
+
+  Future<void> _loadInitial() async {
+    final generation = ++_generation;
+    setState(() {
+      _loadingInitial = true;
+      _loadingMore = false;
+      _hasMore = true;
+      _error = null;
+      _rawItems.clear();
+    });
+    try {
+      final page = await PrismCatalogDataSource.instance.fetchCategoryFeed(category: widget.category, refresh: true);
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _rawItems.addAll(_uniqueItems(page?.items ?? const <FeedItemEntity>[]));
+        _hasMore = page?.hasMore ?? false;
+        _loadingInitial = false;
+      });
+    } catch (error) {
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _error = error;
+        _hasMore = false;
+        _loadingInitial = false;
+      });
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_loadingInitial || _loadingMore || !_hasMore) {
+      return;
+    }
+    setState(() => _loadingMore = true);
+    try {
+      final page = await PrismCatalogDataSource.instance.fetchCategoryFeed(category: widget.category, refresh: false);
+      if (!mounted) return;
+      setState(() {
+        _appendUnique(page?.items ?? const <FeedItemEntity>[]);
+        _hasMore = page?.hasMore ?? false;
+        _loadingMore = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error;
+        _loadingMore = false;
+      });
+    }
   }
 
   List<FeedItemEntity> _uniqueItems(Iterable<FeedItemEntity> items) {
@@ -139,12 +207,16 @@ class _CategoryFeedContentState extends State<_CategoryFeedContent> {
     ];
   }
 
-  Future<void> _refresh() async {
-    setState(() {
-      _itemsFuture = _loadItems();
-    });
-    await _itemsFuture;
+  void _appendUnique(Iterable<FeedItemEntity> items) {
+    final seen = _rawItems.map((item) => item.id).toSet();
+    for (final item in items) {
+      if (seen.add(item.id)) {
+        _rawItems.add(item);
+      }
+    }
   }
+
+  Future<void> _refresh() => _loadInitial();
 
   double _gridAspectRatio(List<FeedItemEntity> items) {
     if (widget.category.catalogContentType == PrismCatalogDataSource.profilePictureContentType) {
@@ -160,63 +232,60 @@ class _CategoryFeedContentState extends State<_CategoryFeedContent> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<FeedItemEntity>>(
-      future: _itemsFuture,
-      builder: (context, state) {
-        final rawItems = state.data ?? const <FeedItemEntity>[];
-        final items = WallpaperTile.expandMatchingItemsForDisplay(rawItems);
-        if (state.connectionState == ConnectionState.waiting && items.isEmpty) {
-          return const LoadingCards();
-        }
-        if (state.hasError && items.isEmpty) {
-          return RefreshIndicator(
-            onRefresh: _refresh,
-            child: const Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                Spacer(),
-                Center(child: Text("Can't load this catalog. Pull to retry.")),
-                Spacer(),
-              ],
-            ),
-          );
-        }
-        if (items.isEmpty) {
-          return RefreshIndicator(
-            onRefresh: _refresh,
-            child: ListView(
-              children: const <Widget>[
-                SizedBox(height: 220),
-                Center(child: Text('No wallpapers loaded. Pull to retry.')),
-              ],
-            ),
-          );
-        }
+    final items = WallpaperTile.expandMatchingItemsForDisplay(_rawItems);
+    if (_loadingInitial && items.isEmpty) {
+      return const LoadingCards();
+    }
+    if (_error != null && items.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: _refresh,
+        child: ListView(
+          children: const <Widget>[
+            SizedBox(height: 220),
+            Center(child: Text("Can't load this catalog. Pull to retry.")),
+          ],
+        ),
+      );
+    }
+    if (items.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: _refresh,
+        child: ListView(
+          children: const <Widget>[
+            SizedBox(height: 220),
+            Center(child: Text('No wallpapers loaded. Pull to retry.')),
+          ],
+        ),
+      );
+    }
 
-        final columns = MediaQuery.of(context).orientation == Orientation.portrait ? 3 : 5;
-        return RefreshIndicator(
-          onRefresh: _refresh,
-          child: GridView.builder(
-            cacheExtent: 16000,
-            padding: const EdgeInsets.fromLTRB(0, 5, 0, 140),
-            itemCount: items.length,
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: columns,
-              childAspectRatio: _gridAspectRatio(items),
-              mainAxisSpacing: 0,
-              crossAxisSpacing: 0,
-            ),
-            itemBuilder: (context, index) {
-              return WallpaperTile(
-                item: items[index],
-                index: index,
-                galleryItems: items,
-                playVideoPreview: true,
-              );
-            },
-          ),
-        );
-      },
+    final columns = MediaQuery.of(context).orientation == Orientation.portrait ? 3 : 5;
+    final loadingTileCount = _loadingMore ? columns : 0;
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      child: GridView.builder(
+        controller: _scrollController,
+        cacheExtent: 18000,
+        padding: const EdgeInsets.fromLTRB(0, 5, 0, 140),
+        itemCount: items.length + loadingTileCount,
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: columns,
+          childAspectRatio: _gridAspectRatio(items),
+          mainAxisSpacing: 0,
+          crossAxisSpacing: 0,
+        ),
+        itemBuilder: (context, index) {
+          if (index >= items.length) {
+            return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+          }
+          return WallpaperTile(
+            item: items[index],
+            index: index,
+            galleryItems: items,
+            playVideoPreview: true,
+          );
+        },
+      ),
     );
   }
 }
