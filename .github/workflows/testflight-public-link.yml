@@ -9,6 +9,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Inspect App Store products
+        env:
+          APP_STORE_CONNECT_API_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          PRISM_APP_BUNDLE_ID: com.nightvibes.prism.39A8Q3T3TR
+        run: ruby tool/app_store_connect_products.rb
+
       - name: Create or print public TestFlight link
         env:
           APP_STORE_CONNECT_API_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
