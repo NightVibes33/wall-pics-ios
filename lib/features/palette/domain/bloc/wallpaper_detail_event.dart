@@ -63,12 +63,18 @@ final class ResetAccentColor extends WallpaperDetailEvent {
 }
 
 final class CaptureScreenshot extends WallpaperDetailEvent {
-  const CaptureScreenshot({required this.imageBytes});
+  const CaptureScreenshot({
+    required this.imageBytes,
+    this.expectedAccent,
+    this.expectedColorChanged,
+  });
 
   final Uint8List imageBytes;
+  final Color? expectedAccent;
+  final bool? expectedColorChanged;
 
   @override
-  List<Object?> get props => [imageBytes];
+  List<Object?> get props => [imageBytes, expectedAccent, expectedColorChanged];
 }
 
 final class OnPanelOpened extends WallpaperDetailEvent {

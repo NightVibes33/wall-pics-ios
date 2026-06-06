@@ -40,6 +40,10 @@ class PrismCatalogDataSource {
     return _isActualCatalogImageUrl(url);
   }
 
+  static bool isPotentialCatalogImageUrl(String url) {
+    return _isPotentialCatalogImageUrl(url) && !_isCatalogPreviewAssetUrl(url);
+  }
+
   static const int _pageSize = 144;
   static const int _catalogShardSize = 100;
   static const Duration _metadataTimeout = Duration(seconds: 10);
@@ -1757,15 +1761,10 @@ class _PrismItem {
     }
 
     bool isPotentialImageUrl(String value) {
-      if (value.trim().isEmpty || isVideoUrl(value) || isArchiveUrl(value) || isUnsupportedDisplayResource(value)) {
-        return false;
-      }
-      final uri = Uri.tryParse(value.trim());
-      return isImageUrl(value) ||
-          (uri != null && (uri.scheme == 'http' || uri.scheme == 'https') && uri.host.isNotEmpty);
+      return _isPotentialCatalogImageUrl(value) && !_isCatalogPreviewAssetUrl(value);
     }
 
-    bool isActualImageUrl(String value) => isImageUrl(value) && _isActualCatalogImageUrl(value);
+    bool isActualImageUrl(String value) => isPotentialImageUrl(value) && _isActualCatalogImageUrl(value);
 
     final thumbnailVideo = url(json['thumbnail_video']);
     final fastVideo = _fastVideoOrOriginal(video);
@@ -1859,15 +1858,15 @@ class _PrismItem {
     final fastPreviewThumbImage = _fastTileOrOriginal(previewThumbImage);
     final fastParallaxLayerPreview = _fastTileOrOriginal(parallaxLayerPreview, width: 1920, quality: 94);
     final parallaxTileImage = _firstString(<Object?>[
-      fastPreviewThumbImage,
       fastParallaxLayerPreview,
+      fastPreviewThumbImage,
       fastFullImage,
       fastFullSizeImage,
     ]);
     final parallaxDisplayImage = isParallaxContent
         ? _firstString(<Object?>[
-            fastPreviewThumbImage,
             fastParallaxLayerPreview,
+            fastPreviewThumbImage,
             parallaxTileImage,
             fastFullImage,
             fullImage,
@@ -1881,12 +1880,12 @@ class _PrismItem {
     final thumb = isLiveContent
         ? _firstString(<Object?>[fastLivePoster, tileImage])
         : isParallaxContent
-            ? _firstString(<Object?>[fastPreviewThumbImage, parallaxTileImage, fastParallaxLayerPreview, fastFullImage])
+            ? _firstString(<Object?>[parallaxTileImage, fastParallaxLayerPreview, fastPreviewThumbImage, fastFullImage])
             : tileImage;
     final staticThumb = isLiveContent
         ? _firstString(<Object?>[fastLivePoster, thumb])
         : isParallaxContent
-            ? _firstString(<Object?>[fastPreviewThumbImage, thumb, fastParallaxLayerPreview])
+            ? _firstString(<Object?>[parallaxTileImage, fastParallaxLayerPreview, thumb, fastPreviewThumbImage])
             : _firstString(<Object?>[
                 isActualImageUrl(staticThumbnail) ? _fastTileOrOriginal(staticThumbnail) : '',
                 isActualImageUrl(hqThumbnail) ? _fastTileOrOriginal(hqThumbnail) : '',
@@ -1904,7 +1903,7 @@ class _PrismItem {
     final displayOnlyContent = contentType == PrismCatalogDataSource.diyTemplateContentType ||
         contentType == PrismCatalogDataSource.liveDiyTemplateContentType;
     final download = isParallaxContent
-        ? _firstString(<Object?>[fastFullSizeImage, imageDownload, fullImage, parallaxDisplayImage, thumb])
+        ? _firstString(<Object?>[parallaxDisplayImage, imageDownload, fullImage, fastFullSizeImage, thumb])
         : displayOnlyContent
         ? _firstString(<Object?>[parallaxArchive, appDownloadUrl, fullImage, preview, thumb, template, fullMedia])
         : isMatchingContent
@@ -2342,7 +2341,7 @@ String? _firstParallaxLayerUrl(Map<String, dynamic> item) {
   final config = _asMap(item['thumbnail_config']);
   for (final layer in _maps(config['layers'])) {
     final url = _string(layer['url']).trim();
-    if (url.isNotEmpty && !_isCatalogPreviewAssetUrl(url)) {
+    if (_isPotentialCatalogImageUrl(url) && !_isCatalogPreviewAssetUrl(url)) {
       return url;
     }
   }
@@ -2492,16 +2491,42 @@ String _workerMediaBaseUrl() {
   return '';
 }
 
+bool _isUnsupportedCatalogDisplayResource(String value) {
+  final path = Uri.tryParse(value.trim())?.path.toLowerCase() ?? value.toLowerCase();
+  return path.endsWith('.mp4') ||
+      path.endsWith('.mov') ||
+      path.endsWith('.zip') ||
+      path.endsWith('.heic') ||
+      path.endsWith('.heif') ||
+      path.endsWith('.json');
+}
+
+bool _hasCatalogImageExtension(String value) {
+  final path = Uri.tryParse(value.trim())?.path.toLowerCase() ?? value.toLowerCase();
+  return path.endsWith('.jpg') ||
+      path.endsWith('.jpeg') ||
+      path.endsWith('.png') ||
+      path.endsWith('.webp') ||
+      path.endsWith('.gif');
+}
+
+bool _isPotentialCatalogImageUrl(String value) {
+  final raw = value.trim();
+  if (raw.isEmpty || _isUnsupportedCatalogDisplayResource(raw)) return false;
+  final uri = Uri.tryParse(raw);
+  if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https') || uri.host.isEmpty) {
+    return false;
+  }
+  final src = uri.queryParameters['src']?.trim();
+  if (src != null && src.isNotEmpty) {
+    return _isPotentialCatalogImageUrl(src);
+  }
+  return true;
+}
+
 bool _isProxyableCatalogImageUrl(String value) {
   final uri = Uri.tryParse(value.trim());
-  if (uri == null || uri.scheme != 'https') {
-    return false;
-  }
-  if (uri.host.isEmpty) {
-    return false;
-  }
-  final path = uri.path.toLowerCase();
-  return path.endsWith('.jpg') || path.endsWith('.jpeg') || path.endsWith('.png') || path.endsWith('.webp');
+  return uri != null && uri.scheme == 'https' && uri.host.isNotEmpty && _isPotentialCatalogImageUrl(value);
 }
 
 bool _isCatalogImageAssetUrl(String value) {
@@ -2509,14 +2534,10 @@ bool _isCatalogImageAssetUrl(String value) {
   if (raw.isEmpty) return false;
   final uri = Uri.tryParse(raw);
   final src = uri?.queryParameters['src'];
-  final path = src != null && src.trim().isNotEmpty
-      ? (Uri.tryParse(src.trim())?.path.toLowerCase() ?? src.toLowerCase())
-      : (uri?.path.toLowerCase() ?? raw.toLowerCase());
-  return path.endsWith('.jpg') ||
-      path.endsWith('.jpeg') ||
-      path.endsWith('.png') ||
-      path.endsWith('.webp') ||
-      path.endsWith('.gif');
+  if (src != null && src.trim().isNotEmpty) {
+    return _isCatalogImageAssetUrl(src);
+  }
+  return _hasCatalogImageExtension(raw) || _isPotentialCatalogImageUrl(raw);
 }
 
 bool _isActualCatalogImageUrl(String value) => _isCatalogImageAssetUrl(value) && !_isCatalogPreviewAssetUrl(value);

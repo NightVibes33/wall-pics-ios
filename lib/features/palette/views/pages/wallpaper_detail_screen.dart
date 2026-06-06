@@ -84,6 +84,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
   double _activeDragDy = 0;
   String? _parallaxCompositeIdentity;
   String? _parallaxCompositePath;
+  String? _pendingScreenshotCaptureKey;
 
   /// Identity for the wallpaper currently shown; resets capture readiness when it changes.
   String? _wallpaperLoadIdentity;
@@ -114,43 +115,6 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     final bloc = context.read<WallpaperDetailBloc>();
     bloc.add(const OnPanelOpened());
     _trackAction(state, AnalyticsActionValue.panelOpened);
-
-    if (state.panelClosed) {
-      logger.d('Screenshot Starting');
-      final gen = _wallpaperCaptureGeneration;
-      unawaited(_captureWallpaperScreenshotWhenReady(context, bloc, gen));
-    }
-  }
-
-  Future<void> _captureWallpaperScreenshotWhenReady(
-    BuildContext context,
-    WallpaperDetailBloc bloc,
-    int captureGeneration,
-  ) async {
-    final deadline = DateTime.now().add(const Duration(seconds: 15));
-    while (mounted && captureGeneration == _wallpaperCaptureGeneration && !_wallpaperReadyForCapture) {
-      if (DateTime.now().isAfter(deadline)) return;
-      await WidgetsBinding.instance.endOfFrame;
-    }
-    if (!mounted || captureGeneration != _wallpaperCaptureGeneration) return;
-
-    final current = bloc.state;
-    if (current is! WallpaperDetailLoaded) return;
-
-    final shouldCapture = current.colorChanged || (_isPrismParallax(current.entity) && _parallaxCompositePath == null);
-    final capture = shouldCapture
-        ? screenshotController.capture(pixelRatio: 3, delay: const Duration(milliseconds: 10))
-        : Future<Uint8List?>.value();
-
-    try {
-      final Uint8List? image = await capture;
-      if (image != null && mounted && captureGeneration == _wallpaperCaptureGeneration) {
-        bloc.add(CaptureScreenshot(imageBytes: image));
-        logger.d('Screenshot Taken');
-      }
-    } catch (e, st) {
-      logger.d('$e\n$st');
-    }
   }
 
   String _imageIdentity(WallpaperDetailEntity entity) => '${entity.id}|${entity.fullUrl}|${entity.thumbnailUrl}';
@@ -163,6 +127,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
       _wallpaperReadyForCapture = false;
       _parallaxCompositeIdentity = null;
       _parallaxCompositePath = null;
+      _pendingScreenshotCaptureKey = null;
     }
   }
 
@@ -242,6 +207,46 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
       if (!mounted || _wallpaperReadyForCapture) return;
       setState(() => _wallpaperReadyForCapture = true);
     });
+  }
+
+
+  String _screenshotCaptureKey(WallpaperDetailLoaded state) {
+    return '${_imageIdentity(state.entity)}|${state.colorChanged}|${state.accent}';
+  }
+
+  void _scheduleFilteredWallpaperCapture(BuildContext context, WallpaperDetailLoaded state) {
+    if (!state.colorChanged || state.screenshotTaken) return;
+    final captureKey = _screenshotCaptureKey(state);
+    if (_pendingScreenshotCaptureKey == captureKey) return;
+    _pendingScreenshotCaptureKey = captureKey;
+    final captureGeneration = _wallpaperCaptureGeneration;
+    final expectedAccent = state.accent;
+
+    unawaited(() async {
+      try {
+        await WidgetsBinding.instance.endOfFrame;
+        await WidgetsBinding.instance.endOfFrame;
+        if (!mounted || captureGeneration != _wallpaperCaptureGeneration) return;
+        final currentState = context.read<WallpaperDetailBloc>().state;
+        if (currentState is! WallpaperDetailLoaded || !currentState.colorChanged) return;
+        if (_screenshotCaptureKey(currentState) != captureKey) return;
+        final image = await screenshotController.capture(pixelRatio: 3, delay: const Duration(milliseconds: 20));
+        if (image == null || !mounted || captureGeneration != _wallpaperCaptureGeneration) return;
+        context.read<WallpaperDetailBloc>().add(
+          CaptureScreenshot(
+            imageBytes: image,
+            expectedAccent: expectedAccent,
+            expectedColorChanged: true,
+          ),
+        );
+      } catch (e, st) {
+        logger.d('$e\n$st');
+      } finally {
+        if (_pendingScreenshotCaptureKey == captureKey) {
+          _pendingScreenshotCaptureKey = null;
+        }
+      }
+    }());
   }
 
   void _handlePanelClosed(BuildContext context, WallpaperDetailLoaded state) {
@@ -451,7 +456,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
   }
 
   bool _isSafeImageUrl(String url) {
-    return url.trim().isNotEmpty && !_isVideoUrl(url) && !_isArchiveUrl(url) && !_isCatalogPreviewUrl(url);
+    return PrismCatalogDataSource.isPotentialCatalogImageUrl(url);
   }
 
   String _firstNonEmpty(Iterable<String> values) {
@@ -466,6 +471,12 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     final pairedImageUrls = _catalogPairedImageUrlsForEntity(entity).where(_isSafeImageUrl).toList(growable: false);
     if (pairedImageUrls.isNotEmpty) return pairedImageUrls.first;
 
+    final metadataDisplay = _firstNonEmpty(<String>[
+      _prismMetadataValue(entity, 'catalogPreviewUrl'),
+      _prismMetadataValue(entity, 'catalogStaticThumbnailUrl'),
+      _prismMetadataValue(entity, 'catalogFirstFrameThumbnailUrl'),
+    ].where(_isSafeImageUrl));
+    if (metadataDisplay.isNotEmpty) return metadataDisplay;
     final full = entity.fullUrl.trim();
     if (_isSafeImageUrl(full)) return full;
     final originalStill = _prismMetadataValue(entity, 'catalogOriginalStillUrl');
@@ -515,8 +526,13 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
       listeners: [
         BlocListener<WallpaperDetailBloc, WallpaperDetailState>(
           listener: (context, state) {
-            if (state is WallpaperDetailLoaded && state.colors != null && state.accent != null) {
-              _setStatusBarIconBrightness(state.accent!);
+            if (state is WallpaperDetailLoaded) {
+              if (state.colors != null && state.accent != null) {
+                _setStatusBarIconBrightness(state.accent!);
+              }
+              if (state.colorChanged && !state.screenshotTaken) {
+                _scheduleFilteredWallpaperCapture(context, state);
+              }
             }
           },
         ),
@@ -755,14 +771,12 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
 
   Widget _buildColorBar(BuildContext context, WallpaperDetailLoaded state) {
     final colors = state.colors;
-    final thumbnailUrl = _catalogDisplayImageUrl(state.entity).trim();
     final colorCount = colors?.length ?? 0;
 
     // Build the default (no-filter) swatch + one swatch per palette color.
     final swatches = <Widget>[
       _buildColorSwatch(
         context: context,
-        thumbnailUrl: thumbnailUrl,
         color: null,
         isSelected: !state.colorChanged,
         onTap: () {
@@ -776,7 +790,6 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
         final isSelected = state.colorChanged && color == state.accent;
         return _buildColorSwatch(
           context: context,
-          thumbnailUrl: thumbnailUrl,
           color: color,
           isSelected: isSelected,
           onTap: color != null ? () => _handleColorSelected(context, state, color) : null,
@@ -802,7 +815,6 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
 
   Widget _buildColorSwatch({
     required BuildContext context,
-    required String thumbnailUrl,
     required Color? color,
     required bool isSelected,
     required VoidCallback? onTap,
@@ -822,29 +834,22 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (thumbnailUrl.isNotEmpty)
-              CachedNetworkImage(
-                imageUrl: thumbnailUrl,
-                width: double.infinity,
-                height: double.infinity,
-                fit: BoxFit.cover,
-                imageBuilder: (ctx, imageProvider) => Container(
-                  decoration: BoxDecoration(
-                    image: DecorationImage(
-                      image: imageProvider,
-                      fit: BoxFit.cover,
-                      colorFilter: color != null ? ColorFilter.mode(color, BlendMode.hue) : null,
-                    ),
-                    border: Border(bottom: BorderSide(color: color ?? Theme.of(ctx).colorScheme.secondary, width: 8)),
-                  ),
-                ),
-                placeholder: (_, u) =>
-                    Container(color: color ?? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.1)),
-                errorWidget: (_, u, e) =>
-                    Container(color: color ?? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.1)),
-              )
-            else
-              Container(color: color ?? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.1)),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: color,
+                gradient: color == null
+                    ? LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: <Color>[
+                          Theme.of(context).colorScheme.secondary.withValues(alpha: 0.26),
+                          Theme.of(context).primaryColor.withValues(alpha: 0.8),
+                        ],
+                      )
+                    : null,
+                border: Border(bottom: BorderSide(color: color ?? Theme.of(context).colorScheme.secondary, width: 8)),
+              ),
+            ),
             AnimatedOpacity(
               duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 200),
               opacity: isSelected ? 1.0 : 0.0,
@@ -1083,17 +1088,19 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     final liveStillUrl = isLivePhoto ? _catalogLiveStillUrl(entity) : null;
     final livePhotoTimeSeconds = isLivePhoto ? _prismMetadataDouble(entity, 'catalogLivePhotoTimeSeconds') : null;
     final parallaxCompositePath = isParallax ? _parallaxCompositePathFor(entity) : null;
-    final downloadUrl = isLivePhoto
+    final sourceDownloadUrl = isLivePhoto
         ? _catalogLiveVideoUrl(entity)
         : parallaxCompositePath ?? (isParallax ? _catalogDisplayImageUrl(entity) : entity.fullUrl);
-    final setWallpaperUrl =
-        !isLivePhoto && state.colorChanged && state.screenshotTaken && state.imageFile != null
-            ? state.imageFile!.path
-            : entity.fullUrl;
+    final filteredImagePath = !isLivePhoto && state.colorChanged && state.screenshotTaken && state.imageFile != null
+        ? state.imageFile!.path
+        : '';
+    final filteredCapturePending = state.colorChanged && !isLivePhoto && filteredImagePath.isEmpty;
+    final downloadUrl = state.colorChanged && !isLivePhoto ? filteredImagePath : sourceDownloadUrl;
+    final setWallpaperUrl = filteredImagePath.isNotEmpty ? filteredImagePath : entity.fullUrl;
     final List<Widget> actions = <Widget>[
       _SheetActionTapScale(
         child: DownloadButton(
-          colorChanged: false,
+          colorChanged: state.colorChanged,
           link: downloadUrl,
           isPremiumContent: _isPrismPremiumCatalogContent(entity),
           sourceContext: _getSourceContext(state),
@@ -1102,7 +1109,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
           livePhotoTimeSeconds: livePhotoTimeSeconds,
         ),
       ),
-      if (!hideSetWallpaperUi && !isLivePhoto)
+      if (!hideSetWallpaperUi && !isLivePhoto && !filteredCapturePending)
         _SheetActionTapScale(
           child: SetWallpaperButton(
             colorChanged: state.colorChanged,
@@ -1349,7 +1356,8 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     final parallaxArchiveUrl = _catalogParallaxFileUrl(entity);
 
     Widget imageLayer;
-    if (parallaxArchiveUrl.isNotEmpty) {
+    final parallaxDisplayUrl = _catalogDisplayImageUrl(entity);
+    if (parallaxArchiveUrl.isNotEmpty && parallaxDisplayUrl.isEmpty) {
       imageLayer = ParallaxArchiveImage(
         archiveUrl: parallaxArchiveUrl,
         fallbackUrl: _catalogDisplayImageUrl(entity),

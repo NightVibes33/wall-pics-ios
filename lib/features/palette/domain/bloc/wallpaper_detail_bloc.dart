@@ -91,7 +91,12 @@ class WallpaperDetailBloc extends Bloc<WallpaperDetailEvent, WallpaperDetailStat
     final currentState = state;
     if (currentState is! WallpaperDetailLoaded) return;
 
-    emit(currentState.copyWith(accent: event.color, colorChanged: true));
+    emit(currentState.copyWith(
+      accent: event.color,
+      colorChanged: true,
+      screenshotTaken: false,
+      clearImageFile: true,
+    ));
   }
 
   void _onCycleAccentColor(CycleAccentColor event, Emitter<WallpaperDetailState> emit) {
@@ -110,19 +115,31 @@ class WallpaperDetailBloc extends Bloc<WallpaperDetailEvent, WallpaperDetailStat
     if (nextIndex >= colors.length) return;
     final nextColor = colors[nextIndex];
 
-    emit(currentState.copyWith(accent: nextColor, colorChanged: true));
+    emit(currentState.copyWith(
+      accent: nextColor,
+      colorChanged: true,
+      screenshotTaken: false,
+      clearImageFile: true,
+    ));
   }
 
   void _onResetAccentColor(ResetAccentColor event, Emitter<WallpaperDetailState> emit) {
     final currentState = state;
     if (currentState is! WallpaperDetailLoaded) return;
 
-    emit(currentState.copyWith(colorChanged: false));
+    emit(currentState.copyWith(colorChanged: false, screenshotTaken: false, clearImageFile: true));
   }
 
   Future<void> _onCaptureScreenshot(CaptureScreenshot event, Emitter<WallpaperDetailState> emit) async {
     final currentState = state;
     if (currentState is! WallpaperDetailLoaded) return;
+
+    if (event.expectedColorChanged != null && currentState.colorChanged != event.expectedColorChanged) {
+      return;
+    }
+    if (event.expectedAccent != null && currentState.accent != event.expectedAccent) {
+      return;
+    }
 
     final tempDir = await getTemporaryDirectory();
     final imageFile = File(
