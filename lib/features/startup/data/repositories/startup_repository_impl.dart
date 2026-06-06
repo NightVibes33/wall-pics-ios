@@ -100,7 +100,7 @@ class StartupRepositoryImpl implements StartupRepository {
       }
 
       unawaited(syncInAppNotificationsFromRemote());
-      unawaited(PrismCatalogDataSource.instance.warmCatalogCache());
+      unawaited(PrismCatalogDataSource.instance.warmCatalogCache(prefetchMedia: false));
       if (getIt.isRegistered<InAppNotificationsBloc>()) {
         getIt<InAppNotificationsBloc>().add(const InAppNotificationsEvent.localReloadRequested());
       }

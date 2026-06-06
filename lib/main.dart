@@ -168,7 +168,7 @@ Future<void> main() async {
       ]);
 
       unawaited(
-        PrismCatalogDataSource.instance.warmHomeBootstrapCache().catchError((Object e, StackTrace s) {
+        PrismCatalogDataSource.instance.warmHomeBootstrapCache(prefetchMedia: false).catchError((Object e, StackTrace s) {
           logger.w('Unable to warm Prism catalog bootstrap.', tag: 'PrismCatalog', error: e, stackTrace: s);
         }),
       );

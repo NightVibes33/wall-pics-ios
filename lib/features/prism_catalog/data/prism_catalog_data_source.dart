@@ -51,7 +51,7 @@ class PrismCatalogDataSource {
   static const Duration _searchIndexTimeout = Duration(seconds: 20);
   static const Duration _bootstrapTimeout = Duration(seconds: 4);
   static const String _homeBootstrapFile = 'prism_bootstrap_home.json';
-  static const int _bootstrapPrefetchLimit = 360;
+  static const int _bootstrapPrefetchLimit = 48;
   static const String regularContentType = 'regular_wallpaper';
   static const String liveContentType = 'live_wallpaper';
   static const String matchingContentType = 'matching_wallpaper';
@@ -331,23 +331,23 @@ class PrismCatalogDataSource {
       }
     }
     for (final rawUrl in bootstrap.prefetchUrls) {
-      addPrefetchUrl(_fastTileImageUrl(rawUrl));
+      addPrefetchUrl(_fastTileImageUrl(rawUrl, width: 720, quality: 78));
     }
-    const batchSize = 12;
+    const batchSize = 3;
     for (var index = 0; index < urls.length; index += batchSize) {
       final batch = urls.skip(index).take(batchSize);
       unawaited(
         Future.wait<void>(
           batch.map((url) async {
             try {
-              await DefaultCacheManager().downloadFile(url).timeout(const Duration(seconds: 6));
+              await DefaultCacheManager().downloadFile(url).timeout(const Duration(seconds: 4));
             } catch (_) {
               // Prefetch failures should not block startup or catalog rendering.
             }
           }),
         ),
       );
-      await Future<void>.delayed(const Duration(milliseconds: 16));
+      await Future<void>.delayed(const Duration(milliseconds: 250));
     }
   }
 

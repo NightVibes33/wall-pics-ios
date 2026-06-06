@@ -83,14 +83,6 @@ class _AutoplayVideoPreviewState extends State<AutoplayVideoPreview> {
     return null;
   }
 
-  Future<void> _warmVideoCache(String url) async {
-    try {
-      await DefaultCacheManager().downloadFile(url).timeout(const Duration(seconds: 30));
-    } catch (_) {
-      // Video cache warmup is opportunistic; network playback remains active.
-    }
-  }
-
   Future<void> _applyPlaybackSpeed(VideoPlayerController controller) async {
     final speed = widget.playbackSpeed.isFinite && widget.playbackSpeed > 0 ? widget.playbackSpeed : 1.0;
     try {
@@ -124,9 +116,6 @@ class _AutoplayVideoPreviewState extends State<AutoplayVideoPreview> {
     final bundledFile = await PrismSeedMediaStore.instance.fileForUrl(rawUrl);
     final cachedFile = bundledFile ?? await _cachedVideoFile(rawUrl);
     final controller = cachedFile != null ? VideoPlayerController.file(cachedFile) : VideoPlayerController.networkUrl(uri);
-    if (cachedFile == null) {
-      unawaited(_warmVideoCache(rawUrl));
-    }
     try {
       await controller.initialize().timeout(const Duration(seconds: 8));
       await controller.setLooping(true);
@@ -194,7 +183,7 @@ class _AutoplayVideoPreviewState extends State<AutoplayVideoPreview> {
         url: poster,
         fit: widget.fit,
         alignment: widget.alignment,
-        filterQuality: FilterQuality.high,
+        filterQuality: FilterQuality.medium,
         placeholder: (_) => const ColoredBox(color: Colors.black),
         errorWidget: (_) => const ColoredBox(color: Colors.black),
         onReady: widget.onReady,
