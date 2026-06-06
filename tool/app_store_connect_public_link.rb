@@ -211,6 +211,57 @@ end.reverse.each do |build|
   puts "- #{JSON.generate(attrs.slice('version', 'uploadedDate', 'expired', 'processingState', 'usesNonExemptEncryption'))}"
 end
 
+def build_beta_detail(build_id)
+  code, response = request_optional(:get, "/v1/builds/#{build_id}/buildBetaDetail", query: {
+    'fields[buildBetaDetails]' => 'autoNotifyEnabled,internalBuildState,externalBuildState'
+  })
+  return nil unless code.between?(200, 299) && response && response['data']
+
+  attributes(response.fetch('data'))
+end
+
+def beta_review_submission(build_id)
+  code, response = request_optional(:get, "/v1/builds/#{build_id}/betaAppReviewSubmission", query: {
+    'fields[betaAppReviewSubmissions]' => 'betaReviewState,submittedDate'
+  })
+  return [code, nil] unless code.between?(200, 299) && response && response['data']
+
+  [code, attributes(response.fetch('data'))]
+end
+
+if latest_valid_build
+  latest_attrs = attributes(latest_valid_build)
+  latest_detail = build_beta_detail(latest_valid_build.fetch('id'))
+  puts "Latest valid beta detail: #{JSON.generate(latest_detail || {})}"
+  submission_code, submission_attrs = beta_review_submission(latest_valid_build.fetch('id'))
+  if submission_attrs
+    puts "Latest valid beta review submission: #{JSON.generate(submission_attrs)}"
+  else
+    puts "Latest valid beta review submission unavailable HTTP #{submission_code}"
+  end
+
+  if latest_detail && latest_detail['externalBuildState'].to_s == 'READY_FOR_BETA_SUBMISSION' && submission_attrs.nil?
+    puts "Submitting build #{latest_attrs['version']} for Beta App Review."
+    submit_body = {
+      data: {
+        type: 'betaAppReviewSubmissions',
+        relationships: {
+          build: {
+            data: { type: 'builds', id: latest_valid_build.fetch('id') }
+          }
+        }
+      }
+    }
+    submit_code, submit_response = request_optional(:post, '/v1/betaAppReviewSubmissions', body: submit_body)
+    if submit_code.between?(200, 299) && submit_response && submit_response['data']
+      puts "Beta App Review submission created: #{JSON.generate(attributes(submit_response.fetch('data')))}"
+    else
+      warn "Beta App Review submission failed with HTTP #{submit_code}"
+      warn JSON.pretty_generate(submit_response)
+    end
+  end
+end
+
 if latest_valid_build
   puts 'Adding latest valid build to beta group if not already attached.'
   begin
