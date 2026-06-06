@@ -78,6 +78,28 @@ def request(method, path, query: nil, body: nil)
   end
 end
 
+def request_optional(method, path, query: nil, body: nil)
+  uri = URI::HTTPS.build(host: API_HOST, path: path)
+  uri.query = URI.encode_www_form(query) if query && !query.empty?
+
+  req_class = case method
+              when :get then Net::HTTP::Get
+              when :post then Net::HTTP::Post
+              when :patch then Net::HTTP::Patch
+              else raise "Unsupported HTTP method #{method}"
+              end
+  req = req_class.new(uri)
+  req['Authorization'] = "Bearer #{TOKEN}"
+  req['Content-Type'] = 'application/json'
+  req.body = JSON.generate(body) if body
+
+  Net::HTTP.start(uri.host, uri.port, use_ssl: true) do |http|
+    response = http.request(req)
+    parsed = response.body.nil? || response.body.empty? ? {} : JSON.parse(response.body)
+    [response.code.to_i, parsed]
+  end
+end
+
 def attributes(record)
   record.fetch('attributes', {}) || {}
 end
@@ -162,6 +184,32 @@ end
 
 group_id = group.fetch('id')
 puts "Beta group: #{attributes(group)['name']} (#{group_id})"
+
+puts 'Recent build beta details:'
+sorted_builds.take(5).each do |build|
+  attrs = attributes(build)
+  code, detail_response = request_optional(:get, "/v1/builds/#{build.fetch('id')}/buildBetaDetail", query: {
+    'fields[buildBetaDetails]' => 'autoNotifyEnabled,internalBuildState,externalBuildState'
+  })
+  if code.between?(200, 299) && detail_response && detail_response['data']
+    detail_attrs = attributes(detail_response.fetch('data'))
+    puts "- build #{attrs['version']}: #{JSON.generate(detail_attrs)}"
+  else
+    puts "- build #{attrs['version']}: buildBetaDetail unavailable HTTP #{code}"
+  end
+end
+
+puts 'Public beta group builds:'
+group_builds = request(:get, "/v1/betaGroups/#{group_id}/builds", query: {
+  'fields[builds]' => 'version,uploadedDate,expired,processingState,usesNonExemptEncryption',
+  'limit' => '20'
+})
+group_builds.fetch('data', []).sort_by do |build|
+  Time.parse(attributes(build)['uploadedDate'].to_s) rescue Time.at(0)
+end.reverse.each do |build|
+  attrs = attributes(build)
+  puts "- #{JSON.generate(attrs.slice('version', 'uploadedDate', 'expired', 'processingState', 'usesNonExemptEncryption'))}"
+end
 
 if latest_valid_build
   puts 'Adding latest valid build to beta group if not already attached.'
