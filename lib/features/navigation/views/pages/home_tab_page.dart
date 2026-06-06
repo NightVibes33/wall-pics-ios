@@ -7,6 +7,7 @@ import 'package:Prism/core/purchases/paywall_orchestrator.dart';
 import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/wallpaper/wallpaper_source.dart';
 import 'package:Prism/core/widgets/common/autoplay_video_preview.dart';
+import 'package:Prism/data/categories/categories.dart';
 import 'package:Prism/data/categories/category_definition.dart';
 import 'package:Prism/features/category_feed/domain/entities/category_entity.dart';
 import 'package:Prism/features/category_feed/domain/entities/feed_item_entity.dart';
@@ -94,6 +95,10 @@ class _HomeTabPageState extends State<HomeTabPage> {
       accent: Color(0xFFFF45D3),
     ),
   ];
+
+  static final List<CategoryDefinition> _homeCategories = categoryDefinitions
+      .where((category) => (category.catalogSlug ?? '').trim().isNotEmpty && (category.catalogContentType ?? '').trim().isNotEmpty)
+      .toList(growable: false);
 
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -426,6 +431,16 @@ class _HomeTabPageState extends State<HomeTabPage> {
     };
   }
 
+  void _openCategory(CategoryDefinition category) {
+    final title = category.name.trim();
+    final contentType = category.catalogContentType?.trim() ?? PrismCatalogDataSource.regularContentType;
+    final slug = category.catalogSlug?.trim() ?? 'for-you';
+    if (title.isEmpty || contentType.isEmpty || slug.isEmpty) {
+      return;
+    }
+    _openCatalog(title: title, contentType: contentType, slug: slug);
+  }
+
   void _openCatalog({required String title, required String contentType, String slug = 'for-you'}) {
     if (contentType == PrismCatalogDataSource.matchingContentType ||
         contentType == PrismCatalogDataSource.doubleContentType) {
@@ -533,10 +548,12 @@ class _HomeTabPageState extends State<HomeTabPage> {
                       SliverToBoxAdapter(
                         child: _CatalogPanel(
                           tabs: _tabs,
+                          categories: _homeCategories,
                           activeTabIndex: _activeTabIndex,
                           loading: snapshot.connectionState == ConnectionState.waiting && data == null,
                           sections: data?.sections ?? const <_HomeSection>[],
                           onTabSelected: _selectTab,
+                          onCategorySelected: _openCategory,
                           onMore: (section) => _openCatalog(
                             title: section.title,
                             contentType: section.contentType,
@@ -802,18 +819,22 @@ class _ShortcutTile extends StatelessWidget {
 class _CatalogPanel extends StatelessWidget {
   const _CatalogPanel({
     required this.tabs,
+    required this.categories,
     required this.activeTabIndex,
     required this.loading,
     required this.sections,
     required this.onTabSelected,
+    required this.onCategorySelected,
     required this.onMore,
   });
 
   final List<_HomeTabSpec> tabs;
+  final List<CategoryDefinition> categories;
   final int activeTabIndex;
   final bool loading;
   final List<_HomeSection> sections;
   final ValueChanged<int> onTabSelected;
+  final ValueChanged<CategoryDefinition> onCategorySelected;
   final ValueChanged<_HomeSection> onMore;
 
   @override
@@ -829,6 +850,7 @@ class _CatalogPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           _TopTabs(tabs: tabs, activeIndex: activeTabIndex, onSelected: onTabSelected),
+          _HomeCategoryRail(categories: categories, onSelected: onCategorySelected),
           if (loading)
             const _DashboardSkeleton()
           else if (sections.isEmpty)
@@ -841,6 +863,62 @@ class _CatalogPanel extends StatelessWidget {
               ),
           const SizedBox(height: 220),
         ],
+      ),
+    );
+  }
+}
+
+class _HomeCategoryRail extends StatelessWidget {
+  const _HomeCategoryRail({required this.categories, required this.onSelected});
+
+  final List<CategoryDefinition> categories;
+  final ValueChanged<CategoryDefinition> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    if (categories.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return SizedBox(
+      height: 70,
+      child: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(18, 4, 18, 14),
+        scrollDirection: Axis.horizontal,
+        itemBuilder: (context, index) {
+          final category = categories[index];
+          return PrismTapScale(
+            pressedScale: 0.96,
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(999),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(999),
+                onTap: () {
+                  PrismHaptics.selection();
+                  onSelected(category);
+                },
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF151518),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 17, vertical: 11),
+                    child: Text(
+                      category.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.white, fontFamily: 'Satoshi', fontSize: 15, fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+        separatorBuilder: (_, _) => const SizedBox(width: 10),
+        itemCount: categories.length,
       ),
     );
   }
