@@ -178,8 +178,7 @@ SUBSCRIPTIONS.each do |spec|
           subscriptionPeriod: spec[:period],
           familySharable: false,
           reviewNote: 'Prism Pro unlocks unlimited 4K downloads, Live Photos, matching sets, 3D Spatial, and profile pictures.',
-          groupLevel: spec[:group_level],
-          availableInAllTerritories: true
+          groupLevel: spec[:group_level]
         },
         relationships: { group: { data: { type: 'subscriptionGroups', id: group_id } } }
       }
@@ -219,7 +218,7 @@ unless iap
 end
 if iap
   puts "Using IAP #{LIFETIME[:product_id]} id=#{iap.fetch('id')} state=#{attributes(iap)['state']}"
-  create_optional('/v2/inAppPurchaseLocalizations', {
+  create_optional('/v1/inAppPurchaseLocalizations', {
     data: {
       type: 'inAppPurchaseLocalizations',
       attributes: { name: LIFETIME[:display_name], locale: 'en-US', description: LIFETIME[:description] },
