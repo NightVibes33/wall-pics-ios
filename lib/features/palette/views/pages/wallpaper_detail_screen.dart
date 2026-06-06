@@ -771,12 +771,14 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
 
   Widget _buildColorBar(BuildContext context, WallpaperDetailLoaded state) {
     final colors = state.colors;
+    final thumbnailUrl = _catalogDisplayImageUrl(state.entity).trim();
     final colorCount = colors?.length ?? 0;
 
     // Build the default (no-filter) swatch + one swatch per palette color.
     final swatches = <Widget>[
       _buildColorSwatch(
         context: context,
+        thumbnailUrl: thumbnailUrl,
         color: null,
         isSelected: !state.colorChanged,
         onTap: () {
@@ -790,6 +792,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
         final isSelected = state.colorChanged && color == state.accent;
         return _buildColorSwatch(
           context: context,
+          thumbnailUrl: thumbnailUrl,
           color: color,
           isSelected: isSelected,
           onTap: color != null ? () => _handleColorSelected(context, state, color) : null,
@@ -815,6 +818,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
 
   Widget _buildColorSwatch({
     required BuildContext context,
+    required String thumbnailUrl,
     required Color? color,
     required bool isSelected,
     required VoidCallback? onTap,
@@ -834,22 +838,29 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
         child: Stack(
           fit: StackFit.expand,
           children: [
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: color,
-                gradient: color == null
-                    ? LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: <Color>[
-                          Theme.of(context).colorScheme.secondary.withValues(alpha: 0.26),
-                          Theme.of(context).primaryColor.withValues(alpha: 0.8),
-                        ],
-                      )
-                    : null,
-                border: Border(bottom: BorderSide(color: color ?? Theme.of(context).colorScheme.secondary, width: 8)),
-              ),
-            ),
+            if (thumbnailUrl.isNotEmpty)
+              CachedNetworkImage(
+                imageUrl: thumbnailUrl,
+                width: double.infinity,
+                height: double.infinity,
+                fit: BoxFit.cover,
+                imageBuilder: (ctx, imageProvider) => Container(
+                  decoration: BoxDecoration(
+                    image: DecorationImage(
+                      image: imageProvider,
+                      fit: BoxFit.cover,
+                      colorFilter: color != null ? ColorFilter.mode(color, BlendMode.hue) : null,
+                    ),
+                    border: Border(bottom: BorderSide(color: color ?? Theme.of(ctx).colorScheme.secondary, width: 8)),
+                  ),
+                ),
+                placeholder: (_, u) =>
+                    Container(color: color ?? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.1)),
+                errorWidget: (_, u, e) =>
+                    Container(color: color ?? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.1)),
+              )
+            else
+              Container(color: color ?? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.1)),
             AnimatedOpacity(
               duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 200),
               opacity: isSelected ? 1.0 : 0.0,
