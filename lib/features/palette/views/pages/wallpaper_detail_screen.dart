@@ -26,6 +26,8 @@ import 'package:Prism/features/palette/domain/entities/wallpaper_detail_entity.d
 import 'package:Prism/features/palette/domain/entities/wallpaper_detail_gallery_store.dart';
 import 'package:Prism/features/palette/palette.dart';
 import 'package:Prism/features/prism_catalog/data/prism_catalog_data_source.dart';
+import 'package:Prism/features/prism_catalog/data/prism_seed_media_store.dart';
+import 'package:Prism/features/prism_catalog/views/prism_seed_media_image.dart';
 import 'package:Prism/logger/logger.dart';
 import 'package:Prism/theme/jam_icons_icons.dart';
 import 'package:Prism/theme/toasts.dart' as toasts;
@@ -190,7 +192,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
       final wrappedIndex = nextIndex < 0 ? nextIndex + _galleryItems.length : nextIndex;
       final entity = _galleryItems[wrappedIndex];
       for (final url in <String>[entity.thumbnailUrl.trim(), entity.fullUrl.trim()]) {
-        if (url.isEmpty || _isVideoUrl(url) || _isArchiveUrl(url)) continue;
+        if (url.isEmpty || _isVideoUrl(url) || _isArchiveUrl(url) || PrismSeedMediaStore.instance.hasUrlSync(url)) continue;
         unawaited(precacheImage(CachedNetworkImageProvider(url), context).catchError((Object _) {}));
       }
     }
@@ -566,12 +568,20 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
         body: Stack(
           fit: StackFit.expand,
           children: [
-            CachedNetworkImage(
-              imageUrl: thumbnailUrl,
-              fit: BoxFit.contain,
-              placeholder: (ctx, _) => const ColoredBox(color: Colors.black),
-              errorWidget: (ctx, _, _) => const ColoredBox(color: Colors.black),
-            ),
+            if (PrismSeedMediaStore.instance.hasUrlSync(thumbnailUrl))
+              PrismSeedMediaImage(
+                url: thumbnailUrl,
+                fit: BoxFit.contain,
+                placeholder: (_) => const ColoredBox(color: Colors.black),
+                errorWidget: (_) => const ColoredBox(color: Colors.black),
+              )
+            else
+              CachedNetworkImage(
+                imageUrl: thumbnailUrl,
+                fit: BoxFit.contain,
+                placeholder: (ctx, _) => const ColoredBox(color: Colors.black),
+                errorWidget: (ctx, _, _) => const ColoredBox(color: Colors.black),
+              ),
             Center(
               child: Semantics(label: 'Loading wallpaper', child: const CircularProgressIndicator()),
             ),
@@ -838,7 +848,29 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (thumbnailUrl.isNotEmpty)
+            if (thumbnailUrl.isNotEmpty && PrismSeedMediaStore.instance.hasUrlSync(thumbnailUrl))
+              Container(
+                decoration: BoxDecoration(
+                  border: Border(bottom: BorderSide(color: color ?? Theme.of(context).colorScheme.secondary, width: 8)),
+                ),
+                child: color != null
+                    ? ColorFiltered(
+                        colorFilter: ColorFilter.mode(color, BlendMode.hue),
+                        child: PrismSeedMediaImage(
+                          url: thumbnailUrl,
+                          fit: BoxFit.cover,
+                          placeholder: (_) => Container(color: color ?? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.1)),
+                          errorWidget: (_) => Container(color: color ?? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.1)),
+                        ),
+                      )
+                    : PrismSeedMediaImage(
+                        url: thumbnailUrl,
+                        fit: BoxFit.cover,
+                        placeholder: (_) => Container(color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.1)),
+                        errorWidget: (_) => Container(color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.1)),
+                      ),
+              )
+            else if (thumbnailUrl.isNotEmpty)
               CachedNetworkImage(
                 imageUrl: thumbnailUrl,
                 width: double.infinity,
@@ -1025,17 +1057,33 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
               final url = previewUrls[index];
               return ClipRRect(
                 borderRadius: BorderRadius.circular(10),
-                child: CachedNetworkImage(
-                  imageUrl: url,
-                  width: 58,
-                  height: 88,
-                  fit: BoxFit.cover,
-                  placeholder: (_, _) => Container(color: scheme.secondary.withValues(alpha: 0.1)),
-                  errorWidget: (_, _, _) => Container(
-                    color: scheme.secondary.withValues(alpha: 0.1),
-                    child: Icon(Icons.broken_image_outlined, color: scheme.secondary.withValues(alpha: 0.5)),
-                  ),
-                ),
+                child: PrismSeedMediaStore.instance.hasUrlSync(url)
+                    ? SizedBox(
+                        width: 58,
+                        height: 88,
+                        child: PrismSeedMediaImage(
+                          url: url,
+                          fit: BoxFit.cover,
+                          cacheWidth: 116,
+                          cacheHeight: 176,
+                          placeholder: (_) => Container(color: scheme.secondary.withValues(alpha: 0.1)),
+                          errorWidget: (_) => Container(
+                            color: scheme.secondary.withValues(alpha: 0.1),
+                            child: Icon(Icons.broken_image_outlined, color: scheme.secondary.withValues(alpha: 0.5)),
+                          ),
+                        ),
+                      )
+                    : CachedNetworkImage(
+                        imageUrl: url,
+                        width: 58,
+                        height: 88,
+                        fit: BoxFit.cover,
+                        placeholder: (_, _) => Container(color: scheme.secondary.withValues(alpha: 0.1)),
+                        errorWidget: (_, _, _) => Container(
+                          color: scheme.secondary.withValues(alpha: 0.1),
+                          child: Icon(Icons.broken_image_outlined, color: scheme.secondary.withValues(alpha: 0.5)),
+                        ),
+                      ),
               );
             },
           ),
@@ -1386,6 +1434,20 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
       );
     } else if (pairedImageUrls.length >= 2) {
       Widget pairedSide(String url) {
+        if (PrismSeedMediaStore.instance.hasUrlSync(url)) {
+          return PrismSeedMediaImage(
+            url: url,
+            fit: BoxFit.contain,
+            placeholder: (context) => Container(color: Theme.of(context).primaryColor),
+            errorWidget: (context) {
+              onWallpaperDisplayReady?.call();
+              return Center(
+                child: Icon(JamIcons.close_circle_f, color: _wallpaperErrorIconColor(context, paletteLoading, state)),
+              );
+            },
+            onReady: onWallpaperDisplayReady,
+          );
+        }
         return CachedNetworkImage(
           imageUrl: url,
           fit: BoxFit.contain,
@@ -1431,47 +1493,73 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
       imageLayer = Stack(
         fit: StackFit.expand,
         children: [
-          CachedNetworkImage(
-            imageUrl: thumb,
-            fit: BoxFit.contain,
-            width: double.infinity,
-            height: double.infinity,
-            imageBuilder: (context, imageProvider) {
-              onWallpaperDisplayReady?.call();
-              return SizedBox.expand(child: Image(image: imageProvider, fit: BoxFit.contain));
-            },
-            placeholder: (context, url) => Container(color: Theme.of(context).primaryColor),
-            errorWidget: (context, url, error) {
-              onWallpaperDisplayReady?.call();
-              return Center(
-                child: Icon(JamIcons.close_circle_f, color: _wallpaperErrorIconColor(context, paletteLoading, state)),
-              );
-            },
-          ),
-          CachedNetworkImage(
-            imageUrl: full,
-            fit: BoxFit.contain,
-            fadeInDuration: const Duration(milliseconds: 280),
-            fadeOutDuration: Duration.zero,
-            imageBuilder: (context, imageProvider) {
-              onWallpaperDisplayReady?.call();
-              return SizedBox.expand(
-                child: Image(image: imageProvider, fit: BoxFit.contain),
-              );
-            },
-            progressIndicatorBuilder: progressOutsideScreenshot
-                ? (context, url, downloadProgress) => const SizedBox.shrink()
-                : (context, url, downloadProgress) => Center(
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation(Theme.of(context).colorScheme.secondary),
-                      value: downloadProgress.progress,
+          if (PrismSeedMediaStore.instance.hasUrlSync(thumb))
+            PrismSeedMediaImage(
+              url: thumb,
+              fit: BoxFit.contain,
+              placeholder: (context) => Container(color: Theme.of(context).primaryColor),
+              errorWidget: (context) {
+                onWallpaperDisplayReady?.call();
+                return Center(
+                  child: Icon(JamIcons.close_circle_f, color: _wallpaperErrorIconColor(context, paletteLoading, state)),
+                );
+              },
+              onReady: onWallpaperDisplayReady,
+            )
+          else
+            CachedNetworkImage(
+              imageUrl: thumb,
+              fit: BoxFit.contain,
+              width: double.infinity,
+              height: double.infinity,
+              imageBuilder: (context, imageProvider) {
+                onWallpaperDisplayReady?.call();
+                return SizedBox.expand(child: Image(image: imageProvider, fit: BoxFit.contain));
+              },
+              placeholder: (context, url) => Container(color: Theme.of(context).primaryColor),
+              errorWidget: (context, url, error) {
+                onWallpaperDisplayReady?.call();
+                return Center(
+                  child: Icon(JamIcons.close_circle_f, color: _wallpaperErrorIconColor(context, paletteLoading, state)),
+                );
+              },
+            ),
+          if (PrismSeedMediaStore.instance.hasUrlSync(full))
+            PrismSeedMediaImage(
+              url: full,
+              fit: BoxFit.contain,
+              placeholder: (_) => progressOutsideScreenshot ? const SizedBox.shrink() : const SizedBox.shrink(),
+              errorWidget: (_) {
+                onWallpaperDisplayReady?.call();
+                return const SizedBox.shrink();
+              },
+              onReady: onWallpaperDisplayReady,
+            )
+          else
+            CachedNetworkImage(
+              imageUrl: full,
+              fit: BoxFit.contain,
+              fadeInDuration: const Duration(milliseconds: 280),
+              fadeOutDuration: Duration.zero,
+              imageBuilder: (context, imageProvider) {
+                onWallpaperDisplayReady?.call();
+                return SizedBox.expand(
+                  child: Image(image: imageProvider, fit: BoxFit.contain),
+                );
+              },
+              progressIndicatorBuilder: progressOutsideScreenshot
+                  ? (context, url, downloadProgress) => const SizedBox.shrink()
+                  : (context, url, downloadProgress) => Center(
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation(Theme.of(context).colorScheme.secondary),
+                        value: downloadProgress.progress,
+                      ),
                     ),
-                  ),
-            errorWidget: (context, url, error) {
-              onWallpaperDisplayReady?.call();
-              return const SizedBox.shrink();
-            },
-          ),
+              errorWidget: (context, url, error) {
+                onWallpaperDisplayReady?.call();
+                return const SizedBox.shrink();
+              },
+            ),
         ],
       );
     } else {
@@ -1484,35 +1572,50 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
           child: Icon(JamIcons.close_circle_f, color: _wallpaperErrorIconColor(context, paletteLoading, state)),
         );
       } else {
-        imageLayer = CachedNetworkImage(
-          imageUrl: url,
-          imageBuilder: (context, imageProvider) {
-            onWallpaperDisplayReady?.call();
-            return SizedBox.expand(
-              child: Image(image: imageProvider, fit: BoxFit.contain),
-            );
-          },
-          progressIndicatorBuilder: progressOutsideScreenshot
-              ? (context, url, downloadProgress) => const SizedBox.shrink()
-              : (context, url, downloadProgress) => Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    const SizedBox.expand(),
-                    Center(
-                      child: CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation(Theme.of(context).colorScheme.secondary),
-                        value: downloadProgress.progress,
+        if (PrismSeedMediaStore.instance.hasUrlSync(url)) {
+          imageLayer = PrismSeedMediaImage(
+            url: url,
+            fit: BoxFit.contain,
+            placeholder: (_) => progressOutsideScreenshot ? const SizedBox.shrink() : const SizedBox.expand(),
+            errorWidget: (context) {
+              onWallpaperDisplayReady?.call();
+              return Center(
+                child: Icon(JamIcons.close_circle_f, color: _wallpaperErrorIconColor(context, paletteLoading, state)),
+              );
+            },
+            onReady: onWallpaperDisplayReady,
+          );
+        } else {
+          imageLayer = CachedNetworkImage(
+            imageUrl: url,
+            imageBuilder: (context, imageProvider) {
+              onWallpaperDisplayReady?.call();
+              return SizedBox.expand(
+                child: Image(image: imageProvider, fit: BoxFit.contain),
+              );
+            },
+            progressIndicatorBuilder: progressOutsideScreenshot
+                ? (context, url, downloadProgress) => const SizedBox.shrink()
+                : (context, url, downloadProgress) => Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      const SizedBox.expand(),
+                      Center(
+                        child: CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation(Theme.of(context).colorScheme.secondary),
+                          value: downloadProgress.progress,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-          errorWidget: (context, url, error) {
-            onWallpaperDisplayReady?.call();
-            return Center(
-              child: Icon(JamIcons.close_circle_f, color: _wallpaperErrorIconColor(context, paletteLoading, state)),
-            );
-          },
-        );
+                    ],
+                  ),
+            errorWidget: (context, url, error) {
+              onWallpaperDisplayReady?.call();
+              return Center(
+                child: Icon(JamIcons.close_circle_f, color: _wallpaperErrorIconColor(context, paletteLoading, state)),
+              );
+            },
+          );
+        }
       }
     }
 

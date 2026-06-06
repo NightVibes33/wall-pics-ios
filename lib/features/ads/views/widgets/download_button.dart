@@ -6,6 +6,7 @@ import 'package:Prism/core/platform/pigeon/prism_media_api.g.dart';
 import 'package:Prism/core/platform/wallpaper_capability.dart';
 import 'package:Prism/core/purchases/download_access_service.dart';
 import 'package:Prism/core/platform/prism_live_photo_saver.dart';
+import 'package:Prism/features/prism_catalog/data/prism_seed_media_store.dart';
 import 'package:Prism/features/startup/services/notification_permission_prompt_service.dart';
 import 'package:Prism/logger/logger.dart';
 import 'package:Prism/theme/jam_icons_icons.dart';
@@ -131,12 +132,16 @@ class _DownloadButtonState extends State<DownloadButton> {
 
       var savedLivePhoto = false;
       logger.d(link);
+      final bundledFile = await PrismSeedMediaStore.instance.fileForUrl(link);
+      final effectiveLink = bundledFile?.path ?? link;
       final shouldSaveLivePhoto = widget.isLivePhoto;
       if (shouldSaveLivePhoto) {
         final stillUrl = widget.livePhotoStillUrl?.trim();
+        final bundledStill = stillUrl == null || stillUrl.isEmpty ? null : await PrismSeedMediaStore.instance.fileForUrl(stillUrl);
+        final effectiveStillUrl = bundledStill?.path ?? stillUrl;
         final message = await PrismLivePhotoSaver.save(
-          videoUrl: link,
-          stillUrl: stillUrl,
+          videoUrl: effectiveLink,
+          stillUrl: effectiveStillUrl,
           photoTimeSeconds: widget.livePhotoTimeSeconds,
         ).timeout(const Duration(seconds: 180));
         if (message != null) {
@@ -145,12 +150,12 @@ class _DownloadButtonState extends State<DownloadButton> {
           return false;
         }
         savedLivePhoto = true;
-      } else if (hideSetWallpaperUi || _isLocalMediaPath(link)) {
+      } else if (hideSetWallpaperUi || _isLocalMediaPath(effectiveLink)) {
         final OperationResult result = await PrismMediaHostApi()
             .saveMedia(
               SaveMediaRequest(
-                link: link,
-                isLocalFile: _isLocalMediaPath(link),
+                link: effectiveLink,
+                isLocalFile: _isLocalMediaPath(effectiveLink),
                 kind: SaveMediaKind.wallpaper,
               ),
             )
@@ -162,7 +167,7 @@ class _DownloadButtonState extends State<DownloadButton> {
         }
       } else {
         final DownloadRequest request = DownloadRequest(
-          link: link,
+          link: effectiveLink,
           filenameWithoutExtension: _filenameBaseFromUrl(link),
         );
         final OperationResult result = await PrismMediaHostApi().enqueueDownload(request).timeout(const Duration(seconds: 15));

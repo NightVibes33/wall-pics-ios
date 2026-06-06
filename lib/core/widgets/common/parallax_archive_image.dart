@@ -4,6 +4,8 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:Prism/features/prism_catalog/data/prism_seed_media_store.dart';
+import 'package:Prism/features/prism_catalog/views/prism_seed_media_image.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_archive/flutter_archive.dart';
@@ -44,7 +46,8 @@ class ParallaxArchiveCache {
         }
         await cacheDir.create(recursive: true);
 
-        final archive = await DefaultCacheManager().getSingleFile(normalizedUrl).timeout(const Duration(seconds: 45));
+        final archive = await PrismSeedMediaStore.instance.fileForUrl(normalizedUrl) ??
+            await DefaultCacheManager().getSingleFile(normalizedUrl).timeout(const Duration(seconds: 45));
         await ZipFile.extractToDirectory(zipFile: archive, destinationDir: cacheDir);
         return _renderArchive(cacheDir: cacheDir, output: output);
       } catch (_) {
@@ -282,6 +285,19 @@ class _ParallaxArchiveImageState extends State<ParallaxArchiveImage> {
     if (fallback.isEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _notifyReady());
       return const ColoredBox(color: Colors.black);
+    }
+    if (PrismSeedMediaStore.instance.hasUrlSync(fallback)) {
+      return PrismSeedMediaImage(
+        url: fallback,
+        fit: widget.fit,
+        alignment: widget.alignment,
+        placeholder: (_) => const ColoredBox(color: Colors.black),
+        errorWidget: (_) {
+          _notifyReady();
+          return const ColoredBox(color: Colors.black);
+        },
+        onReady: _notifyReady,
+      );
     }
     return CachedNetworkImage(
       imageUrl: fallback,

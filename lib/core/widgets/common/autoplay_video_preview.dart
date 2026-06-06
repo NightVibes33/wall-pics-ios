@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:Prism/features/prism_catalog/data/prism_seed_media_store.dart';
+import 'package:Prism/features/prism_catalog/views/prism_seed_media_image.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter/material.dart';
@@ -120,7 +121,8 @@ class _AutoplayVideoPreviewState extends State<AutoplayVideoPreview> {
       return;
     }
 
-    final cachedFile = await _cachedVideoFile(rawUrl);
+    final bundledFile = await PrismSeedMediaStore.instance.fileForUrl(rawUrl);
+    final cachedFile = bundledFile ?? await _cachedVideoFile(rawUrl);
     final controller = cachedFile != null ? VideoPlayerController.file(cachedFile) : VideoPlayerController.networkUrl(uri);
     if (cachedFile == null) {
       unawaited(_warmVideoCache(rawUrl));
@@ -187,14 +189,15 @@ class _AutoplayVideoPreviewState extends State<AutoplayVideoPreview> {
     if (poster.isEmpty) {
       return const ColoredBox(color: Colors.black);
     }
-    final seedBytes = PrismSeedMediaStore.instance.bytesForUrlSync(poster);
-    if (seedBytes != null) {
-      widget.onReady?.call();
-      return Image.memory(
-        seedBytes,
+    if (PrismSeedMediaStore.instance.hasUrlSync(poster)) {
+      return PrismSeedMediaImage(
+        url: poster,
         fit: widget.fit,
         alignment: widget.alignment,
         filterQuality: FilterQuality.high,
+        placeholder: (_) => const ColoredBox(color: Colors.black),
+        errorWidget: (_) => const ColoredBox(color: Colors.black),
+        onReady: widget.onReady,
       );
     }
     return CachedNetworkImage(

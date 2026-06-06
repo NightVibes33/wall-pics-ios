@@ -5,6 +5,7 @@ import 'package:Prism/features/category_feed/biz/bloc/category_feed_bloc.j.dart'
 import 'package:Prism/features/category_feed/domain/entities/category_entity.dart';
 import 'package:Prism/features/prism_catalog/data/prism_catalog_data_source.dart';
 import 'package:Prism/features/prism_catalog/data/prism_seed_media_store.dart';
+import 'package:Prism/features/prism_catalog/views/prism_seed_media_image.dart';
 import 'package:auto_route/auto_route.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -83,9 +84,14 @@ class _CategoryPreviewImageState extends State<_CategoryPreviewImage> {
       builder: (context, snapshot) {
         final url = snapshot.data?.trim() ?? '';
         if (url.isEmpty) return placeholder;
-        final seedBytes = PrismSeedMediaStore.instance.bytesForUrlSync(url);
-        if (seedBytes != null) {
-          return Image.memory(seedBytes, fit: BoxFit.cover, filterQuality: FilterQuality.high);
+        if (PrismSeedMediaStore.instance.hasUrlSync(url)) {
+          return PrismSeedMediaImage(
+            url: url,
+            fit: BoxFit.cover,
+            filterQuality: FilterQuality.high,
+            placeholder: (_) => placeholder,
+            errorWidget: (_) => placeholder,
+          );
         }
         return CachedNetworkImage(
           imageUrl: url,

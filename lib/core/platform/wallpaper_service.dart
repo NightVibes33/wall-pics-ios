@@ -1,3 +1,4 @@
+import 'package:Prism/features/prism_catalog/data/prism_seed_media_store.dart';
 import 'package:async_wallpaper/async_wallpaper.dart' as aw;
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
@@ -34,6 +35,10 @@ class WallpaperService {
 
   static Future<String> _resolveToLocalFile(String source) async {
     if (source.startsWith('http://') || source.startsWith('https://')) {
+      final bundledFile = await PrismSeedMediaStore.instance.fileForUrl(source);
+      if (bundledFile != null) {
+        return bundledFile.path;
+      }
       final file = await DefaultCacheManager().getSingleFile(source).timeout(const Duration(seconds: 30));
       return file.path;
     }

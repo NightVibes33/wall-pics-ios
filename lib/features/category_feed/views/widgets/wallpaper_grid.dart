@@ -115,7 +115,7 @@ class _WallpaperGridState extends State<WallpaperGrid> {
   Future<void> _precacheVideoUrls(Iterable<String> urls) async {
     final futures = <Future<void>>[];
     for (final url in urls) {
-      if (!_prefetchedVideoUrls.add(url)) {
+      if (PrismSeedMediaStore.instance.hasUrlSync(url) || !_prefetchedVideoUrls.add(url)) {
         continue;
       }
       futures.add(

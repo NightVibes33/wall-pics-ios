@@ -16,6 +16,7 @@ import 'package:Prism/features/palette/domain/entities/wallpaper_detail_entity.d
 import 'package:Prism/features/palette/domain/entities/wallpaper_detail_gallery_store.dart';
 import 'package:Prism/features/prism_catalog/data/prism_catalog_data_source.dart';
 import 'package:Prism/features/prism_catalog/data/prism_seed_media_store.dart';
+import 'package:Prism/features/prism_catalog/views/prism_seed_media_image.dart';
 import 'package:Prism/features/user_search/views/pages/search_screen.dart';
 import 'package:Prism/theme/jam_icons_icons.dart';
 import 'package:auto_route/auto_route.dart';
@@ -31,15 +32,14 @@ Widget? _seededCatalogImage(
   int? cacheWidth,
   int? cacheHeight,
 }) {
-  final seedBytes = PrismSeedMediaStore.instance.bytesForUrlSync(rawUrl.trim());
-  if (seedBytes == null) {
+  final url = rawUrl.trim();
+  if (!PrismSeedMediaStore.instance.hasUrlSync(url)) {
     return null;
   }
-  return Image.memory(
-    seedBytes,
+  return PrismSeedMediaImage(
+    url: url,
     fit: fit,
     alignment: alignment,
-    filterQuality: FilterQuality.high,
     cacheWidth: cacheWidth,
     cacheHeight: cacheHeight,
   );
@@ -479,6 +479,9 @@ class _HomeTabPageState extends State<HomeTabPage> {
         unawaited(precacheImage(CachedNetworkImageProvider(url), context).catchError((Object _) {}));
       }
       for (final url in videoUrls) {
+        if (PrismSeedMediaStore.instance.hasUrlSync(url)) {
+          continue;
+        }
         unawaited(DefaultCacheManager().downloadFile(url).timeout(const Duration(seconds: 24)).then((_) {}).catchError((Object _) {}));
       }
     });

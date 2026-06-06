@@ -6,6 +6,7 @@ import 'package:Prism/core/widgets/home/wallpapers/loading.dart';
 import 'package:Prism/features/category_feed/domain/entities/feed_item_entity.dart';
 import 'package:Prism/features/category_feed/views/widgets/wallpaper_tile.dart';
 import 'package:Prism/features/prism_catalog/data/prism_catalog_data_source.dart';
+import 'package:Prism/features/prism_catalog/data/prism_seed_media_store.dart';
 import 'package:Prism/theme/jam_icons_icons.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -206,7 +207,7 @@ class _SearchGridState extends State<SearchGrid> {
       }
       final poster = WallpaperTile.posterUrlForItem(item).trim();
       final url = poster.isNotEmpty ? poster : item.thumbnailUrl.trim();
-      if (url.isEmpty || !_prefetchedThumbnailUrls.add(url)) {
+      if (url.isEmpty || PrismSeedMediaStore.instance.hasUrlSync(url) || !_prefetchedThumbnailUrls.add(url)) {
         continue;
       }
       scheduled += 1;
@@ -227,7 +228,7 @@ class _SearchGridState extends State<SearchGrid> {
         break;
       }
       final videoUrl = WallpaperTile.videoUrlForItem(item).trim();
-      if (videoUrl.isEmpty || !_prefetchedVideoUrls.add(videoUrl)) {
+      if (videoUrl.isEmpty || PrismSeedMediaStore.instance.hasUrlSync(videoUrl) || !_prefetchedVideoUrls.add(videoUrl)) {
         continue;
       }
       scheduled += 1;

@@ -87,7 +87,20 @@ final class PrismLivePhotoSaver: NSObject {
   }
 
   private func fetchFile(urlString: String, fallbackExtension: String, directory: URL) throws -> URL {
-    guard let url = URL(string: urlString), let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
+    let clean = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
+    if clean.hasPrefix("/") {
+      let local = URL(fileURLWithPath: clean)
+      guard FileManager.default.fileExists(atPath: local.path) else { throw LivePhotoError.invalidUrl }
+      return local
+    }
+    guard let url = URL(string: clean), let scheme = url.scheme?.lowercased() else {
+      throw LivePhotoError.invalidUrl
+    }
+    if scheme == "file" {
+      guard FileManager.default.fileExists(atPath: url.path) else { throw LivePhotoError.invalidUrl }
+      return url
+    }
+    guard scheme == "http" || scheme == "https" else {
       throw LivePhotoError.invalidUrl
     }
     let data = try fetchData(url: url)

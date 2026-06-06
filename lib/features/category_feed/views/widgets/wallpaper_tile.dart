@@ -12,6 +12,7 @@ import 'package:Prism/features/palette/domain/entities/wallpaper_detail_entity.d
 import 'package:Prism/features/palette/domain/entities/wallpaper_detail_gallery_store.dart';
 import 'package:Prism/features/prism_catalog/data/prism_catalog_data_source.dart';
 import 'package:Prism/features/prism_catalog/data/prism_seed_media_store.dart';
+import 'package:Prism/features/prism_catalog/views/prism_seed_media_image.dart';
 import 'package:auto_route/auto_route.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -319,14 +320,15 @@ class WallpaperTile extends StatelessWidget {
     if (url.trim().isEmpty || _isArchiveUrl(url)) {
       return ColoredBox(color: Theme.of(context).colorScheme.surfaceContainerHighest);
     }
-    final seedBytes = PrismSeedMediaStore.instance.bytesForUrlSync(url);
-    if (seedBytes != null) {
-      return Image.memory(
-        seedBytes,
+    if (PrismSeedMediaStore.instance.hasUrlSync(url)) {
+      return PrismSeedMediaImage(
+        url: url,
         fit: BoxFit.cover,
         filterQuality: FilterQuality.high,
         cacheWidth: cacheWidth,
         cacheHeight: cacheHeight,
+        placeholder: (ctx) => ColoredBox(color: Theme.of(ctx).colorScheme.surfaceContainerHighest),
+        errorWidget: (ctx) => ColoredBox(color: Theme.of(ctx).colorScheme.surfaceContainerHighest),
       );
     }
     return CachedNetworkImage(

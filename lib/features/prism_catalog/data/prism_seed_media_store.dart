@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 
 class PrismSeedMediaStore {
   PrismSeedMediaStore._();
@@ -10,6 +12,7 @@ class PrismSeedMediaStore {
   static final PrismSeedMediaStore instance = PrismSeedMediaStore._();
 
   static const String _assetPath = 'assets/catalog/prism_seed_media.dbx';
+  static const String _manifestAssetPath = 'assets/catalog/prism_seed_media_manifest.json';
   static const List<int> _magic = <int>[0x50, 0x53, 0x4d, 0x45, 0x44, 0x49, 0x41, 0x31, 0x0a];
   static const List<int> _binaryMagic = <int>[0x50, 0x53, 0x4d, 0x42, 0x49, 0x4e, 0x32, 0x0a];
   static const List<int> _keyParts = <int>[
@@ -17,7 +20,15 @@ class PrismSeedMediaStore {
     0x3f, 0x3e, 0x77, 0x37, 0x3f, 0x3e, 0x33, 0x3b, 0x77, 0x2c, 0x6b,
   ];
 
+  static const int _maxMemoryCacheBytes = 96 * 1024 * 1024;
+
   final Map<String, Uint8List> _mediaByKey = <String, Uint8List>{};
+  final Map<String, _SeedMediaEntry> _entriesByKey = <String, _SeedMediaEntry>{};
+  final Map<String, Uint8List> _decodedBytesByKey = <String, Uint8List>{};
+  final List<String> _decodedByteOrder = <String>[];
+  final Map<String, Future<Uint8List?>> _byteLoadsByKey = <String, Future<Uint8List?>>{};
+  final Map<String, Future<File?>> _fileLoadsByKey = <String, Future<File?>>{};
+  int _decodedMemoryBytes = 0;
   Future<void>? _warmFuture;
   bool _loaded = false;
 
@@ -28,18 +39,25 @@ class PrismSeedMediaStore {
   }
 
   bool hasUrlSync(String url) {
-    return bytesForUrlSync(url) != null;
+    if (!_loaded) {
+      return false;
+    }
+    return _entryForUrl(url) != null || bytesForUrlSync(url) != null;
   }
 
   Uint8List? bytesForUrlSync(String url) {
-    if (!_loaded || _mediaByKey.isEmpty) {
+    if (!_loaded) {
       return null;
     }
-    final keys = _candidateKeys(url);
-    for (final key in keys) {
-      final bytes = _mediaByKey[key];
-      if (bytes != null && bytes.isNotEmpty) {
-        return bytes;
+    for (final key in _candidateKeys(url)) {
+      final cached = _decodedBytesByKey[key];
+      if (cached != null && cached.isNotEmpty) {
+        _touchDecodedKey(key);
+        return cached;
+      }
+      final legacyBytes = _mediaByKey[key];
+      if (legacyBytes != null && legacyBytes.isNotEmpty) {
+        return legacyBytes;
       }
     }
     return null;
@@ -47,10 +65,87 @@ class PrismSeedMediaStore {
 
   Future<Uint8List?> bytesForUrl(String url) async {
     await warm();
-    return bytesForUrlSync(url);
+    final sync = bytesForUrlSync(url);
+    if (sync != null) {
+      return sync;
+    }
+    final match = _entryMatchForUrl(url);
+    if (match == null || !match.entry.isImage) {
+      return null;
+    }
+    return _byteLoadsByKey.putIfAbsent(match.key, () async {
+      try {
+        final raw = await rootBundle.load(match.entry.asset);
+        final bytes = _crypt(raw.buffer.asUint8List());
+        _rememberDecodedBytes(match.key, bytes);
+        return bytes;
+      } catch (_) {
+        return null;
+      } finally {
+        _byteLoadsByKey.remove(match.key);
+      }
+    });
+  }
+
+  Future<File?> fileForUrl(String url) async {
+    await warm();
+    final match = _entryMatchForUrl(url);
+    if (match != null) {
+      return _fileLoadsByKey.putIfAbsent(match.key, () async {
+        try {
+          final tempDir = await getTemporaryDirectory();
+          final directory = Directory('${tempDir.path}/prism_seed_media');
+          if (!await directory.exists()) {
+            await directory.create(recursive: true);
+          }
+          final extension = match.entry.extension.isNotEmpty ? match.entry.extension : _extensionForUrl(url);
+          final file = File('${directory.path}/${match.key}$extension');
+          if (await file.exists() && await file.length() == match.entry.length) {
+            return file;
+          }
+          final raw = await rootBundle.load(match.entry.asset);
+          final bytes = _crypt(raw.buffer.asUint8List());
+          await file.writeAsBytes(bytes, flush: false);
+          return file;
+        } catch (_) {
+          return null;
+        } finally {
+          _fileLoadsByKey.remove(match.key);
+        }
+      });
+    }
+
+    final legacyBytes = bytesForUrlSync(url);
+    if (legacyBytes == null || legacyBytes.isEmpty) {
+      return null;
+    }
+    final key = cacheKeyForUrl(url);
+    return _fileLoadsByKey.putIfAbsent(key, () async {
+      try {
+        final tempDir = await getTemporaryDirectory();
+        final directory = Directory('${tempDir.path}/prism_seed_media');
+        if (!await directory.exists()) {
+          await directory.create(recursive: true);
+        }
+        final file = File('${directory.path}/$key${_extensionForUrl(url)}');
+        if (!await file.exists()) {
+          await file.writeAsBytes(legacyBytes, flush: false);
+        }
+        return file;
+      } catch (_) {
+        return null;
+      } finally {
+        _fileLoadsByKey.remove(key);
+      }
+    });
   }
 
   Future<void> _load() async {
+    await _loadManifestPack();
+    if (_entriesByKey.isNotEmpty) {
+      _loaded = true;
+      return;
+    }
     try {
       final rawData = await rootBundle.load(_assetPath);
       final raw = rawData.buffer.asUint8List();
@@ -69,6 +164,33 @@ class PrismSeedMediaStore {
       // Seed packs are optional. Missing or unreadable seed data falls back to the network cache.
     } finally {
       _loaded = true;
+    }
+  }
+
+
+  Future<void> _loadManifestPack() async {
+    try {
+      final raw = await rootBundle.loadString(_manifestAssetPath);
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        return;
+      }
+      final entries = decoded['entries'];
+      if (entries is! List) {
+        return;
+      }
+      for (final entry in entries) {
+        if (entry is! Map) {
+          continue;
+        }
+        final mediaEntry = _SeedMediaEntry.fromJson(entry);
+        if (mediaEntry == null) {
+          continue;
+        }
+        _entriesByKey[mediaEntry.key] = mediaEntry;
+      }
+    } catch (_) {
+      // Manifest packs are generated in CI. Local/dev builds may only have the legacy DBX placeholder.
     }
   }
 
@@ -183,13 +305,67 @@ class PrismSeedMediaStore {
     return output;
   }
 
-  Set<String> _candidateKeys(String rawUrl) {
+
+  _SeedMediaEntry? _entryForUrl(String url) => _entryMatchForUrl(url)?.entry;
+
+  _SeedMediaMatch? _entryMatchForUrl(String url) {
+    if (!_loaded || _entriesByKey.isEmpty) {
+      return null;
+    }
+    for (final key in _candidateKeys(url)) {
+      final entry = _entriesByKey[key];
+      if (entry != null) {
+        return _SeedMediaMatch(key: key, entry: entry);
+      }
+    }
+    return null;
+  }
+
+  void _rememberDecodedBytes(String key, Uint8List bytes) {
+    if (bytes.isEmpty || bytes.length > _maxMemoryCacheBytes ~/ 2) {
+      return;
+    }
+    final existing = _decodedBytesByKey[key];
+    if (existing != null) {
+      _decodedMemoryBytes -= existing.length;
+      _decodedByteOrder.remove(key);
+    }
+    _decodedBytesByKey[key] = bytes;
+    _decodedByteOrder.add(key);
+    _decodedMemoryBytes += bytes.length;
+    while (_decodedMemoryBytes > _maxMemoryCacheBytes && _decodedByteOrder.isNotEmpty) {
+      final evicted = _decodedByteOrder.removeAt(0);
+      final removed = _decodedBytesByKey.remove(evicted);
+      if (removed != null) {
+        _decodedMemoryBytes -= removed.length;
+      }
+    }
+  }
+
+  void _touchDecodedKey(String key) {
+    if (_decodedBytesByKey.containsKey(key)) {
+      _decodedByteOrder.remove(key);
+      _decodedByteOrder.add(key);
+    }
+  }
+
+  String _extensionForUrl(String url) {
+    final path = Uri.tryParse(canonicalUrl(url))?.path.toLowerCase() ?? url.toLowerCase();
+    for (final extension in const <String>['.jpg', '.jpeg', '.png', '.webp', '.gif', '.mp4', '.mov', '.zip']) {
+      if (path.endsWith(extension)) {
+        return extension;
+      }
+    }
+    return '.bin';
+  }
+
+  List<String> _candidateKeys(String rawUrl) {
     final raw = rawUrl.trim();
     if (raw.isEmpty) {
-      return const <String>{};
+      return const <String>[];
     }
     final canonical = canonicalUrl(raw);
-    return <String>{_hash(raw), if (canonical != raw) _hash(canonical)};
+    return <String>[_hash(raw), if (canonical != raw) _hash(canonical)];
   }
 
   static String canonicalUrl(String rawUrl) {
@@ -212,4 +388,45 @@ class PrismSeedMediaStore {
   static String _hash(String value) {
     return sha256.convert(utf8.encode(value.trim())).toString();
   }
+}
+
+
+class _SeedMediaEntry {
+  const _SeedMediaEntry({
+    required this.key,
+    required this.asset,
+    required this.length,
+    required this.extension,
+    required this.kind,
+  });
+
+  final String key;
+  final String asset;
+  final int length;
+  final String extension;
+  final String kind;
+
+  bool get isImage => kind == 'image';
+
+  static _SeedMediaEntry? fromJson(Object? raw) {
+    if (raw is! Map) {
+      return null;
+    }
+    final key = raw['key']?.toString().trim() ?? '';
+    final asset = raw['asset']?.toString().trim() ?? '';
+    final length = raw['length'] is int ? raw['length'] as int : int.tryParse(raw['length']?.toString() ?? '') ?? 0;
+    final extension = raw['extension']?.toString().trim() ?? '';
+    final kind = raw['kind']?.toString().trim() ?? '';
+    if (key.isEmpty || asset.isEmpty || length <= 0 || kind.isEmpty) {
+      return null;
+    }
+    return _SeedMediaEntry(key: key, asset: asset, length: length, extension: extension, kind: kind);
+  }
+}
+
+class _SeedMediaMatch {
+  const _SeedMediaMatch({required this.key, required this.entry});
+
+  final String key;
+  final _SeedMediaEntry entry;
 }
