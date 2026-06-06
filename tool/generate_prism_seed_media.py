@@ -12,6 +12,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -483,72 +484,110 @@ def _sha_url(raw_url: str) -> str:
     return hashlib.sha256(raw_url.strip().encode("utf-8")).hexdigest()
 
 
+def _download_asset(
+    fetch_url: str,
+    fallback_urls: list[str],
+    expected_kind: str,
+    per_file_max_bytes: int,
+) -> tuple[str, bytes, str, str] | None:
+    headers = {"Accept": "*/*", "User-Agent": "PrismBundledMediaBuilder/2.0"}
+    urls = [fetch_url, *[url for url in fallback_urls if url != fetch_url]]
+    for url in urls:
+        response = _request_bytes(
+            url,
+            headers,
+            max_bytes=per_file_max_bytes,
+            timeout=90 if expected_kind != "image" else 45,
+        )
+        if response is None:
+            continue
+        data, content_type = response
+        detected = _detect_kind(data, content_type, url, expected_kind)
+        if detected == expected_kind and data:
+            return url, data, content_type, detected
+    return None
+
+
 def _write_manifest_pack(candidates: list[ResourceCandidate], *, limit: int, max_bytes: int, per_file_max_bytes: int) -> tuple[int, int, int]:
     if MEDIA_DIR.exists():
         shutil.rmtree(MEDIA_DIR)
     MEDIA_DIR.mkdir(parents=True, exist_ok=True)
     MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-    image_headers = {"Accept": "*/*", "User-Agent": "PrismBundledMediaBuilder/2.0"}
+    grouped: dict[str, list[ResourceCandidate]] = {}
+    for candidate in candidates:
+        grouped.setdefault(candidate.fetch_url, []).append(candidate)
+    groups = list(grouped.items())
+
+    workers = max(1, _int_env("PRISM_SEED_MEDIA_DOWNLOAD_WORKERS", 6))
     entries: list[dict[str, Any]] = []
+    entry_keys: set[str] = set()
     fetch_assets: dict[str, dict[str, Any]] = {}
     total_bytes = 0
     failures = 0
+    next_group = 0
 
-    for candidate in candidates:
-        if len(entries) >= limit or total_bytes >= max_bytes:
-            break
-        key = _sha_url(candidate.lookup_url)
-        if any(entry["key"] == key for entry in entries):
-            continue
-        asset_record = fetch_assets.get(candidate.fetch_url)
-        if asset_record is None:
-            remaining = max(0, max_bytes - total_bytes)
-            response = _request_bytes(
-                candidate.fetch_url,
-                image_headers,
-                max_bytes=min(per_file_max_bytes, remaining),
-                timeout=90 if candidate.kind != "image" else 45,
-            )
-            if response is None:
-                if candidate.fetch_url != candidate.lookup_url:
-                    response = _request_bytes(
-                        candidate.lookup_url,
-                        image_headers,
-                        max_bytes=min(per_file_max_bytes, remaining),
-                        timeout=90 if candidate.kind != "image" else 45,
-                    )
-                if response is None:
+    def submit_next(executor: ThreadPoolExecutor, pending: dict[Any, tuple[str, list[ResourceCandidate]]]) -> None:
+        nonlocal next_group
+        while next_group < len(groups) and len(pending) < workers:
+            fetch_url, group = groups[next_group]
+            next_group += 1
+            kind = group[0].kind
+            fallback_urls = [candidate.lookup_url for candidate in group]
+            future = executor.submit(_download_asset, fetch_url, fallback_urls, kind, per_file_max_bytes)
+            pending[future] = (fetch_url, group)
+
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        pending: dict[Any, tuple[str, list[ResourceCandidate]]] = {}
+        submit_next(executor, pending)
+        while pending and len(entries) < limit and total_bytes < max_bytes:
+            done, _ = wait(pending.keys(), return_when=FIRST_COMPLETED)
+            for future in done:
+                fetch_url, group = pending.pop(future)
+                try:
+                    result = future.result()
+                except Exception:
+                    result = None
+                if result is None:
                     failures += 1
                     continue
-            data, content_type = response
-            detected = _detect_kind(data, content_type, candidate.fetch_url, candidate.kind)
-            if detected != candidate.kind or not data:
-                failures += 1
-                continue
-            if total_bytes + len(data) > max_bytes:
-                break
-            asset_key = _sha_url(candidate.fetch_url)
-            asset = MEDIA_DIR / f"{asset_key}.bin"
-            asset.write_bytes(_crypt(data))
-            extension = _extension_for(detected, content_type, candidate.fetch_url)
-            asset_record = {
-                "asset": asset.as_posix(),
-                "length": len(data),
-                "extension": extension,
-                "kind": detected,
-            }
-            fetch_assets[candidate.fetch_url] = asset_record
-            total_bytes += len(data)
-        entries.append(
-            {
-                "key": key,
-                "asset": asset_record["asset"],
-                "length": asset_record["length"],
-                "extension": asset_record["extension"],
-                "kind": asset_record["kind"],
-            }
-        )
+                used_url, data, content_type, detected = result
+                if total_bytes + len(data) > max_bytes:
+                    for other in pending:
+                        other.cancel()
+                    pending.clear()
+                    break
+                asset_key = _sha_url(used_url)
+                asset = MEDIA_DIR / f"{asset_key}.bin"
+                asset.write_bytes(_crypt(data))
+                asset_record = {
+                    "asset": asset.as_posix(),
+                    "length": len(data),
+                    "extension": _extension_for(detected, content_type, used_url),
+                    "kind": detected,
+                }
+                fetch_assets[fetch_url] = asset_record
+                total_bytes += len(data)
+                for candidate in group:
+                    key = _sha_url(candidate.lookup_url)
+                    if key in entry_keys or len(entries) >= limit:
+                        continue
+                    entry_keys.add(key)
+                    entries.append(
+                        {
+                            "key": key,
+                            "asset": asset_record["asset"],
+                            "length": asset_record["length"],
+                            "extension": asset_record["extension"],
+                            "kind": asset_record["kind"],
+                        }
+                    )
+                if len(fetch_assets) % 25 == 0:
+                    print(
+                        f"Bundled media progress: {len(fetch_assets)} assets, {len(entries)} entries, {total_bytes} bytes",
+                        flush=True,
+                    )
+            submit_next(executor, pending)
 
     manifest = {
         "version": 3,

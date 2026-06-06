@@ -2,6 +2,13 @@ name: Unsigned IPA
 
 on:
   workflow_dispatch:
+  schedule:
+    # Refresh the embedded catalog/media bundle every day.
+    - cron: '17 9 * * *'
+
+concurrency:
+  group: unsigned-ipa-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build-unsigned-ipa:
@@ -55,6 +62,7 @@ jobs:
           PRISM_SEED_MEDIA_API_MAX_PAGES: 80
           PRISM_SEED_MEDIA_CATALOG_MAX_PAGES: 80
           PRISM_SEED_MEDIA_PAGE_SIZE: 144
+          PRISM_SEED_MEDIA_DOWNLOAD_WORKERS: 6
         run: python3 tool/generate_prism_seed_media.py
 
       - name: Flutter pub get
