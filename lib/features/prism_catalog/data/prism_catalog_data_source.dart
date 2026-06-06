@@ -1855,11 +1855,21 @@ class _PrismItem {
       isActualImageUrl(thumbnail) ? thumbnail : '',
       isActualImageUrl(firstFrameThumbnail) ? firstFrameThumbnail : '',
     ]);
+    final parallaxFallbackThumbImage = isParallaxContent
+        ? _firstString(<Object?>[
+            isPotentialImageUrl(previewImage) ? previewImage : '',
+            isPotentialImageUrl(staticThumbnail) ? staticThumbnail : '',
+            isPotentialImageUrl(hqThumbnail) ? hqThumbnail : '',
+            isPotentialImageUrl(thumbnail) ? thumbnail : '',
+            isPotentialImageUrl(firstFrameThumbnail) ? firstFrameThumbnail : '',
+          ])
+        : '';
     final fastPreviewThumbImage = _fastTileOrOriginal(previewThumbImage);
     final fastParallaxLayerPreview = _fastTileOrOriginal(parallaxLayerPreview, width: 1920, quality: 94);
     final parallaxTileImage = _firstString(<Object?>[
       fastParallaxLayerPreview,
       fastPreviewThumbImage,
+      parallaxFallbackThumbImage,
       fastFullImage,
       fastFullSizeImage,
     ]);
@@ -1867,6 +1877,7 @@ class _PrismItem {
         ? _firstString(<Object?>[
             fastParallaxLayerPreview,
             fastPreviewThumbImage,
+            parallaxFallbackThumbImage,
             parallaxTileImage,
             fastFullImage,
             fullImage,
@@ -1880,12 +1891,12 @@ class _PrismItem {
     final thumb = isLiveContent
         ? _firstString(<Object?>[fastLivePoster, tileImage])
         : isParallaxContent
-            ? _firstString(<Object?>[parallaxTileImage, fastParallaxLayerPreview, fastPreviewThumbImage, fastFullImage])
+            ? _firstString(<Object?>[parallaxTileImage, fastParallaxLayerPreview, fastPreviewThumbImage, parallaxFallbackThumbImage, fastFullImage])
             : tileImage;
     final staticThumb = isLiveContent
         ? _firstString(<Object?>[fastLivePoster, thumb])
         : isParallaxContent
-            ? _firstString(<Object?>[parallaxTileImage, fastParallaxLayerPreview, thumb, fastPreviewThumbImage])
+            ? _firstString(<Object?>[parallaxTileImage, fastParallaxLayerPreview, thumb, fastPreviewThumbImage, parallaxFallbackThumbImage])
             : _firstString(<Object?>[
                 isActualImageUrl(staticThumbnail) ? _fastTileOrOriginal(staticThumbnail) : '',
                 isActualImageUrl(hqThumbnail) ? _fastTileOrOriginal(hqThumbnail) : '',

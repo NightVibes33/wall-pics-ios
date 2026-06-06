@@ -379,7 +379,7 @@ def _is_catalog_preview_url(raw_url: str) -> bool:
     return any(marker in probe for marker in PREVIEW_MARKERS)
 
 
-def _resource_kind_from_url(raw_url: str) -> str | None:
+def _resource_kind_from_url(raw_url: str, *, allow_preview: bool = False) -> str | None:
     url = raw_url.strip()
     if not url.startswith(("http://", "https://")):
         return None
@@ -387,7 +387,7 @@ def _resource_kind_from_url(raw_url: str) -> str | None:
     lowered = urllib.parse.unquote((parsed.path + "?" + parsed.query).lower())
     if lowered.endswith(UNSUPPORTED_EXTENSIONS):
         return None
-    if _is_catalog_preview_url(url):
+    if not allow_preview and _is_catalog_preview_url(url):
         return None
     if lowered.endswith(VIDEO_EXTENSIONS):
         return "video"
@@ -400,20 +400,55 @@ def _resource_kind_from_url(raw_url: str) -> str | None:
     return None
 
 
-def _all_resource_urls(payloads: list[Any]) -> list[str]:
-    seen: set[str] = set()
+def _is_parallax_item(item: Any, payload: Any) -> bool:
+    if not isinstance(item, dict):
+        return False
+    payload_type = payload.get("content_type") if isinstance(payload, dict) else ""
+    content_type = str(item.get("content_type") or payload_type or item.get("source_section") or "").strip().lower()
+    numeric_type = str(item.get("type") or "").strip()
+    return content_type in {"parallax_wallpaper", "parallax"} or numeric_type == "4"
+
+
+def _parallax_preview_urls(item: dict[str, Any]) -> list[str]:
     urls: list[str] = []
-    for payload in payloads:
-        for value in _walk(payload):
-            if not isinstance(value, str):
-                continue
-            url = value.strip()
-            if _resource_kind_from_url(url) is None:
-                continue
-            if url not in seen:
-                seen.add(url)
-                urls.append(url)
+    for key in ("app_display_url", "preview_image", "static_thumbnail", "hq_thumbnail", "thumbnail", "first_frame_thumbnail"):
+        value = item.get(key)
+        if isinstance(value, str) and value.strip():
+            urls.append(value.strip())
+    config = item.get("thumbnail_config")
+    if isinstance(config, dict):
+        for layer in config.get("layers") or []:
+            if isinstance(layer, dict):
+                value = layer.get("url")
+                if isinstance(value, str) and value.strip():
+                    urls.append(value.strip())
     return urls
+
+
+def _all_resource_urls(payloads: list[Any]) -> tuple[list[str], set[str]]:
+    seen: set[str] = set()
+    allow_preview_urls: set[str] = set()
+    urls: list[str] = []
+
+    def add(raw_url: str, *, allow_preview: bool = False) -> None:
+        url = raw_url.strip()
+        if _resource_kind_from_url(url, allow_preview=allow_preview) is None:
+            return
+        if url not in seen:
+            seen.add(url)
+            urls.append(url)
+        if allow_preview:
+            allow_preview_urls.add(url)
+
+    for payload in payloads:
+        for item in _payload_items(payload):
+            if _is_parallax_item(item, payload):
+                for url in _parallax_preview_urls(item):
+                    add(url, allow_preview=True)
+        for value in _walk(payload):
+            if isinstance(value, str):
+                add(value)
+    return urls, allow_preview_urls
 
 
 def _worker_base_url() -> str:
@@ -445,9 +480,10 @@ def _media_video_proxy_url(source_url: str) -> str:
     return f"{_url_join(base, f'/v1/media/video.{ext}')}?{query}"
 
 
-def _resource_candidates(source_urls: list[str]) -> list[ResourceCandidate]:
+def _resource_candidates(source_urls: list[str], *, allow_preview_urls: set[str] | None = None) -> list[ResourceCandidate]:
     include_video_proxy = _bool_env("PRISM_SEED_MEDIA_INCLUDE_VIDEO_PROXY", True)
     include_image_proxy_variants = _bool_env("PRISM_SEED_MEDIA_INCLUDE_IMAGE_PROXY_VARIANTS", True)
+    allowed_previews = allow_preview_urls or set()
     seen: set[tuple[str, str]] = set()
     candidates: list[ResourceCandidate] = []
 
@@ -459,7 +495,7 @@ def _resource_candidates(source_urls: list[str]) -> list[ResourceCandidate]:
         candidates.append(ResourceCandidate(lookup_url=key[0], fetch_url=fetch_url.strip() or key[0], kind=kind))
 
     for source_url in source_urls:
-        kind = _resource_kind_from_url(source_url)
+        kind = _resource_kind_from_url(source_url, allow_preview=source_url in allowed_previews)
         if kind is None:
             continue
         if kind == "image":
@@ -609,8 +645,8 @@ def main() -> int:
     layout = (_env("PRISM_SEED_MEDIA_LAYOUT") or "files").lower()
 
     payloads = _catalog_payloads()
-    urls = _all_resource_urls(payloads)
-    candidates = _resource_candidates(urls)
+    urls, allow_preview_urls = _all_resource_urls(payloads)
+    candidates = _resource_candidates(urls, allow_preview_urls=allow_preview_urls)
 
     if layout == "legacy":
         media: dict[str, bytes] = {}

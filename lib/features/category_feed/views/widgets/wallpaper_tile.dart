@@ -121,6 +121,21 @@ class WallpaperTile extends StatelessWidget {
     return item.when(
       prism: (_, wallpaper) {
         final metadata = wallpaper.aiMetadata ?? const <String, Object?>{};
+        final contentType = metadata['catalogContentType'];
+        if (contentType == PrismCatalogDataSource.parallaxContentType) {
+          final parallaxPreferred = _firstStringValue(
+            <Object?>[
+              metadata['catalogPreviewUrl'],
+              metadata['catalogStaticThumbnailUrl'],
+              wallpaper.core.thumbnailUrl,
+              wallpaper.core.fullUrl,
+            ],
+            imageOnly: true,
+            excludeCatalogPreviews: false,
+          );
+          final fast = PrismCatalogDataSource.fastImageTileUrl(parallaxPreferred);
+          return fast.isNotEmpty ? fast : parallaxPreferred;
+        }
         final preferred = _firstStringValue(
           <Object?>[
             metadata['catalogOriginalStillUrl'],

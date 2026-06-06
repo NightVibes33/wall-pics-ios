@@ -1416,10 +1416,10 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
 
     Widget imageLayer;
     final parallaxDisplayUrl = _catalogDisplayImageUrl(entity);
-    if (parallaxArchiveUrl.isNotEmpty && parallaxDisplayUrl.isEmpty) {
+    if (parallaxArchiveUrl.isNotEmpty) {
       imageLayer = ParallaxArchiveImage(
         archiveUrl: parallaxArchiveUrl,
-        fallbackUrl: _catalogDisplayImageUrl(entity),
+        fallbackUrl: parallaxDisplayUrl,
         fit: BoxFit.contain,
         onReady: onWallpaperDisplayReady,
         onCompositeReady: (path) => _handleParallaxCompositeReady(entity, path),
