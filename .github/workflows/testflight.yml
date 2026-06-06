@@ -75,7 +75,9 @@ jobs:
       - name: Build Flutter iOS artifacts without codesigning
         run: |
           DART_DEFINES="$(./tool/dart_defines_from_env.sh)"
-          flutter build ios --release --no-codesign --build-number="$GITHUB_RUN_NUMBER" $DART_DEFINES
+          TESTFLIGHT_BUILD_NUMBER="$((5000 + GITHUB_RUN_NUMBER))"
+          echo "Building TestFlight app build $TESTFLIGHT_BUILD_NUMBER"
+          flutter build ios --release --no-codesign --build-number="$TESTFLIGHT_BUILD_NUMBER" $DART_DEFINES
 
       - name: Write App Store Connect key
         env:
@@ -96,7 +98,7 @@ jobs:
             -destination 'generic/platform=iOS' \
             -archivePath build/Prism.xcarchive \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
+            CURRENT_PROJECT_VERSION="$((5000 + GITHUB_RUN_NUMBER))" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
@@ -110,6 +112,7 @@ jobs:
         run: |
           mkdir -p build/export
           cp ExportOptions.plist build/ExportOptions.generated.plist
+          /usr/libexec/PlistBuddy -c "Set :manageAppVersionAndBuildNumber false" build/ExportOptions.generated.plist
           /usr/libexec/PlistBuddy -c "Delete :teamID" build/ExportOptions.generated.plist 2>/dev/null || true
           /usr/libexec/PlistBuddy -c "Add :teamID string $APPLE_TEAM_ID" build/ExportOptions.generated.plist
           xcodebuild \
