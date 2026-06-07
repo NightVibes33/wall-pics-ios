@@ -1864,11 +1864,11 @@ class _PrismItem {
     final fastFullSizeImage = _fastTileOrOriginal(fullImage, width: 3840, quality: 98);
     final fastLivePoster = _fastTileOrOriginal(liveOriginalStill);
     final previewThumbImage = _firstString(<Object?>[
-      isActualImageUrl(previewImage) ? previewImage : '',
       isActualImageUrl(staticThumbnail) ? staticThumbnail : '',
       isActualImageUrl(hqThumbnail) ? hqThumbnail : '',
       isActualImageUrl(thumbnail) ? thumbnail : '',
       isActualImageUrl(firstFrameThumbnail) ? firstFrameThumbnail : '',
+      isActualImageUrl(previewImage) ? previewImage : '',
     ]);
     final parallaxFallbackThumbImage = isParallaxContent
         ? _firstString(<Object?>[
@@ -1900,6 +1900,7 @@ class _PrismItem {
         : '';
     final tileImage = _firstString(<Object?>[
       isMatchingContent ? _firstString(<Object?>[...pairedDisplayUrls]) : '',
+      isLiveContent ? '' : fastPreviewThumbImage,
       fastFullImage,
       fastLivePoster,
     ]);
@@ -2602,12 +2603,8 @@ bool _isCatalogPreviewAssetUrl(String value) {
       .replaceAll('thumbnail-config', 'spatial-config');
   return previewProbe.contains('/preview') ||
       previewProbe.contains('/previews') ||
-      previewProbe.contains('/thumbnail') ||
-      previewProbe.contains('/thumb') ||
-      previewProbe.contains('first_frame') ||
       previewProbe.contains('app_display') ||
       previewProbe.contains('display_url') ||
-      previewProbe.contains('poster') ||
       previewProbe.contains('watermark') ||
       previewProbe.contains('brand') ||
       previewProbe.contains('logo') ||

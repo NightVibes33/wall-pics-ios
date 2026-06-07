@@ -497,6 +497,78 @@ def _parallax_preview_urls(item: dict[str, Any]) -> list[str]:
     return urls
 
 
+def _item_display_preview_urls(item: Any) -> list[str]:
+    if not isinstance(item, dict):
+        return []
+    urls: list[str] = []
+
+    def add(value: Any) -> None:
+        if isinstance(value, str) and _is_preferred_seed_preview_url(value, item):
+            urls.append(value.strip())
+
+    for key in (
+        "static_thumbnail",
+        "hq_thumbnail",
+        "preview_image",
+        "thumbnail",
+        "first_frame_thumbnail",
+        "photo",
+        "photo_url",
+        "still",
+        "still_url",
+        "still_image",
+        "still_image_url",
+        "original_photo",
+        "original_photo_url",
+        "original_still",
+        "original_still_url",
+    ):
+        add(item.get(key))
+
+    for row_key in ("paired_wallpapers", "wallpapers", "app_matching_sides"):
+        rows = item.get(row_key)
+        if not isinstance(rows, list):
+            continue
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            for key in ("thumbnail", "preview_url", "preview_image", "static_thumbnail", "hq_thumbnail", "first_frame_thumbnail"):
+                add(row.get(key))
+
+    config = item.get("thumbnail_config")
+    if isinstance(config, dict):
+        for layer in config.get("layers") or []:
+            if isinstance(layer, dict):
+                add(layer.get("url"))
+
+    return urls
+
+
+def _is_preferred_seed_preview_url(value: str, item: dict[str, Any]) -> bool:
+    url = value.strip()
+    if not url or _is_catalog_branded_url(url):
+        return False
+    kind = _resource_kind_from_url(url, allow_preview=True)
+    if kind != "image":
+        return False
+    probe = _preview_probe(url)
+    small_markers = (
+        "/thumbnail",
+        "/thumbnails",
+        "_thumbnail",
+        "/thumb",
+        "_thumb",
+        "first_frame",
+        "poster",
+    )
+    if any(marker in probe for marker in small_markers):
+        return True
+    content_type = str(item.get("content_type") or item.get("source_section") or "").lower()
+    if "profile" in content_type or "pfp" in content_type:
+        return True
+    return False
+
+
 def _all_resource_urls(payloads: list[Any]) -> tuple[list[str], set[str]]:
     seen: set[str] = set()
     allow_preview_urls: set[str] = set()
@@ -514,9 +586,13 @@ def _all_resource_urls(payloads: list[Any]) -> tuple[list[str], set[str]]:
 
     for payload in payloads:
         for item in _payload_items(payload):
+            for url in _item_display_preview_urls(item):
+                add(url, allow_preview=True)
             if _is_parallax_item(item, payload):
                 for url in _parallax_preview_urls(item):
                     add(url, allow_preview=True)
+
+    for payload in payloads:
         for value in _walk(payload):
             if isinstance(value, str):
                 add(value)
