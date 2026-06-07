@@ -63,6 +63,11 @@ jobs:
           PRISM_SEED_MEDIA_CATALOG_MAX_PAGES: 500
           PRISM_SEED_MEDIA_PAGE_SIZE: 100
           PRISM_SEED_MEDIA_DOWNLOAD_WORKERS: 6
+          PRISM_SEED_MEDIA_TILE_WIDTH: 480
+          PRISM_SEED_MEDIA_TILE_QUALITY: 72
+          PRISM_SEED_MEDIA_INCLUDE_FULL_IMAGES: false
+          PRISM_SEED_MEDIA_INCLUDE_VIDEO: false
+          PRISM_SEED_MEDIA_INCLUDE_ARCHIVE: false
           PRISM_BUNDLE_CATALOG_MAX_PAGES: 500
         run: |
           if [ -f assets/catalog/prism_index.json ]; then

@@ -20,7 +20,7 @@ class PrismCatalogDataSource {
 
   static final PrismCatalogDataSource instance = PrismCatalogDataSource._();
 
-  static String fastImageTileUrl(String url, {int width = 1080, int quality = 90}) {
+  static String fastImageTileUrl(String url, {int width = 480, int quality = 72}) {
     return _fastTileImageUrl(url, width: width, quality: quality);
   }
 
@@ -1880,7 +1880,7 @@ class _PrismItem {
           ])
         : '';
     final fastPreviewThumbImage = _fastTileOrOriginal(previewThumbImage);
-    final fastParallaxLayerPreview = _fastTileOrOriginal(parallaxLayerPreview, width: 1920, quality: 94);
+    final fastParallaxLayerPreview = _fastTileOrOriginal(parallaxLayerPreview);
     final parallaxTileImage = _firstString(<Object?>[
       fastParallaxLayerPreview,
       fastPreviewThumbImage,
@@ -2469,7 +2469,7 @@ String _fastTileImageUrl(String rawUrl, {int width = 1920, int quality = 96}) {
       .toString();
 }
 
-String _fastTileOrOriginal(String rawUrl, {int width = 1080, int quality = 90}) {
+String _fastTileOrOriginal(String rawUrl, {int width = 480, int quality = 72}) {
   final source = rawUrl.trim();
   if (_isCatalogPreviewAssetUrl(source)) {
     return '';

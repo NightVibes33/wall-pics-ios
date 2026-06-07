@@ -30,6 +30,8 @@ PER_FILE_MAX_BYTES = 180_000_000
 DEFAULT_API_MAX_PAGES = 80
 DEFAULT_CATALOG_MAX_PAGES = 80
 DEFAULT_PAGE_SIZE = 100
+DEFAULT_TILE_WIDTH = 480
+DEFAULT_TILE_QUALITY = 72
 
 BASE_CATALOG_FILES = (
     "prism_index.json",
@@ -448,18 +450,18 @@ def _resource_kind_from_url(raw_url: str, *, allow_preview: bool = False) -> str
     if not url.startswith(("http://", "https://")):
         return None
     parsed = urllib.parse.urlparse(url)
-    lowered = urllib.parse.unquote((parsed.path + "?" + parsed.query).lower())
-    if lowered.endswith(UNSUPPORTED_EXTENSIONS):
+    lowered_path = urllib.parse.unquote(parsed.path.lower())
+    if lowered_path.endswith(UNSUPPORTED_EXTENSIONS):
         return None
     if _is_catalog_branded_url(url):
         return None
     if not allow_preview and _is_catalog_preview_url(url):
         return None
-    if lowered.endswith(VIDEO_EXTENSIONS):
+    if lowered_path.endswith(VIDEO_EXTENSIONS):
         return "video"
-    if lowered.endswith(ARCHIVE_EXTENSIONS):
+    if lowered_path.endswith(ARCHIVE_EXTENSIONS):
         return "archive"
-    if lowered.endswith(IMAGE_EXTENSIONS):
+    if lowered_path.endswith(IMAGE_EXTENSIONS):
         return "image"
     if parsed.scheme == "https" and parsed.netloc:
         return "image"
@@ -547,8 +549,12 @@ def _media_video_proxy_url(source_url: str) -> str:
 
 
 def _resource_candidates(source_urls: list[str], *, allow_preview_urls: set[str] | None = None) -> list[ResourceCandidate]:
-    include_video_proxy = _bool_env("PRISM_SEED_MEDIA_INCLUDE_VIDEO_PROXY", True)
-    include_image_proxy_variants = _bool_env("PRISM_SEED_MEDIA_INCLUDE_IMAGE_PROXY_VARIANTS", True)
+    include_full_images = _bool_env("PRISM_SEED_MEDIA_INCLUDE_FULL_IMAGES", False)
+    include_video = _bool_env("PRISM_SEED_MEDIA_INCLUDE_VIDEO", False)
+    include_video_proxy = _bool_env("PRISM_SEED_MEDIA_INCLUDE_VIDEO_PROXY", False)
+    include_archive = _bool_env("PRISM_SEED_MEDIA_INCLUDE_ARCHIVE", False)
+    tile_width = _int_env("PRISM_SEED_MEDIA_TILE_WIDTH", DEFAULT_TILE_WIDTH)
+    tile_quality = _int_env("PRISM_SEED_MEDIA_TILE_QUALITY", DEFAULT_TILE_QUALITY)
     allowed_previews = allow_preview_urls or set()
     seen: set[tuple[str, str]] = set()
     candidates: list[ResourceCandidate] = []
@@ -565,21 +571,19 @@ def _resource_candidates(source_urls: list[str], *, allow_preview_urls: set[str]
         if kind is None:
             continue
         if kind == "image":
-            full_proxy = _media_image_proxy_url(source_url, 3840, 98)
-            if include_image_proxy_variants:
-                for width, quality in ((1080, 90), (1920, 94)):
-                    proxy = _media_image_proxy_url(source_url, width, quality)
-                    add(proxy, proxy, "image")
-            add(source_url, full_proxy, "image")
-            if include_image_proxy_variants:
+            tile_proxy = _media_image_proxy_url(source_url, tile_width, tile_quality)
+            add(tile_proxy, tile_proxy, "image")
+            if include_full_images:
+                full_proxy = _media_image_proxy_url(source_url, 3840, 98)
+                add(source_url, full_proxy, "image")
                 add(full_proxy, full_proxy, "image")
-        elif kind == "video":
+        elif kind == "video" and include_video:
             add(source_url, source_url, "video")
             if include_video_proxy:
                 proxy = _media_video_proxy_url(source_url)
                 if proxy != source_url:
                     add(proxy, proxy, "video")
-        elif kind == "archive":
+        elif kind == "archive" and include_archive:
             add(source_url, source_url, "archive")
     return candidates
 
