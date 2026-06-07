@@ -7,8 +7,10 @@ import hashlib
 import json
 import os
 import shutil
+import subprocess
 import sys
 import time
+import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -32,6 +34,8 @@ DEFAULT_CATALOG_MAX_PAGES = 80
 DEFAULT_PAGE_SIZE = 100
 DEFAULT_TILE_WIDTH = 480
 DEFAULT_TILE_QUALITY = 72
+DEFAULT_RECOMPRESS_WIDTH = 480
+DEFAULT_RECOMPRESS_QUALITY = 72
 
 BASE_CATALOG_FILES = (
     "prism_index.json",
@@ -612,8 +616,58 @@ def _download_asset(
         data, content_type = response
         detected = _detect_kind(data, content_type, url, expected_kind)
         if detected == expected_kind and data:
+            if detected == "image":
+                recompressed = _recompress_image_bytes(data)
+                if recompressed is not None:
+                    data = recompressed
+                    content_type = "image/jpeg"
             return url, data, content_type, detected
     return None
+
+
+def _recompress_image_bytes(data: bytes) -> bytes | None:
+    if not _bool_env("PRISM_SEED_MEDIA_RECOMPRESS_IMAGES", True):
+        return None
+    sips = shutil.which("sips")
+    if not sips:
+        return None
+    width = max(120, _int_env("PRISM_SEED_MEDIA_RECOMPRESS_WIDTH", DEFAULT_RECOMPRESS_WIDTH))
+    quality = _clamp(_int_env("PRISM_SEED_MEDIA_RECOMPRESS_QUALITY", DEFAULT_RECOMPRESS_QUALITY), 30, 95)
+    with tempfile.TemporaryDirectory(prefix="prism-seed-media-") as tmp:
+        source = Path(tmp) / "source.bin"
+        output = Path(tmp) / "tile.jpg"
+        source.write_bytes(data)
+        try:
+            subprocess.run(
+                [
+                    sips,
+                    "-Z",
+                    str(width),
+                    "-s",
+                    "format",
+                    "jpeg",
+                    "-s",
+                    "formatOptions",
+                    str(quality),
+                    str(source),
+                    "--out",
+                    str(output),
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=True,
+                timeout=20,
+            )
+            converted = output.read_bytes()
+        except (OSError, subprocess.SubprocessError):
+            return None
+    if converted.startswith(b"\xff\xd8\xff") and 512 < len(converted) < len(data):
+        return converted
+    return None
+
+
+def _clamp(value: int, low: int, high: int) -> int:
+    return max(low, min(high, value))
 
 
 def _write_manifest_pack(candidates: list[ResourceCandidate], *, limit: int, max_bytes: int, per_file_max_bytes: int) -> tuple[int, int, int]:
