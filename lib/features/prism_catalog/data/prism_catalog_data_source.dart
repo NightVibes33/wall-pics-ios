@@ -170,32 +170,32 @@ class PrismCatalogDataSource {
     final scope = _scope(slug: slug, contentType: contentType);
 
     if (slug == 'for-you') {
-      final directFeed = await _fetchDirectApiPageFeed(
-        contentType: contentType,
-        slug: slug,
-        scope: scope,
-        refresh: refresh,
-      );
-      if (directFeed != null) {
-        return directFeed;
+      final catalogFeed = await _fetchSequentialPageFeed(contentType: contentType, scope: scope, refresh: refresh);
+      if (catalogFeed.items.isNotEmpty) {
+        return catalogFeed;
       }
-      return _fetchSequentialPageFeed(contentType: contentType, scope: scope, refresh: refresh);
+      return await _fetchDirectApiPageFeed(
+            contentType: contentType,
+            slug: slug,
+            scope: scope,
+            refresh: refresh,
+          ) ??
+          catalogFeed;
     }
     if (slug == 'newest' || slug == 'new') {
       return _fetchNewestPageFeed(contentType: contentType, scope: scope, refresh: refresh);
     }
 
-    final directFeed = await _fetchDirectApiPageFeed(
-      contentType: contentType,
-      slug: slug,
-      scope: scope,
-      refresh: refresh,
-    );
-    if (directFeed != null) {
-      return directFeed;
+    final categoryIds = await _categoryIdsFor(contentType, slug);
+    if (categoryIds.isEmpty) {
+      return _fetchDirectApiPageFeed(
+        contentType: contentType,
+        slug: slug,
+        scope: scope,
+        refresh: refresh,
+      );
     }
 
-    final categoryIds = await _categoryIdsFor(contentType, slug);
     final start = refresh ? 0 : (_offsets[scope] ?? 0);
     final pageIds = categoryIds.skip(start).take(_pageSize).toList(growable: false);
     final items = await _itemsByIds(contentType: contentType, ids: pageIds);
@@ -1236,21 +1236,21 @@ class PrismCatalogDataSource {
     bool preferCache = false,
   }) async {
     final cacheKey = PersistenceKeys.cachePrismCatalog(fileName);
+    final bundled = await _readBundledCatalogJson(fileName);
+    if (bundled != null && _looksLikeJson(bundled) && _shouldServeBundledCatalogFirst(fileName)) {
+      unawaited(_writeCachedCatalogJson(cacheKey, bundled));
+      return bundled;
+    }
+
     final cached = await _readCachedCatalogJson(cacheKey);
     if (cached != null && _looksLikeJson(cached) && (preferCache || _shouldServeCachedCatalogFirst(fileName))) {
       unawaited(_refreshCatalogJsonCache(fileName: fileName, cacheKey: cacheKey, timeout: timeout));
       return cached;
     }
 
-    if (preferCache && fileName == _homeBootstrapFile) {
-      try {
-        final bundled = await rootBundle.loadString('assets/catalog/$fileName');
-        unawaited(_writeCachedCatalogJson(cacheKey, bundled));
-        unawaited(_refreshCatalogJsonCache(fileName: fileName, cacheKey: cacheKey, timeout: timeout));
-        return bundled;
-      } catch (_) {
-        // A missing bundled bootstrap can still fall through to remote/catalog fallback.
-      }
+    if (preferCache && fileName == _homeBootstrapFile && bundled != null && _looksLikeJson(bundled)) {
+      unawaited(_writeCachedCatalogJson(cacheKey, bundled));
+      return bundled;
     }
 
     final remote = await _fetchRemoteCatalogJson(fileName: fileName, timeout: timeout);
@@ -1260,9 +1260,9 @@ class PrismCatalogDataSource {
     }
 
     try {
-      final bundled = await rootBundle.loadString('assets/catalog/$fileName');
-      unawaited(_writeCachedCatalogJson(cacheKey, bundled));
-      return bundled;
+      final fallbackBundled = bundled ?? await rootBundle.loadString('assets/catalog/$fileName');
+      unawaited(_writeCachedCatalogJson(cacheKey, fallbackBundled));
+      return fallbackBundled;
     } catch (bundleError) {
       if (cached != null && _looksLikeJson(cached)) {
         return cached;
@@ -1327,6 +1327,18 @@ class PrismCatalogDataSource {
 
   bool _shouldServeCachedCatalogFirst(String fileName) {
     return fileName != _homeBootstrapFile && fileName.startsWith('prism_') && fileName.endsWith('.json');
+  }
+
+  bool _shouldServeBundledCatalogFirst(String fileName) {
+    return fileName.startsWith('prism_') && fileName.endsWith('.json');
+  }
+
+  Future<String?> _readBundledCatalogJson(String fileName) async {
+    try {
+      return await rootBundle.loadString('assets/catalog/$fileName');
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<String?> _fetchRemoteCatalogJson({required String fileName, required Duration timeout}) async {

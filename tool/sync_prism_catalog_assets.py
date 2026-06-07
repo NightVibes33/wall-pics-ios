@@ -1,0 +1,159 @@
+#!/usr/bin/env python3
+"""Download Prism catalog JSON pages into Flutter assets for offline listing."""
+
+from __future__ import annotations
+
+import json
+import os
+import pathlib
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+from typing import Any
+
+
+OUT_DIR = pathlib.Path("assets/catalog")
+BASE_CATALOG_FILES = (
+    "prism_index.json",
+    "prism_categories.json",
+    "prism_category_lite.json",
+    "prism_category_trees.json",
+    "prism_category_ids.json",
+    "prism_item_locations.json",
+    "prism_popular_searches.json",
+    "prism_search_suggestions.json",
+    "prism_search_index.json",
+    "prism_bootstrap_home.json",
+)
+PAGE_CATALOG_PREFIXES = {
+    "prism_regular",
+    "prism_live",
+    "prism_matching",
+    "prism_double",
+    "prism_parallax",
+    "prism_profile_pictures",
+    "prism_charging_animations",
+    "prism_diy_templates",
+    "prism_live_diy_templates",
+    "prism_stickers",
+}
+
+
+def _env(name: str) -> str:
+    return os.environ.get(name, "").strip()
+
+
+def _int_env(name: str, fallback: int) -> int:
+    value = _env(name)
+    if not value:
+        return fallback
+    try:
+        return int(value)
+    except ValueError:
+        return fallback
+
+
+def _catalog_base_url() -> str:
+    for name in ("PRISM_CATALOG_BASE_URL", "CATALOG_BASE_URL", "WALL_PICS_CATALOG_BASE_URL"):
+        value = _env(name).rstrip("/")
+        if value:
+            return value
+    user_store = _env("USER_STORE_API_BASE_URL").rstrip("/")
+    if user_store:
+        return f"{user_store}/v1/catalog"
+    raise SystemExit("Missing PRISM_CATALOG_BASE_URL or USER_STORE_API_BASE_URL")
+
+
+def _url_join(base: str, path: str) -> str:
+    return urllib.parse.urljoin(base.rstrip("/") + "/", path.lstrip("/"))
+
+
+def _request_json(base: str, file_name: str) -> Any:
+    url = _url_join(base, file_name)
+    request = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "PrismCatalogAssetSync/1.0",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=60) as response:
+        body = response.read()
+    return json.loads(body.decode("utf-8"))
+
+
+def _write_json(file_name: str, payload: Any) -> int:
+    target = OUT_DIR / file_name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(payload, separators=(",", ":"), sort_keys=True), encoding="utf-8")
+    return target.stat().st_size
+
+
+def _clean_old_catalog_json() -> None:
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    for path in OUT_DIR.glob("prism_*.json"):
+        path.unlink()
+
+
+def _section_page_prefix(section: dict[str, Any]) -> str:
+    file_name = pathlib.PurePosixPath(str(section.get("file", ""))).name
+    if file_name.endswith(".json"):
+        return file_name[:-5]
+    return ""
+
+
+def main() -> int:
+    base = _catalog_base_url()
+    max_pages = _int_env("PRISM_BUNDLE_CATALOG_MAX_PAGES", 500)
+    _clean_old_catalog_json()
+
+    downloaded: list[tuple[str, int]] = []
+
+    def fetch_write(file_name: str) -> Any:
+        payload = _request_json(base, file_name)
+        size = _write_json(file_name, payload)
+        downloaded.append((file_name, size))
+        return payload
+
+    index = fetch_write("prism_index.json")
+    for file_name in BASE_CATALOG_FILES:
+        if file_name == "prism_index.json":
+            continue
+        try:
+            fetch_write(file_name)
+        except (OSError, urllib.error.HTTPError, urllib.error.URLError, json.JSONDecodeError) as error:
+            print(f"Skipping optional catalog file {file_name}: {error}", flush=True)
+
+    sections = index.get("sections") if isinstance(index, dict) else None
+    if not isinstance(sections, dict):
+        raise SystemExit("Catalog index does not contain sections")
+
+    page_files = 0
+    for section in sections.values():
+        if not isinstance(section, dict):
+            continue
+        prefix = _section_page_prefix(section)
+        last_page = section.get("last_page") or section.get("page_count")
+        try:
+            last_page_int = int(last_page)
+        except (TypeError, ValueError):
+            continue
+        if not prefix or prefix not in PAGE_CATALOG_PREFIXES or last_page_int <= 0:
+            continue
+        for page in range(1, min(last_page_int, max_pages) + 1):
+            file_name = f"{prefix}_page_{page:03d}.json"
+            fetch_write(file_name)
+            page_files += 1
+
+    total_bytes = sum(size for _, size in downloaded)
+    print(
+        "Prism catalog assets: "
+        f"{len(downloaded)} json files, {page_files} page files, {total_bytes} bytes, base={base}",
+        flush=True,
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

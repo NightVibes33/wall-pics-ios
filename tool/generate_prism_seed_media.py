@@ -500,11 +500,13 @@ def _resource_candidates(source_urls: list[str], *, allow_preview_urls: set[str]
             continue
         if kind == "image":
             full_proxy = _media_image_proxy_url(source_url, 3840, 98)
-            add(source_url, full_proxy, "image")
             if include_image_proxy_variants:
-                for width, quality in ((1080, 90), (1920, 94), (3840, 98)):
+                for width, quality in ((1080, 90), (1920, 94)):
                     proxy = _media_image_proxy_url(source_url, width, quality)
                     add(proxy, proxy, "image")
+            add(source_url, full_proxy, "image")
+            if include_image_proxy_variants:
+                add(full_proxy, full_proxy, "image")
         elif kind == "video":
             add(source_url, source_url, "video")
             if include_video_proxy:

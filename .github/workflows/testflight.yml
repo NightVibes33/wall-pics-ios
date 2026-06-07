@@ -53,11 +53,14 @@ jobs:
           PRISM_SEED_MEDIA_LIMIT: 20000
           PRISM_SEED_MEDIA_MAX_BYTES: 1800000000
           PRISM_SEED_MEDIA_PER_FILE_MAX_BYTES: 180000000
-          PRISM_SEED_MEDIA_API_MAX_PAGES: 80
-          PRISM_SEED_MEDIA_CATALOG_MAX_PAGES: 80
+          PRISM_SEED_MEDIA_API_MAX_PAGES: 500
+          PRISM_SEED_MEDIA_CATALOG_MAX_PAGES: 500
           PRISM_SEED_MEDIA_PAGE_SIZE: 100
           PRISM_SEED_MEDIA_DOWNLOAD_WORKERS: 6
-        run: python3 tool/generate_prism_seed_media.py
+          PRISM_BUNDLE_CATALOG_MAX_PAGES: 500
+        run: |
+          python3 tool/sync_prism_catalog_assets.py
+          python3 tool/generate_prism_seed_media.py
 
       - name: Flutter pub get
         run: flutter pub get
