@@ -156,7 +156,14 @@ groups = request(:get, "/v1/apps/#{app_id}/betaGroups", query: {
   'fields[betaGroups]' => 'name,isInternalGroup,hasAccessToAllBuilds,publicLinkEnabled,publicLinkId,publicLinkLimitEnabled,publicLinkLimit,publicLink,feedbackEnabled',
   'limit' => '200'
 })
-external_groups = groups.fetch('data', []).reject { |group| attributes(group)['isInternalGroup'] }
+all_groups = groups.fetch('data', [])
+puts 'Beta groups:'
+all_groups.each do |beta_group|
+  gattrs = attributes(beta_group)
+  puts "- #{gattrs['name']} internal=#{gattrs['isInternalGroup']} accessAllBuilds=#{gattrs['hasAccessToAllBuilds']} publicLinkEnabled=#{gattrs['publicLinkEnabled']}"
+end
+
+external_groups = all_groups.reject { |group| attributes(group)['isInternalGroup'] }
 group = external_groups.find { |candidate| attributes(candidate)['name'] == GROUP_NAME }
 
 unless group
@@ -180,6 +187,7 @@ unless group
   }
   puts "Creating external beta group: #{GROUP_NAME}"
   group = request(:post, '/v1/betaGroups', body: body).fetch('data')
+  all_groups << group
 end
 
 group_id = group.fetch('id')
@@ -229,6 +237,22 @@ def beta_review_submission(build_id)
   [code, attributes(response.fetch('data'))]
 end
 
+def attach_build_to_group(build, beta_group)
+  gattrs = attributes(beta_group)
+  code, response = request_optional(:post, "/v1/betaGroups/#{beta_group.fetch('id')}/relationships/builds", body: {
+    data: [{ type: 'builds', id: build.fetch('id') }]
+  })
+  build_version = attributes(build)['version']
+  if code.between?(200, 299) || code == 409
+    puts "Ensured build #{build_version} is available to beta group #{gattrs['name']} (internal=#{gattrs['isInternalGroup']})."
+    true
+  else
+    warn "Could not attach build #{build_version} to beta group #{gattrs['name']} (internal=#{gattrs['isInternalGroup']}); HTTP #{code}"
+    warn JSON.pretty_generate(response)
+    false
+  end
+end
+
 if latest_valid_build
   latest_attrs = attributes(latest_valid_build)
   latest_detail = build_beta_detail(latest_valid_build.fetch('id'))
@@ -263,14 +287,16 @@ if latest_valid_build
 end
 
 if latest_valid_build
-  puts 'Adding latest valid build to beta group if not already attached.'
-  begin
-    request(:post, "/v1/betaGroups/#{group_id}/relationships/builds", body: {
-      data: [{ type: 'builds', id: latest_valid_build.fetch('id') }]
-    })
-  rescue SystemExit
-    warn 'Could not attach the build to the external group. This commonly means Beta App Review/export compliance/test info is still pending in App Store Connect.'
-    raise
+  puts 'Adding latest valid build to every beta group if not already attached.'
+  failed_external_groups = []
+  all_groups.uniq { |beta_group| beta_group.fetch('id') }.each do |beta_group|
+    ok = attach_build_to_group(latest_valid_build, beta_group)
+    failed_external_groups << attributes(beta_group)['name'] if !ok && !attributes(beta_group)['isInternalGroup']
+  end
+  if failed_external_groups.any?
+    warn "Could not attach the build to these external beta groups: #{failed_external_groups.join(', ')}"
+    warn 'This commonly means Beta App Review/export compliance/test information is still pending in App Store Connect.'
+    exit 2
   end
 end
 
