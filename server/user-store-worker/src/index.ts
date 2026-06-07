@@ -9,6 +9,7 @@ interface Env {
   CATALOG_GITHUB_REF?: string;
   CATALOG_GITHUB_PATH?: string;
   CATALOG_CACHE_TTL_SECONDS?: string;
+  CATALOG_GITHUB_FIRST?: string;
   CATALOG_EDGE_BASE_URL?: string;
   CATALOG_EDGE_PATH?: string;
   CATALOG_BUCKET?: R2Bucket;
@@ -276,6 +277,17 @@ function isPublicHostname(host: string): boolean {
 }
 
 async function catalogStorageResponse(fileName: string, env: Env): Promise<Response | null> {
+  const githubFirst = booleanValue(env.CATALOG_GITHUB_FIRST, true);
+  if (githubFirst) {
+    const githubResponse = await catalogGithubResponse(fileName, env);
+    if (githubResponse?.ok) {
+      return githubResponse;
+    }
+    if (githubResponse && githubResponse.status !== 404) {
+      return githubResponse;
+    }
+  }
+
   const bucket = env.CATALOG_BUCKET;
   if (bucket) {
     const object = await bucket.get(catalogObjectKey(fileName, env));
@@ -289,14 +301,18 @@ async function catalogStorageResponse(fileName: string, env: Env): Promise<Respo
   const edgeBaseUrl = stringValue(env.CATALOG_EDGE_BASE_URL);
   if (edgeBaseUrl) {
     const edgeResponse = await fetch(catalogEdgeUrl(fileName, env));
-    if (edgeResponse.status === 404) {
-      return null;
-    }
     if (edgeResponse.ok) {
       return edgeResponse;
     }
   }
 
+  if (!githubFirst) {
+    return catalogGithubResponse(fileName, env);
+  }
+  return null;
+}
+
+async function catalogGithubResponse(fileName: string, env: Env): Promise<Response | null> {
   const githubResponse = await fetch(catalogRawUrl(fileName, env), { headers: catalogGithubHeaders(env) });
   if (githubResponse.status === 404) {
     return null;
@@ -914,6 +930,12 @@ function stringValue(value: unknown): string {
 function numberValue(value: unknown): number {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function booleanValue(value: unknown, fallback = false): boolean {
+  const normalized = stringValue(value).toLowerCase();
+  if (normalized.length === 0) return fallback;
+  return ['1', 'true', 'yes', 'on'].includes(normalized);
 }
 
 function clampNumber(value: number, min: number, max: number): number {
