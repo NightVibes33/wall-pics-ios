@@ -2568,6 +2568,25 @@ bool _isCatalogImageAssetUrl(String value) {
 
 bool _isActualCatalogImageUrl(String value) => _isCatalogImageAssetUrl(value) && !_isCatalogPreviewAssetUrl(value);
 
+String _catalogAssetPathProbe(String value) {
+  final raw = value.trim();
+  if (raw.isEmpty) return '';
+  final uri = Uri.tryParse(raw);
+  final probes = <String>[uri?.path ?? raw];
+  final src = uri?.queryParameters['src'];
+  if (src != null && src.trim().isNotEmpty) {
+    final srcUri = Uri.tryParse(src.trim());
+    probes.add(srcUri?.path ?? src.trim());
+  }
+  return Uri.decodeComponent(probes.join('?')).toLowerCase();
+}
+
+bool _hasWallPicsBrandPathMarker(String value) {
+  final probe = _catalogAssetPathProbe(value);
+  if (probe.isEmpty) return false;
+  return RegExp(r'(^|[^a-z0-9])wallpics([^a-z0-9]|$)').hasMatch(probe);
+}
+
 bool _isCatalogPreviewAssetUrl(String value) {
   final raw = value.trim();
   if (raw.isEmpty) return false;
@@ -2591,18 +2610,17 @@ bool _isCatalogPreviewAssetUrl(String value) {
       previewProbe.contains('poster') ||
       previewProbe.contains('watermark') ||
       previewProbe.contains('brand') ||
-      previewProbe.contains('logo');
+      previewProbe.contains('logo') ||
+      _hasWallPicsBrandPathMarker(raw);
 }
 
 bool _isCatalogBrandedAssetUrl(String value) {
-  final raw = value.trim();
-  if (raw.isEmpty) return false;
-  final uri = Uri.tryParse(raw);
-  final decoded = Uri.decodeComponent(<String>[
-    uri?.path ?? raw,
-    uri?.query ?? '',
-  ].join('?')).toLowerCase();
-  return decoded.contains('watermark') || decoded.contains('brand') || decoded.contains('logo');
+  final probe = _catalogAssetPathProbe(value);
+  if (probe.isEmpty) return false;
+  return probe.contains('watermark') ||
+      probe.contains('brand') ||
+      probe.contains('logo') ||
+      _hasWallPicsBrandPathMarker(value);
 }
 
 bool _isProxyableCatalogVideoUrl(String value) {

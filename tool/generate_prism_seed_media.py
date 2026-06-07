@@ -77,7 +77,6 @@ PREVIEW_MARKERS = (
     "watermark",
     "brand",
     "logo",
-    "wallpics",
 )
 
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".gif")
@@ -374,9 +373,24 @@ def _preview_probe(url: str) -> str:
     )
 
 
+def _path_brand_probe(raw_url: str) -> str:
+    parsed = urllib.parse.urlparse(raw_url)
+    probes = [parsed.path]
+    query = urllib.parse.parse_qs(parsed.query)
+    src = (query.get("src") or [""])[0]
+    if src:
+        probes.append(urllib.parse.urlparse(src).path)
+    return urllib.parse.unquote("?".join(probes).lower())
+
+
+def _has_wallpics_brand_path_marker(raw_url: str) -> bool:
+    probe = _path_brand_probe(raw_url)
+    return any(token in probe for token in ("/wallpics/", "wallpics_", "wallpics-", "wallpics."))
+
+
 def _is_catalog_preview_url(raw_url: str) -> bool:
     probe = _preview_probe(raw_url)
-    return any(marker in probe for marker in PREVIEW_MARKERS)
+    return any(marker in probe for marker in PREVIEW_MARKERS) or _has_wallpics_brand_path_marker(raw_url)
 
 
 def _resource_kind_from_url(raw_url: str, *, allow_preview: bool = False) -> str | None:
