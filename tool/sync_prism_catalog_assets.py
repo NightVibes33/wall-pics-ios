@@ -97,10 +97,45 @@ def _request_json(base: str, file_name: str) -> Any:
     return json.loads(body.decode("utf-8"))
 
 
+def _catalog_asset_path_probe(raw_url: str) -> str:
+    parsed = urllib.parse.urlparse(raw_url)
+    probes = [parsed.path]
+    query = urllib.parse.parse_qs(parsed.query)
+    src = (query.get("src") or [""])[0]
+    if src:
+        probes.append(urllib.parse.urlparse(src).path)
+    return urllib.parse.unquote("?".join(probes).lower())
+
+
+def _has_wallpics_brand_path_marker(raw_url: str) -> bool:
+    probe = _catalog_asset_path_probe(raw_url)
+    return any(token in probe for token in ("/wallpics/", "wallpics_", "wallpics-", "wallpics."))
+
+
+def _is_branded_asset_string(value: str) -> bool:
+    raw = value.strip()
+    if not raw.startswith(("http://", "https://")):
+        return False
+    parsed = urllib.parse.urlparse(raw)
+    decoded = urllib.parse.unquote((parsed.path + "?" + parsed.query).lower())
+    return any(marker in decoded for marker in ("watermark", "brand", "logo")) or _has_wallpics_brand_path_marker(raw)
+
+
+def _sanitize_payload(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _sanitize_payload(entry) for key, entry in value.items()}
+    if isinstance(value, list):
+        sanitized = [_sanitize_payload(entry) for entry in value]
+        return [entry for entry in sanitized if not (isinstance(entry, str) and entry == "")]
+    if isinstance(value, str) and _is_branded_asset_string(value):
+        return ""
+    return value
+
+
 def _write_json(file_name: str, payload: Any) -> int:
     target = OUT_DIR / file_name
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(payload, separators=(",", ":"), sort_keys=True), encoding="utf-8")
+    target.write_text(json.dumps(_sanitize_payload(payload), separators=(",", ":"), sort_keys=True), encoding="utf-8")
     return target.stat().st_size
 
 

@@ -23,6 +23,7 @@ KEY = b"prism-catalog-seed-media-v1"
 LEGACY_OUT_PATH = Path("assets/catalog/prism_seed_media.dbx")
 MANIFEST_PATH = Path("assets/catalog/prism_seed_media_manifest.json")
 MEDIA_DIR = Path("assets/catalog/prism_seed_media")
+LOCAL_CATALOG_DIR = Path("assets/catalog")
 DEFAULT_LIMIT = 20_000
 DEFAULT_MAX_BYTES = 1_800_000_000
 PER_FILE_MAX_BYTES = 180_000_000
@@ -295,12 +296,56 @@ def _payload_items(payload: Any) -> list[Any]:
     return []
 
 
+def _request_local_json(file_name: str) -> Any | None:
+    path = LOCAL_CATALOG_DIR / file_name
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def _local_catalog_payloads(catalog_max_pages: int, page_size: int) -> list[Any]:
+    if not (LOCAL_CATALOG_DIR / "prism_index.json").exists():
+        return []
+    payloads: list[Any] = []
+    seen_files: set[str] = set()
+
+    def add(file_name: str) -> Any | None:
+        if file_name in seen_files:
+            return None
+        seen_files.add(file_name)
+        payload = _request_local_json(file_name)
+        if payload is not None:
+            payloads.append(payload)
+        return payload
+
+    for name in BASE_CATALOG_FILES:
+        add(name)
+    for prefix in CATALOG_PREFIXES:
+        for page in range(1, catalog_max_pages + 1):
+            payload = add(f"{prefix}_page_{page:03d}.json")
+            if payload is None:
+                break
+            items = _payload_items(payload)
+            has_more = isinstance(payload, dict) and payload.get("has_more", False) is True
+            if not has_more and len(items) < page_size:
+                break
+    print(f"Using local Prism catalog assets: {len(payloads)} payloads", flush=True)
+    return payloads
+
+
 def _catalog_payloads() -> list[Any]:
-    headers = _wallpics_headers()
     payloads: list[Any] = []
     catalog_max_pages = _int_env("PRISM_SEED_MEDIA_CATALOG_MAX_PAGES", DEFAULT_CATALOG_MAX_PAGES)
     api_max_pages = _int_env("PRISM_SEED_MEDIA_API_MAX_PAGES", DEFAULT_API_MAX_PAGES)
     page_size = _int_env("PRISM_SEED_MEDIA_PAGE_SIZE", DEFAULT_PAGE_SIZE)
+    local_payloads = _local_catalog_payloads(catalog_max_pages, page_size)
+    if local_payloads:
+        return local_payloads
+
+    headers = _wallpics_headers()
     bases = [_env("PRISM_CATALOG_BASE_URL"), _env("CATALOG_BASE_URL"), _env("WALL_PICS_CATALOG_BASE_URL")]
     user_store = _env("USER_STORE_API_BASE_URL")
     if user_store:

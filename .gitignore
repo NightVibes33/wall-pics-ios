@@ -65,5 +65,6 @@ infra/cloudflare/worker/.wrangler/**
 AuthKey.p8
 dead_code_report.html
 web/node_modules/**
-# Catalog payloads live in the private catalog repo and are served through the API.
-assets/catalog/*.json
+# Committed catalog JSON is bundled into the app; encrypted media files are generated in CI.
+assets/catalog/prism_seed_media_manifest.json
+assets/catalog/prism_seed_media/*.bin

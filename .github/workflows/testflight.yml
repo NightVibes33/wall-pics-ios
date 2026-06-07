@@ -59,7 +59,11 @@ jobs:
           PRISM_SEED_MEDIA_DOWNLOAD_WORKERS: 6
           PRISM_BUNDLE_CATALOG_MAX_PAGES: 500
         run: |
-          python3 tool/sync_prism_catalog_assets.py
+          if [ -f assets/catalog/prism_index.json ]; then
+            echo "Using committed Prism catalog JSON assets"
+          else
+            python3 tool/sync_prism_catalog_assets.py
+          fi
           python3 tool/generate_prism_seed_media.py
 
       - name: Flutter pub get
