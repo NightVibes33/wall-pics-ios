@@ -158,7 +158,11 @@ def main() -> int:
             continue
         for page in range(1, min(last_page_int, max_pages) + 1):
             file_name = f"{prefix}_page_{page:03d}.json"
-            fetch_write(file_name)
+            try:
+                fetch_write(file_name)
+            except (OSError, urllib.error.HTTPError, urllib.error.URLError, json.JSONDecodeError) as error:
+                print(f"Stopping {prefix} catalog sync at missing page {file_name}: {error}", flush=True)
+                break
             page_files += 1
 
     total_bytes = sum(size for _, size in downloaded)

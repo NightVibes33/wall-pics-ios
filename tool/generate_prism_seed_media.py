@@ -388,9 +388,14 @@ def _has_wallpics_brand_path_marker(raw_url: str) -> bool:
     return any(token in probe for token in ("/wallpics/", "wallpics_", "wallpics-", "wallpics."))
 
 
+def _is_catalog_branded_url(raw_url: str) -> bool:
+    probe = _preview_probe(raw_url)
+    return any(marker in probe for marker in ("watermark", "brand", "logo")) or _has_wallpics_brand_path_marker(raw_url)
+
+
 def _is_catalog_preview_url(raw_url: str) -> bool:
     probe = _preview_probe(raw_url)
-    return any(marker in probe for marker in PREVIEW_MARKERS) or _has_wallpics_brand_path_marker(raw_url)
+    return any(marker in probe for marker in PREVIEW_MARKERS) or _is_catalog_branded_url(raw_url)
 
 
 def _resource_kind_from_url(raw_url: str, *, allow_preview: bool = False) -> str | None:
@@ -400,6 +405,8 @@ def _resource_kind_from_url(raw_url: str, *, allow_preview: bool = False) -> str
     parsed = urllib.parse.urlparse(url)
     lowered = urllib.parse.unquote((parsed.path + "?" + parsed.query).lower())
     if lowered.endswith(UNSUPPORTED_EXTENSIONS):
+        return None
+    if _is_catalog_branded_url(url):
         return None
     if not allow_preview and _is_catalog_preview_url(url):
         return None
