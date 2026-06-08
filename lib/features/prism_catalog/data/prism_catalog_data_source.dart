@@ -1494,8 +1494,11 @@ class PrismCatalogHomeBootstrapSection {
     final items = rawItems is List
         ? rawItems.whereType<Map>().map((row) {
             final item = _PrismItem.fromJson(_asMap(row), contentType);
+            if (_isBlockedCatalogItem(item)) {
+              return null;
+            }
             return PrismFeedItem(id: item.id, wallpaper: item.toWallpaper());
-          }).where((item) => item.id.trim().isNotEmpty).toList(growable: false)
+          }).whereType<FeedItemEntity>().where((item) => item.id.trim().isNotEmpty).toList(growable: false)
         : const <FeedItemEntity>[];
 
     return PrismCatalogHomeBootstrapSection(
@@ -2398,11 +2401,25 @@ void setFirstNonEmpty(Map<String, dynamic> item, String key, Iterable<Object?> v
   return (width: (width * scale).round(), height: (height * scale).round());
 }
 
+bool _isBlockedCatalogItem(_PrismItem item) {
+  if (_isBlockedCatalogLabel(item.name) ||
+      _isBlockedCatalogLabel(item.slug) ||
+      _isBlockedCatalogLabel(item.description)) {
+    return true;
+  }
+  return item.categoryNames.any(_isBlockedCatalogLabel) ||
+      item.categorySlugs.any(_isBlockedCatalogLabel) ||
+      item.tags.any(_isBlockedCatalogLabel);
+}
+
 List<_PrismItem> _dedupeItems(Iterable<_PrismItem> items) {
   final seenIds = <String>{};
   final seenUrls = <String>{};
   final deduped = <_PrismItem>[];
   for (final item in items) {
+    if (_isBlockedCatalogItem(item)) {
+      continue;
+    }
     final idKey = item.id.trim().isEmpty ? '' : '${item.contentType}:${item.id.trim()}';
     final urlKey = _firstString(<Object?>[item.downloadUrl, item.previewUrl, item.thumbnailUrl]).trim().toLowerCase();
     final allowSharedUrl = item.contentType == PrismCatalogDataSource.matchingContentType ||
@@ -2644,6 +2661,8 @@ bool _isFastPrefetchableUrl(String value) {
 }
 
 const Set<String> _blockedCatalogTerms = <String>{
+  'wallpics',
+  'wallpic',
   'desktop',
   'macbook',
   'computer',

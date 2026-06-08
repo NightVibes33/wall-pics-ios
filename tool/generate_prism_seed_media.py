@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -413,6 +414,39 @@ def _catalog_payloads() -> list[Any]:
     return payloads
 
 
+
+def _normalize_label(value: Any) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", str(value or "").lower())).strip()
+
+
+def _is_blocked_catalog_label(value: Any) -> bool:
+    normalized = _normalize_label(value)
+    if not normalized:
+        return False
+    compact = normalized.replace(" ", "")
+    tokens = set(normalized.split())
+    blocked_terms = {"wallpics", "wallpic", "desktop", "macbook", "computer", "monitor", "tablet", "ipad", "widescreen"}
+    return any(term in tokens or compact == term for term in blocked_terms)
+
+
+def _is_blocked_catalog_item(item: Any) -> bool:
+    if not isinstance(item, dict):
+        return False
+    if any(_is_blocked_catalog_label(item.get(key)) for key in ("name", "slug", "description")):
+        return True
+    for category in item.get("categories") or []:
+        if not isinstance(category, dict):
+            continue
+        if any(_is_blocked_catalog_label(category.get(key)) for key in ("name", "slug", "description")):
+            return True
+        child = category.get("child")
+        if isinstance(child, dict) and any(_is_blocked_catalog_label(child.get(key)) for key in ("name", "slug", "description")):
+            return True
+    for tag in item.get("tags") or []:
+        if isinstance(tag, dict) and _is_blocked_catalog_label(tag.get("name")):
+            return True
+    return False
+
 def _preview_probe(url: str) -> str:
     parsed = urllib.parse.urlparse(url)
     decoded = urllib.parse.unquote((parsed.path + "?" + parsed.query).lower())
@@ -584,7 +618,20 @@ def _all_resource_urls(payloads: list[Any]) -> tuple[list[str], set[str]]:
         if allow_preview:
             allow_preview_urls.add(url)
 
+    filtered_payloads: list[Any] = []
     for payload in payloads:
+        if isinstance(payload, dict):
+            cloned = dict(payload)
+            items = [item for item in _payload_items(payload) if not _is_blocked_catalog_item(item)]
+            if "wallpapers" in cloned:
+                cloned["wallpapers"] = items
+            elif "items" in cloned:
+                cloned["items"] = items
+            filtered_payloads.append(cloned)
+        else:
+            filtered_payloads.append(payload)
+
+    for payload in filtered_payloads:
         for item in _payload_items(payload):
             for url in _item_display_preview_urls(item):
                 add(url, allow_preview=True)
@@ -592,7 +639,7 @@ def _all_resource_urls(payloads: list[Any]) -> tuple[list[str], set[str]]:
                 for url in _parallax_preview_urls(item):
                     add(url, allow_preview=True)
 
-    for payload in payloads:
+    for payload in filtered_payloads:
         for value in _walk(payload):
             if isinstance(value, str):
                 add(value)

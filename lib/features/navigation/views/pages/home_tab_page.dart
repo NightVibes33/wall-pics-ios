@@ -23,7 +23,6 @@ import 'package:Prism/theme/jam_icons_icons.dart';
 import 'package:auto_route/auto_route.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:internet_connection_checker/internet_connection_checker.dart';
 
 Widget? _seededCatalogImage(
@@ -103,7 +102,7 @@ class _HomeTabPageState extends State<HomeTabPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final Set<String> _precachedUrls = <String>{};
-  final Set<String> _precachedVideoUrls = <String>{};
+  _HomeDashboardData? _lastPrecachingData;
 
   late Future<_HomeDashboardData> _dashboardFuture;
   bool _hasConnection = true;
@@ -456,6 +455,10 @@ class _HomeTabPageState extends State<HomeTabPage> {
   }
 
   void _precacheDashboardMedia(_HomeDashboardData data) {
+    if (identical(_lastPrecachingData, data)) {
+      return;
+    }
+    _lastPrecachingData = data;
     final displayItems = data.sections
         .expand((section) => section.items)
         .expand((item) => WallpaperTile.expandMatchingItemsForDisplay(<FeedItemEntity>[item]))
@@ -470,17 +473,10 @@ class _HomeTabPageState extends State<HomeTabPage> {
           return thumbnailUrl;
         })
         .where((url) => url.isNotEmpty)
-        .take(360)
+        .take(24)
         .where(_precachedUrls.add)
         .toList(growable: false);
-    final videoUrls = displayItems
-        .map(WallpaperTile.videoUrlForItem)
-        .map((url) => url.trim())
-        .where((url) => url.isNotEmpty)
-        .take(72)
-        .where(_precachedVideoUrls.add)
-        .toList(growable: false);
-    if (imageUrls.isEmpty && videoUrls.isEmpty) {
+    if (imageUrls.isEmpty) {
       return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -492,12 +488,6 @@ class _HomeTabPageState extends State<HomeTabPage> {
           continue;
         }
         unawaited(precacheImage(CachedNetworkImageProvider(url), context).catchError((Object _) {}));
-      }
-      for (final url in videoUrls) {
-        if (PrismSeedMediaStore.instance.hasUrlSync(url)) {
-          continue;
-        }
-        unawaited(DefaultCacheManager().downloadFile(url).timeout(const Duration(seconds: 24)).then((_) {}).catchError((Object _) {}));
       }
     });
   }
