@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import pathlib
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -121,9 +122,60 @@ def _is_branded_asset_string(value: str) -> bool:
     return any(marker in decoded for marker in ("watermark", "brand", "logo")) or _has_wallpics_brand_path_marker(raw)
 
 
+def _normalize_label(value: Any) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", str(value or "").lower())).strip()
+
+
+def _is_blocked_catalog_label(value: Any) -> bool:
+    normalized = _normalize_label(value)
+    if not normalized:
+        return False
+    compact = normalized.replace(" ", "")
+    tokens = set(normalized.split())
+    blocked_terms = {"wallpics", "wallpic", "desktop", "macbook", "computer", "monitor", "tablet", "ipad", "widescreen"}
+    return any(term in tokens or compact == term for term in blocked_terms)
+
+
+def _is_blocked_category(row: Any) -> bool:
+    if not isinstance(row, dict):
+        return False
+    return any(_is_blocked_catalog_label(row.get(key)) for key in ("name", "slug", "description", "extended_name", "parent_slug"))
+
+
+def _is_blocked_catalog_item(item: Any) -> bool:
+    if not isinstance(item, dict):
+        return False
+    if any(_is_blocked_catalog_label(item.get(key)) for key in ("name", "slug", "description")):
+        return True
+    for category in item.get("categories") or []:
+        if not isinstance(category, dict):
+            continue
+        if _is_blocked_category(category):
+            return True
+        child = category.get("child")
+        while isinstance(child, dict):
+            if _is_blocked_category(child):
+                return True
+            child = child.get("child")
+    for tag in item.get("tags") or []:
+        if isinstance(tag, dict) and _is_blocked_catalog_label(tag.get("name")):
+            return True
+        if isinstance(tag, str) and _is_blocked_catalog_label(tag):
+            return True
+    return False
+
+
 def _sanitize_payload(value: Any) -> Any:
     if isinstance(value, dict):
-        return {key: _sanitize_payload(entry) for key, entry in value.items()}
+        sanitized: dict[str, Any] = {}
+        for key, entry in value.items():
+            if key in {"wallpapers", "items", "data", "results", "profile_pictures"} and isinstance(entry, list):
+                sanitized[key] = [_sanitize_payload(row) for row in entry if not _is_blocked_catalog_item(row)]
+            elif key == "categories" and isinstance(entry, list):
+                sanitized[key] = [_sanitize_payload(row) for row in entry if not _is_blocked_category(row)]
+            else:
+                sanitized[key] = _sanitize_payload(entry)
+        return sanitized
     if isinstance(value, list):
         sanitized = [_sanitize_payload(entry) for entry in value]
         return [entry for entry in sanitized if not (isinstance(entry, str) and entry == "")]

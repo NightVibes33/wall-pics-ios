@@ -140,7 +140,7 @@ class PrismCatalogDataSource {
     profilePictureContentType: 'profile_pictures',
   };
 
-  final LazyFileCache _catalogCache = LazyFileCache('prism_catalog_cache');
+  final LazyFileCache _catalogCache = LazyFileCache('prism_catalog_cache_v2');
   final Map<String, Future<_PrismCatalogPage>> _pageFutures = <String, Future<_PrismCatalogPage>>{};
   final Map<String, Future<_PrismCatalogPage?>> _directApiPageFutures = <String, Future<_PrismCatalogPage?>>{};
   final Map<String, Future<List<_PrismItem>>> _compactCatalogFutures = <String, Future<List<_PrismItem>>>{};
@@ -435,6 +435,8 @@ class PrismCatalogDataSource {
           _hiddenContentTypes.contains(contentType) ||
           _isBlockedCatalogLabel(name) ||
           _isBlockedCatalogLabel(slug) ||
+          _isBlockedCatalogLabel(_string(row['description'])) ||
+          _isBlockedCatalogLabel(_string(row['extended_name'])) ||
           _isBlockedCatalogLabel(_string(row['parent_slug']))) {
         continue;
       }
@@ -2409,7 +2411,10 @@ bool _isBlockedCatalogItem(_PrismItem item) {
   }
   return item.categoryNames.any(_isBlockedCatalogLabel) ||
       item.categorySlugs.any(_isBlockedCatalogLabel) ||
-      item.tags.any(_isBlockedCatalogLabel);
+      item.tags.any(_isBlockedCatalogLabel) ||
+      item.mediaAssetUrls.any(_isCatalogBrandedAssetUrl) ||
+      item.pairedPreviewUrls.any(_isCatalogBrandedAssetUrl) ||
+      item.pairedDownloadUrls.any(_isCatalogBrandedAssetUrl);
 }
 
 List<_PrismItem> _dedupeItems(Iterable<_PrismItem> items) {
