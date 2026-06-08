@@ -198,6 +198,7 @@ def create_optional(path, body, label)
     response.fetch('data')
   elsif code == 409 || code == 422
     puts "#{label} already exists or cannot be recreated right now; HTTP #{code}."
+    puts JSON.pretty_generate(response)
     nil
   else
     warn "Could not create #{label}; HTTP #{code}"
@@ -275,10 +276,39 @@ def preferred_english_record(records)
   records.find { |record| attributes(record)['locale'].to_s == 'en-US' }
 end
 
+def localization_update_attributes(create_attributes)
+  create_attributes.reject { |key, _| key.to_s == 'locale' }
+end
+
+def records_from_relationship(relationship_path, resource_path, fields_key, fields)
+  linkages = list_all(relationship_path, query: { 'limit' => '200' })
+  linkages.map do |linkage|
+    id = linkage.fetch('id')
+    code, response = request(:get, "#{resource_path}/#{id}", query: { fields_key => fields }, fatal: false)
+    if code.between?(200, 299) && response['data']
+      response.fetch('data')
+    else
+      warn "Could not read related record #{resource_path}/#{id}; HTTP #{code}"
+      warn JSON.pretty_generate(response)
+      nil
+    end
+  end.compact
+end
+
+def relationship_linkage_ids(path)
+  list_all(path, query: { 'limit' => '200' }).map { |linkage| linkage.fetch('id') }
+rescue StandardError => e
+  warn "Could not read relationship #{path}: #{e}"
+  []
+end
+
 def ensure_subscription_group_localization(group_id, name)
-  records = list_all("/v1/subscriptionGroups/#{group_id}/subscriptionGroupLocalizations", query: {
-    'fields[subscriptionGroupLocalizations]' => 'name,locale'
-  })
+  records = records_from_relationship(
+    "/v1/subscriptionGroups/#{group_id}/relationships/subscriptionGroupLocalizations",
+    '/v1/subscriptionGroupLocalizations',
+    'fields[subscriptionGroupLocalizations]',
+    'name,locale'
+  )
   existing = preferred_english_record(records)
   body = {
     data: {
@@ -293,7 +323,7 @@ def ensure_subscription_group_localization(group_id, name)
       data: {
         type: 'subscriptionGroupLocalizations',
         id: id,
-        attributes: body[:data][:attributes]
+        attributes: localization_update_attributes(body[:data][:attributes])
       }
     }, 'subscription group localization')
   else
@@ -316,9 +346,12 @@ def patch_subscription_details(subscription_id, spec)
 end
 
 def ensure_subscription_localization(subscription_id, spec)
-  records = list_all("/v1/subscriptions/#{subscription_id}/subscriptionLocalizations", query: {
-    'fields[subscriptionLocalizations]' => 'name,locale,description'
-  })
+  records = records_from_relationship(
+    "/v1/subscriptions/#{subscription_id}/relationships/subscriptionLocalizations",
+    '/v1/subscriptionLocalizations',
+    'fields[subscriptionLocalizations]',
+    'name,locale,description'
+  )
   existing = preferred_english_record(records)
   body = {
     data: {
@@ -333,7 +366,7 @@ def ensure_subscription_localization(subscription_id, spec)
       data: {
         type: 'subscriptionLocalizations',
         id: id,
-        attributes: body[:data][:attributes]
+        attributes: localization_update_attributes(body[:data][:attributes])
       }
     }, "subscription localization #{spec[:product_id]}")
   else
@@ -356,9 +389,12 @@ def patch_iap_details(iap_id)
 end
 
 def ensure_iap_localization(iap_id, spec)
-  records = list_all("/v2/inAppPurchases/#{iap_id}/inAppPurchaseLocalizations", query: {
-    'fields[inAppPurchaseLocalizations]' => 'name,locale,description'
-  })
+  records = records_from_relationship(
+    "/v2/inAppPurchases/#{iap_id}/relationships/inAppPurchaseLocalizations",
+    '/v1/inAppPurchaseLocalizations',
+    'fields[inAppPurchaseLocalizations]',
+    'name,locale,description'
+  )
   existing = preferred_english_record(records)
   body = {
     data: {
@@ -373,7 +409,7 @@ def ensure_iap_localization(iap_id, spec)
       data: {
         type: 'inAppPurchaseLocalizations',
         id: id,
-        attributes: body[:data][:attributes]
+        attributes: localization_update_attributes(body[:data][:attributes])
       }
     }, "IAP localization #{spec[:product_id]}")
   else
@@ -470,13 +506,16 @@ def ensure_iap_price_schedule(iap_id, product_id, target_price)
     'limit[automaticPrices]' => '50'
   }, fatal: false)
   if code.between?(200, 299) && schedule['data']
+    schedule_id = schedule.fetch('data').fetch('id')
     relationship_ids = []
     %w[manualPrices automaticPrices].each do |relationship_name|
-      relationship_ids.concat(Array(schedule.dig('data', 'relationships', relationship_name, 'data')).map { |item| item.fetch('id') })
+      embedded_ids = Array(schedule.dig('data', 'relationships', relationship_name, 'data')).map { |item| item.fetch('id') }
+      relationship_ids.concat(embedded_ids)
+      relationship_ids.concat(relationship_linkage_ids("/v1/inAppPurchasePriceSchedules/#{schedule_id}/relationships/#{relationship_name}"))
     end
     included_ids = schedule.fetch('included', []).select { |item| item['type'].to_s == 'inAppPurchasePrices' }.map { |item| item.fetch('id') }
     price_count = (relationship_ids + included_ids).uniq.size
-    puts "IAP #{product_id} has an existing price schedule with #{price_count} linked price records."
+    puts "IAP #{product_id} has existing price schedule #{schedule_id} with #{price_count} linked price records."
     return if price_count.positive?
 
     puts "IAP #{product_id} price schedule exists but has no linked price records; attempting to set target schedule."
