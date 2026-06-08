@@ -16,6 +16,7 @@ GROUP_REFERENCE_NAME = ENV.fetch('PRISM_SUBSCRIPTION_GROUP_NAME', 'Prism Pro')
 BASE_TERRITORY = ENV.fetch('PRISM_PRICE_TERRITORY', 'USA')
 REVIEW_SCREENSHOT_PATH = ENV.fetch('PRISM_REVIEW_SCREENSHOT_PATH', File.expand_path('assets/prism_pro_review.png', __dir__))
 REVIEW_NOTE = 'Prism Pro unlocks unlimited 4K downloads, Live Photos, matching sets, 3D Spatial, and profile pictures. No special login is required for App Review.'
+IAP_REVIEW_NOTE = 'Prism Pro Lifetime unlocks the same Pro features without renewal.'
 
 SUBSCRIPTIONS = [
   {
@@ -205,6 +206,22 @@ def create_optional(path, body, label)
   end
 end
 
+def patch_optional(path, body, label)
+  code, response = request(:patch, path, body: body, fatal: false)
+  if code.between?(200, 299) && response['data']
+    puts "Updated #{label}: #{JSON.generate(attributes(response.fetch('data')).merge('id' => response.fetch('data').fetch('id')))}"
+    response.fetch('data')
+  elsif code == 409 || code == 422
+    puts "#{label} could not be updated right now; HTTP #{code}."
+    puts JSON.pretty_generate(response)
+    nil
+  else
+    warn "Could not update #{label}; HTTP #{code}"
+    warn JSON.pretty_generate(response)
+    nil
+  end
+end
+
 def submit_optional(path, body, label)
   code, response = request(:post, path, body: body, fatal: false)
   if code.between?(200, 299) && response['data']
@@ -252,6 +269,116 @@ def create_iap_availability(iap_id, product_id)
       }
     }
   }, "IAP availability #{product_id}")
+end
+
+def preferred_english_record(records)
+  records.find { |record| attributes(record)['locale'].to_s == 'en-US' }
+end
+
+def ensure_subscription_group_localization(group_id, name)
+  records = list_all("/v1/subscriptionGroups/#{group_id}/subscriptionGroupLocalizations", query: {
+    'fields[subscriptionGroupLocalizations]' => 'name,locale'
+  })
+  existing = preferred_english_record(records)
+  body = {
+    data: {
+      type: 'subscriptionGroupLocalizations',
+      attributes: { name: name, locale: 'en-US' },
+      relationships: { subscriptionGroup: { data: { type: 'subscriptionGroups', id: group_id } } }
+    }
+  }
+  if existing
+    id = existing.fetch('id')
+    patch_optional("/v1/subscriptionGroupLocalizations/#{id}", {
+      data: {
+        type: 'subscriptionGroupLocalizations',
+        id: id,
+        attributes: body[:data][:attributes]
+      }
+    }, 'subscription group localization')
+  else
+    create_optional('/v1/subscriptionGroupLocalizations', body, 'subscription group localization')
+  end
+end
+
+def patch_subscription_details(subscription_id, spec)
+  patch_optional("/v1/subscriptions/#{subscription_id}", {
+    data: {
+      type: 'subscriptions',
+      id: subscription_id,
+      attributes: {
+        name: spec[:name],
+        familySharable: false,
+        reviewNote: REVIEW_NOTE
+      }
+    }
+  }, "subscription details #{spec[:product_id]}")
+end
+
+def ensure_subscription_localization(subscription_id, spec)
+  records = list_all("/v1/subscriptions/#{subscription_id}/subscriptionLocalizations", query: {
+    'fields[subscriptionLocalizations]' => 'name,locale,description'
+  })
+  existing = preferred_english_record(records)
+  body = {
+    data: {
+      type: 'subscriptionLocalizations',
+      attributes: { name: spec[:display_name], locale: 'en-US', description: spec[:description] },
+      relationships: { subscription: { data: { type: 'subscriptions', id: subscription_id } } }
+    }
+  }
+  if existing
+    id = existing.fetch('id')
+    patch_optional("/v1/subscriptionLocalizations/#{id}", {
+      data: {
+        type: 'subscriptionLocalizations',
+        id: id,
+        attributes: body[:data][:attributes]
+      }
+    }, "subscription localization #{spec[:product_id]}")
+  else
+    create_optional('/v1/subscriptionLocalizations', body, "subscription localization #{spec[:product_id]}")
+  end
+end
+
+def patch_iap_details(iap_id)
+  patch_optional("/v2/inAppPurchases/#{iap_id}", {
+    data: {
+      type: 'inAppPurchases',
+      id: iap_id,
+      attributes: {
+        name: LIFETIME[:name],
+        familySharable: false,
+        reviewNote: IAP_REVIEW_NOTE
+      }
+    }
+  }, "IAP details #{LIFETIME[:product_id]}")
+end
+
+def ensure_iap_localization(iap_id, spec)
+  records = list_all("/v2/inAppPurchases/#{iap_id}/inAppPurchaseLocalizations", query: {
+    'fields[inAppPurchaseLocalizations]' => 'name,locale,description'
+  })
+  existing = preferred_english_record(records)
+  body = {
+    data: {
+      type: 'inAppPurchaseLocalizations',
+      attributes: { name: spec[:display_name], locale: 'en-US', description: spec[:description] },
+      relationships: { inAppPurchaseV2: { data: { type: 'inAppPurchases', id: iap_id } } }
+    }
+  }
+  if existing
+    id = existing.fetch('id')
+    patch_optional("/v1/inAppPurchaseLocalizations/#{id}", {
+      data: {
+        type: 'inAppPurchaseLocalizations',
+        id: id,
+        attributes: body[:data][:attributes]
+      }
+    }, "IAP localization #{spec[:product_id]}")
+  else
+    create_optional('/v1/inAppPurchaseLocalizations', body, "IAP localization #{spec[:product_id]}")
+  end
 end
 
 def decimal_equal?(left, right)
@@ -343,8 +470,16 @@ def ensure_iap_price_schedule(iap_id, product_id, target_price)
     'limit[automaticPrices]' => '50'
   }, fatal: false)
   if code.between?(200, 299) && schedule['data']
-    puts "IAP #{product_id} already has a price schedule; keeping existing schedule."
-    return
+    relationship_ids = []
+    %w[manualPrices automaticPrices].each do |relationship_name|
+      relationship_ids.concat(Array(schedule.dig('data', 'relationships', relationship_name, 'data')).map { |item| item.fetch('id') })
+    end
+    included_ids = schedule.fetch('included', []).select { |item| item['type'].to_s == 'inAppPurchasePrices' }.map { |item| item.fetch('id') }
+    price_count = (relationship_ids + included_ids).uniq.size
+    puts "IAP #{product_id} has an existing price schedule with #{price_count} linked price records."
+    return if price_count.positive?
+
+    puts "IAP #{product_id} price schedule exists but has no linked price records; attempting to set target schedule."
   end
 
   point = choose_price_point(iap_price_points(iap_id), target_price, product_id)
@@ -502,13 +637,7 @@ end
 group_id = group.fetch('id')
 puts "Using subscription group #{group_id}: #{attributes(group)['referenceName'] || GROUP_REFERENCE_NAME}"
 
-create_optional('/v1/subscriptionGroupLocalizations', {
-  data: {
-    type: 'subscriptionGroupLocalizations',
-    attributes: { name: 'Prism Pro', locale: 'en-US' },
-    relationships: { subscriptionGroup: { data: { type: 'subscriptionGroups', id: group_id } } }
-  }
-}, 'subscription group localization')
+ensure_subscription_group_localization(group_id, 'Prism Pro')
 
 existing_subscriptions = list_all("/v1/subscriptionGroups/#{group_id}/subscriptions")
 SUBSCRIPTIONS.each do |spec|
@@ -535,14 +664,9 @@ SUBSCRIPTIONS.each do |spec|
 
   subscription_id = sub.fetch('id')
   puts "Using subscription #{spec[:product_id]} id=#{subscription_id} state=#{attributes(sub)['state']} target_price=#{spec[:price]}"
+  patch_subscription_details(subscription_id, spec)
   create_subscription_availability(subscription_id, spec[:product_id])
-  create_optional('/v1/subscriptionLocalizations', {
-    data: {
-      type: 'subscriptionLocalizations',
-      attributes: { name: spec[:display_name], locale: 'en-US', description: spec[:description] },
-      relationships: { subscription: { data: { type: 'subscriptions', id: subscription_id } } }
-    }
-  }, "subscription localization #{spec[:product_id]}")
+  ensure_subscription_localization(subscription_id, spec)
   ensure_subscription_prices(subscription_id, spec[:product_id], spec[:price])
   ensure_subscription_review_screenshot(subscription_id, spec[:product_id])
   fresh = refresh_subscription(subscription_id)
@@ -566,7 +690,7 @@ unless iap
         productId: LIFETIME[:product_id],
         inAppPurchaseType: 'NON_CONSUMABLE',
         familySharable: false,
-        reviewNote: 'Prism Pro Lifetime unlocks the same Pro features without renewal.'
+        reviewNote: IAP_REVIEW_NOTE
       },
       relationships: { app: { data: { type: 'apps', id: app_id } } }
     }
@@ -576,14 +700,9 @@ end
 if iap
   iap_id = iap.fetch('id')
   puts "Using IAP #{LIFETIME[:product_id]} id=#{iap_id} state=#{attributes(iap)['state']} target_price=#{LIFETIME[:price]}"
+  patch_iap_details(iap_id)
   create_iap_availability(iap_id, LIFETIME[:product_id])
-  create_optional('/v1/inAppPurchaseLocalizations', {
-    data: {
-      type: 'inAppPurchaseLocalizations',
-      attributes: { name: LIFETIME[:display_name], locale: 'en-US', description: LIFETIME[:description] },
-      relationships: { inAppPurchaseV2: { data: { type: 'inAppPurchases', id: iap_id } } }
-    }
-  }, "IAP localization #{LIFETIME[:product_id]}")
+  ensure_iap_localization(iap_id, LIFETIME)
   ensure_iap_price_schedule(iap_id, LIFETIME[:product_id], LIFETIME[:price])
   ensure_iap_review_screenshot(iap_id, LIFETIME[:product_id])
   fresh = refresh_iap(iap_id)
