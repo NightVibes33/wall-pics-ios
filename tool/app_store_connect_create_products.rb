@@ -23,7 +23,7 @@ SUBSCRIPTIONS = [
     product_id: 'prism_pro_yearly',
     name: 'Prism Pro Yearly',
     display_name: 'Yearly Pro',
-    description: 'Unlimited 4K downloads, Live Photos, matching sets, 3D Spatial, and profile pictures for one year.',
+    description: '4K downloads, Live Photos, and PFPs for one year.',
     period: 'ONE_YEAR',
     group_level: 1,
     price: ENV.fetch('PRISM_YEARLY_PRICE_USD', '9.99')
@@ -32,7 +32,7 @@ SUBSCRIPTIONS = [
     product_id: 'prism_pro_monthly',
     name: 'Prism Pro Monthly',
     display_name: 'Monthly Pro',
-    description: 'Unlimited 4K downloads, Live Photos, matching sets, 3D Spatial, and profile pictures for one month.',
+    description: '4K downloads, Live Photos, and PFPs for one month.',
     period: 'ONE_MONTH',
     group_level: 2,
     price: ENV.fetch('PRISM_MONTHLY_PRICE_USD', '1.99')
@@ -43,7 +43,7 @@ LIFETIME = {
   product_id: 'prism_pro_lifetime',
   name: 'Prism Pro Lifetime',
   display_name: 'Lifetime Pro',
-  description: 'Unlimited 4K downloads, Live Photos, matching sets, 3D Spatial, and profile pictures with one payment.',
+  description: '4K downloads, Live Photos, and PFPs forever.',
   price: ENV.fetch('PRISM_LIFETIME_PRICE_USD', '19.99')
 }.freeze
 
@@ -522,7 +522,7 @@ def ensure_iap_price_schedule(iap_id, product_id, target_price)
   end
 
   point = choose_price_point(iap_price_points(iap_id), target_price, product_id)
-  price_record_id = point.fetch('id')
+  price_record_id = '${price-0}'
   create_optional('/v1/inAppPurchasePriceSchedules', {
     data: {
       type: 'inAppPurchasePriceSchedules',
