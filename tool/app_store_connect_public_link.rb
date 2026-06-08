@@ -11,6 +11,9 @@ require 'uri'
 API_HOST = 'api.appstoreconnect.apple.com'
 BUNDLE_ID = ENV.fetch('PRISM_APP_BUNDLE_ID', 'com.nightvibes.prism.39A8Q3T3TR')
 GROUP_NAME = ENV.fetch('PRISM_BETA_GROUP_NAME', 'Přism Public Beta')
+EXPECTED_BUILD_VERSION = ENV.fetch('PRISM_EXPECTED_BUILD_VERSION', '').strip
+EXPECTED_BUILD_WAIT_SECONDS = ENV.fetch('PRISM_EXPECTED_BUILD_WAIT_SECONDS', '1800').to_i
+EXPECTED_BUILD_WAIT_INTERVAL_SECONDS = ENV.fetch('PRISM_EXPECTED_BUILD_WAIT_INTERVAL_SECONDS', '60').to_i
 
 KEY_ID = ENV.fetch('APP_STORE_CONNECT_KEY_ID')
 ISSUER_ID = ENV.fetch('APP_STORE_CONNECT_ISSUER_ID')
@@ -104,6 +107,38 @@ def attributes(record)
   record.fetch('attributes', {}) || {}
 end
 
+def fetch_sorted_builds(app_id)
+  builds = request(:get, "/v1/apps/#{app_id}/builds", query: {
+    'limit' => '200'
+  })
+  builds.fetch('data', []).sort_by do |build|
+    Time.parse(attributes(build)['uploadedDate'].to_s) rescue Time.at(0)
+  end.reverse
+end
+
+def valid_build?(build)
+  attrs = attributes(build)
+  !attrs['expired'] && attrs['processingState'].to_s.upcase == 'VALID'
+end
+
+def print_recent_builds(sorted_builds)
+  puts 'Recent builds:'
+  sorted_builds.take(8).each do |build|
+    attrs = attributes(build)
+    summary = attrs.slice(
+      'version',
+      'uploadedDate',
+      'expired',
+      'processingState',
+      'usesNonExemptEncryption',
+      'betaReviewState',
+      'externalBuildState',
+      'internalBuildState'
+    )
+    puts "- #{JSON.generate(summary)}"
+  end
+end
+
 apps = request(:get, '/v1/apps', query: {
   'filter[bundleId]' => BUNDLE_ID,
   'fields[apps]' => 'name,bundleId,sku',
@@ -118,33 +153,53 @@ app_id = app.fetch('id')
 app_attrs = attributes(app)
 puts "App: #{app_attrs['name'] || '(unknown)'} (#{BUNDLE_ID})"
 
-builds = request(:get, "/v1/apps/#{app_id}/builds", query: {
-  'limit' => '200'
-})
-sorted_builds = builds.fetch('data', []).sort_by do |build|
-  Time.parse(attributes(build)['uploadedDate'].to_s) rescue Time.at(0)
-end.reverse
+sorted_builds = fetch_sorted_builds(app_id)
+print_recent_builds(sorted_builds)
 
-puts 'Recent builds:'
-sorted_builds.take(8).each do |build|
-  attrs = attributes(build)
-  summary = attrs.slice(
-    'version',
-    'uploadedDate',
-    'expired',
-    'processingState',
-    'usesNonExemptEncryption',
-    'betaReviewState',
-    'externalBuildState',
-    'internalBuildState'
-  )
-  puts "- #{JSON.generate(summary)}"
+latest_valid_build = nil
+if EXPECTED_BUILD_VERSION.empty?
+  latest_valid_build = sorted_builds.find { |build| valid_build?(build) }
+else
+  deadline = Time.now + EXPECTED_BUILD_WAIT_SECONDS
+  loop do
+    expected_build = sorted_builds.find { |build| attributes(build)['version'].to_s == EXPECTED_BUILD_VERSION }
+    if expected_build && valid_build?(expected_build)
+      latest_valid_build = expected_build
+      battrs = attributes(latest_valid_build)
+      puts "Using expected valid build: #{battrs['version']} uploaded #{battrs['uploadedDate']}"
+      break
+    end
+
+    if expected_build
+      attrs = attributes(expected_build)
+      summary = attrs.slice(
+        'version',
+        'uploadedDate',
+        'expired',
+        'processingState',
+        'usesNonExemptEncryption',
+        'betaReviewState',
+        'externalBuildState',
+        'internalBuildState'
+      )
+      puts "Expected build #{EXPECTED_BUILD_VERSION} is not VALID yet: #{JSON.generate(summary)}"
+    else
+      puts "Expected build #{EXPECTED_BUILD_VERSION} not found yet."
+    end
+
+    if Time.now >= deadline
+      warn "Expected build #{EXPECTED_BUILD_VERSION} did not become VALID within #{EXPECTED_BUILD_WAIT_SECONDS} seconds. Refusing to attach an older build."
+      exit 2
+    end
+
+    sleep_seconds = [EXPECTED_BUILD_WAIT_INTERVAL_SECONDS, [(deadline - Time.now).to_i, 1].max].min
+    puts "Waiting #{sleep_seconds}s before checking App Store Connect again."
+    sleep sleep_seconds
+    sorted_builds = fetch_sorted_builds(app_id)
+    print_recent_builds(sorted_builds)
+  end
 end
 
-latest_valid_build = sorted_builds.find do |build|
-  attrs = attributes(build)
-  !attrs['expired'] && attrs['processingState'].to_s.upcase == 'VALID'
-end
 if latest_valid_build
   battrs = attributes(latest_valid_build)
   puts "Latest valid build: #{battrs['version']} uploaded #{battrs['uploadedDate']}"

@@ -2,6 +2,11 @@ name: TestFlight Public Link
 
 on:
   workflow_dispatch:
+    inputs:
+      expected_build_version:
+        description: Expected TestFlight build number to sync
+        required: false
+        type: string
 
 jobs:
   public-link:
@@ -24,4 +29,5 @@ jobs:
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           PRISM_APP_BUNDLE_ID: com.nightvibes.prism.39A8Q3T3TR
           PRISM_BETA_GROUP_NAME: Přism Public Beta
+          PRISM_EXPECTED_BUILD_VERSION: ${{ inputs.expected_build_version }}
         run: ruby tool/app_store_connect_public_link.rb
