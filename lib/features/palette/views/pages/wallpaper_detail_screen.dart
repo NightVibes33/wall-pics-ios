@@ -394,12 +394,11 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
   }
 
   bool _isPrismLivePhoto(WallpaperDetailEntity entity) {
-    return _isPrismContentType(entity, PrismCatalogDataSource.liveContentType);
+    return false;
   }
 
   bool _isPrismDiyTemplate(WallpaperDetailEntity entity) {
-    return _isPrismContentType(entity, PrismCatalogDataSource.diyTemplateContentType) ||
-        _isPrismContentType(entity, PrismCatalogDataSource.liveDiyTemplateContentType);
+    return _isPrismContentType(entity, PrismCatalogDataSource.diyTemplateContentType);
   }
 
   bool _isPrismParallax(WallpaperDetailEntity entity) {
@@ -1163,9 +1162,6 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
           link: downloadUrl,
           isPremiumContent: _isPrismPremiumCatalogContent(entity),
           sourceContext: _getSourceContext(state),
-          isLivePhoto: isLivePhoto,
-          livePhotoStillUrl: liveStillUrl,
-          livePhotoTimeSeconds: livePhotoTimeSeconds,
         ),
       ),
       if (!hideSetWallpaperUi && !isLivePhoto && !filteredCapturePending)

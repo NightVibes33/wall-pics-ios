@@ -201,15 +201,6 @@ const List<CategoryDefinition> categoryDefinitions = <CategoryDefinition>[
     catalogContentType: 'regular_wallpaper',
   ),
   CategoryDefinition(
-    name: 'Unlock Live 🔓',
-    source: WallpaperSource.prism,
-    searchType: CategorySearchType.nonSearch,
-    imageUrl: '',
-    secondaryImageUrl: '',
-    catalogSlug: 'unlock-live',
-    catalogContentType: 'regular_wallpaper',
-  ),
-  CategoryDefinition(
     name: 'Halloween 🎃',
     source: WallpaperSource.prism,
     searchType: CategorySearchType.nonSearch,

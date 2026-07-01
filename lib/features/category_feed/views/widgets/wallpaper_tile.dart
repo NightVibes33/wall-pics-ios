@@ -66,11 +66,13 @@ class WallpaperTile extends StatelessWidget {
     return item.when(
       prism: (_, wallpaper) {
         if (!isMatchingSetItem(item)) return const <String>[];
-        final direct = _stringList(wallpaper.aiMetadata?['catalogPairedDownloadUrls']);
+        final direct = _stringList(wallpaper.aiMetadata?['catalogPairedDownloadUrls'])
+            .where((url) => !PrismCatalogDataSource.isCatalogBrandedAssetUrl(url))
+            .toList(growable: false);
         if (direct.isNotEmpty) return direct;
         return _mapList(wallpaper.aiMetadata?['catalogMatchingSides'])
             .map((side) => side['download_url']?.toString().trim() ?? '')
-            .where((url) => url.isNotEmpty)
+            .where((url) => url.isNotEmpty && !PrismCatalogDataSource.isCatalogBrandedAssetUrl(url))
             .toList(growable: false);
       },
       wallhaven: (_, _) => const <String>[],
@@ -98,7 +100,7 @@ class WallpaperTile extends StatelessWidget {
           metadata['catalogOriginalVideoUrl'],
           metadata['catalogVideoUrl'],
           _isVideoUrl(fullUrl) && !PrismCatalogDataSource.isCatalogPreviewAssetUrl(fullUrl) ? fullUrl : '',
-        ], excludeCatalogPreviews: true);
+        ], excludeCatalogPreviews: true, excludeCatalogBranded: true);
       },
       wallhaven: (_, _) => '',
       pexels: (_, _) => '',
@@ -132,6 +134,7 @@ class WallpaperTile extends StatelessWidget {
             ],
             imageOnly: true,
             excludeCatalogPreviews: false,
+            excludeCatalogBranded: true,
           );
           final fast = PrismCatalogDataSource.fastImageTileUrl(parallaxPreferred);
           return fast.isNotEmpty ? fast : parallaxPreferred;
@@ -144,6 +147,7 @@ class WallpaperTile extends StatelessWidget {
           ],
           imageOnly: true,
           excludeCatalogPreviews: true,
+          excludeCatalogBranded: true,
         );
         final fast = PrismCatalogDataSource.fastImageTileUrl(preferred);
         return fast.isNotEmpty ? fast : preferred;
@@ -305,6 +309,7 @@ class WallpaperTile extends StatelessWidget {
     Iterable<Object?> values, {
     bool imageOnly = false,
     bool excludeCatalogPreviews = false,
+    bool excludeCatalogBranded = false,
   }) {
     for (final value in values) {
       final text = value?.toString().trim() ?? '';
@@ -315,6 +320,9 @@ class WallpaperTile extends StatelessWidget {
         continue;
       }
       if (excludeCatalogPreviews && PrismCatalogDataSource.isCatalogPreviewAssetUrl(text)) {
+        continue;
+      }
+      if (excludeCatalogBranded && PrismCatalogDataSource.isCatalogBrandedAssetUrl(text)) {
         continue;
       }
       return text;

@@ -239,9 +239,6 @@ class _HomeTabPageState extends State<HomeTabPage> {
 
     final sections = <_HomeSection>[];
     for (final section in bootstrap.sections) {
-      if (section.contentType == PrismCatalogDataSource.liveContentType) {
-        continue;
-      }
       final items = _uniqueItems(section.items).toList(growable: false);
       if (items.isEmpty) {
         continue;
@@ -1075,8 +1072,6 @@ class _HomeWallpaperCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
         ),
-        if (section.kind == _SectionKind.live)
-          Positioned(left: 8, top: 8, child: _MediaBadge(kind: section.kind)),
       ],
     );
     Widget materialCard = PrismTapScale(
@@ -1965,4 +1960,4 @@ class _HomeShortcut {
   final Color accent;
 }
 
-enum _SectionKind { wallpaper, live, matching, profile }
+enum _SectionKind { wallpaper, matching, profile }

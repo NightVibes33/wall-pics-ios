@@ -29,14 +29,12 @@ BASE_CATALOG_FILES = (
 )
 PAGE_CATALOG_PREFIXES = {
     "prism_regular",
-    "prism_live",
     "prism_matching",
     "prism_double",
     "prism_parallax",
     "prism_profile_pictures",
     "prism_charging_animations",
     "prism_diy_templates",
-    "prism_live_diy_templates",
     "prism_stickers",
 }
 

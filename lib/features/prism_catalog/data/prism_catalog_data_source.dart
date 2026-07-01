@@ -77,7 +77,6 @@ class PrismCatalogDataSource {
     profilePictureContentType: 'prism_profile_pictures.json',
     chargingAnimationContentType: 'prism_charging_animations.json',
     diyTemplateContentType: 'prism_diy_templates.json',
-    liveDiyTemplateContentType: 'prism_live_diy_templates.json',
     stickerContentType: 'prism_stickers.json',
   };
   static const Map<String, String> _catalogPagePrefixesByContentType = <String, String>{
@@ -89,7 +88,6 @@ class PrismCatalogDataSource {
     profilePictureContentType: 'prism_profile_pictures',
     chargingAnimationContentType: 'prism_charging_animations',
     diyTemplateContentType: 'prism_diy_templates',
-    liveDiyTemplateContentType: 'prism_live_diy_templates',
     stickerContentType: 'prism_stickers',
   };
   static const Map<String, String> _contentTypeLabels = <String, String>{
@@ -471,7 +469,7 @@ class PrismCatalogDataSource {
 
     String previewFromItem(_PrismItem item) {
       final candidate = _firstString(<Object?>[item.thumbnailUrl, item.staticThumbnailUrl, item.firstFrameThumbnailUrl]);
-      return _isCatalogPreviewAssetUrl(candidate) ? '' : candidate;
+      return _isCatalogPreviewAssetUrl(candidate) || _isCatalogBrandedAssetUrl(candidate) ? '' : candidate;
     }
 
     try {
@@ -1381,9 +1379,6 @@ class PrismCatalogDataSource {
       'prism_regular_page_001.json',
       'prism_regular_page_002.json',
       'prism_regular_page_003.json',
-      'prism_live_page_001.json',
-      'prism_live_page_002.json',
-      'prism_live_page_003.json',
       'prism_matching_page_001.json',
       'prism_matching_page_002.json',
       'prism_matching_page_003.json',
@@ -2427,7 +2422,7 @@ List<_PrismItem> _dedupeItems(Iterable<_PrismItem> items) {
       continue;
     }
     final idKey = item.id.trim().isEmpty ? '' : '${item.contentType}:${item.id.trim()}';
-    final urlKey = _firstString(<Object?>[item.downloadUrl, item.previewUrl, item.thumbnailUrl]).trim().toLowerCase();
+    final urlKey = _firstString(<Object?>[item.downloadUrl, item.previewUrl, item.thumbnailUrl], excludeCatalogBranded: true).trim().toLowerCase();
     final allowSharedUrl = item.contentType == PrismCatalogDataSource.matchingContentType ||
         item.contentType == PrismCatalogDataSource.doubleContentType ||
         item.contentType == PrismCatalogDataSource.profilePictureContentType;
@@ -2922,10 +2917,16 @@ List<String> _uniqueStrings(Iterable<String> values) {
 
 String _string(Object? value) => value?.toString() ?? '';
 
-String _firstString(List<Object?> values) {
+String _firstString(List<Object?> values, {bool excludeCatalogBranded = false}) {
   for (final value in values) {
     final text = _string(value).trim();
-    if (text.isNotEmpty) return text;
+    if (text.isEmpty) {
+      continue;
+    }
+    if (excludeCatalogBranded && _isCatalogBrandedAssetUrl(text)) {
+      continue;
+    }
+    return text;
   }
   return '';
 }

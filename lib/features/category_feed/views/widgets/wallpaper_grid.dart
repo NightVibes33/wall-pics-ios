@@ -158,9 +158,6 @@ class _WallpaperGridState extends State<WallpaperGrid> {
     return profileCount * 2 >= sample.length ? 1.0 : 0.5;
   }
 
-  bool _isLiveCategory(CategoryFeedState state) {
-    return state.selectedCategory?.catalogContentType == PrismCatalogDataSource.liveContentType;
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -179,7 +176,7 @@ class _WallpaperGridState extends State<WallpaperGrid> {
     final showSkeletonTiles = subWalls.isEmpty;
     final columns = MediaQuery.of(context).orientation == Orientation.portrait ? 3 : 5;
     final aspectRatio = _gridAspectRatio(state, subWalls);
-    final playLiveVideos = _isLiveCategory(state);
+    final playLiveVideos = false;
 
     if (subWalls.isNotEmpty) {
       _contentLoadTracker.success(

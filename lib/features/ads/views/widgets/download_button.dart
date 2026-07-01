@@ -5,7 +5,6 @@ import 'package:Prism/core/interaction/prism_tap_scale.dart';
 import 'package:Prism/core/platform/pigeon/prism_media_api.g.dart';
 import 'package:Prism/core/platform/wallpaper_capability.dart';
 import 'package:Prism/core/purchases/download_access_service.dart';
-import 'package:Prism/core/platform/prism_live_photo_saver.dart';
 import 'package:Prism/features/prism_catalog/data/prism_seed_media_store.dart';
 import 'package:Prism/features/startup/services/notification_permission_prompt_service.dart';
 import 'package:Prism/logger/logger.dart';
@@ -21,9 +20,6 @@ class DownloadButton extends StatefulWidget {
     this.isPremiumContent = false,
     this.contentId,
     this.sourceContext,
-    this.isLivePhoto = false,
-    this.livePhotoStillUrl,
-    this.livePhotoTimeSeconds,
     super.key,
   });
 
@@ -32,9 +28,6 @@ class DownloadButton extends StatefulWidget {
   final bool isPremiumContent;
   final String? contentId;
   final String? sourceContext;
-  final bool isLivePhoto;
-  final String? livePhotoStillUrl;
-  final double? livePhotoTimeSeconds;
 
   @override
   State<DownloadButton> createState() => _DownloadButtonState();
@@ -130,27 +123,10 @@ class _DownloadButtonState extends State<DownloadButton> {
         return false;
       }
 
-      var savedLivePhoto = false;
       logger.d(link);
       final bundledFile = await PrismSeedMediaStore.instance.fileForUrl(link);
       final effectiveLink = bundledFile?.path ?? link;
-      final shouldSaveLivePhoto = widget.isLivePhoto;
-      if (shouldSaveLivePhoto) {
-        final stillUrl = widget.livePhotoStillUrl?.trim();
-        final bundledStill = stillUrl == null || stillUrl.isEmpty ? null : await PrismSeedMediaStore.instance.fileForUrl(stillUrl);
-        final effectiveStillUrl = bundledStill?.path ?? stillUrl;
-        final message = await PrismLivePhotoSaver.save(
-          videoUrl: effectiveLink,
-          stillUrl: effectiveStillUrl,
-          photoTimeSeconds: widget.livePhotoTimeSeconds,
-        ).timeout(const Duration(seconds: 180));
-        if (message != null) {
-          PrismHaptics.failure();
-          toasts.error(message);
-          return false;
-        }
-        savedLivePhoto = true;
-      } else if (hideSetWallpaperUi || _isLocalMediaPath(effectiveLink)) {
+      if (hideSetWallpaperUi || _isLocalMediaPath(effectiveLink)) {
         final OperationResult result = await PrismMediaHostApi()
             .saveMedia(
               SaveMediaRequest(
@@ -201,7 +177,7 @@ class _DownloadButtonState extends State<DownloadButton> {
       }
       PrismHaptics.success();
       toasts.codeSend(
-        savedLivePhoto ? 'Live Photo saved to Photos.' : (hideSetWallpaperUi ? 'Saved to Photos.' : 'Wall downloaded in Pictures/Prism!'),
+        hideSetWallpaperUi ? 'Saved to Photos.' : 'Wall downloaded in Pictures/Prism!',
       );
       return true;
     } on PlatformException catch (e) {
