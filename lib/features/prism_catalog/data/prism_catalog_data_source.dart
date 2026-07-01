@@ -44,6 +44,10 @@ class PrismCatalogDataSource {
     return _isPotentialCatalogImageUrl(url) && !_isCatalogPreviewAssetUrl(url);
   }
 
+  static bool isCatalogBrandedAssetUrl(String url) {
+    return _isCatalogBrandedAssetUrl(url);
+  }
+
   static const int _pageSize = 144;
   static const int _catalogShardSize = 100;
   static const Duration _metadataTimeout = Duration(seconds: 10);
