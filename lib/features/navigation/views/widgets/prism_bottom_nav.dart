@@ -22,7 +22,7 @@ class PrismBottomNav extends StatefulWidget {
 class _PrismBottomNavState extends State<PrismBottomNav> {
   static const List<_NavTabConfig> _tabs = <_NavTabConfig>[
     _NavTabConfig(routeIndex: 0, label: 'Home', icon: JamIcons.home_f, value: NavTabValue.home),
-    _NavTabConfig(routeIndex: 1, label: 'Live', icon: JamIcons.play_circle_f, value: NavTabValue.search),
+    _NavTabConfig(routeIndex: 1, label: 'Search', icon: JamIcons.search, value: NavTabValue.search),
     _NavTabConfig(routeIndex: 2, label: 'Widgets', icon: JamIcons.grid_f, value: NavTabValue.collection),
     _NavTabConfig(routeIndex: null, label: 'Profile', icon: JamIcons.user, value: null),
   ];

@@ -105,7 +105,7 @@ class _AboutScreenState extends State<AboutScreen> {
             ),
             const SizedBox(height: 10),
             Text(
-              "A phone-first wallpaper and Live Photos app for iOS.",
+              "A phone-first wallpaper app for iOS.",
               textAlign: TextAlign.center,
               style: Theme.of(
                 context,

@@ -126,7 +126,7 @@ class _PrismProPaywallState extends State<PrismProPaywall> {
               ),
               const SizedBox(height: 6),
               Text(
-                'Unlimited 4K downloads, Live Photos, matching sets, 3D Spatial, and profile pictures.',
+                'Unlimited 4K downloads, matching sets, 3D Spatial, and profile pictures.',
                 style: TextStyle(color: Colors.white.withValues(alpha: 0.72), fontFamily: 'Satoshi', fontSize: 16, height: 1.28),
               ),
               const SizedBox(height: 16),

@@ -94,7 +94,6 @@ class PrismCatalogDataSource {
   };
   static const Map<String, String> _contentTypeLabels = <String, String>{
     regularContentType: 'For You',
-    liveContentType: 'Live Photos',
     matchingContentType: 'Matching Sets',
     doubleContentType: 'Wallpaper Pairs',
     parallaxContentType: 'Spatial Wallpapers',
@@ -429,7 +428,8 @@ class PrismCatalogDataSource {
       final name = _string(row['name']).trim();
       final slug = _string(row['slug']).trim();
       final contentType = _contentTypeForCategory(row);
-      if (name.isEmpty ||
+      if (contentType == liveContentType ||
+          name.isEmpty ||
           slug.isEmpty ||
           !_catalogPagePrefixesByContentType.containsKey(contentType) ||
           _hiddenContentTypes.contains(contentType) ||
@@ -1161,7 +1161,8 @@ class PrismCatalogDataSource {
       final name = _string(row['name']).trim();
       final slug = _string(row['slug']).trim();
       final contentType = _contentTypeForCategory(row);
-      if (name.isEmpty ||
+      if (contentType == liveContentType ||
+          name.isEmpty ||
           slug.isEmpty ||
           !_catalogPagePrefixesByContentType.containsKey(contentType) ||
           _hiddenContentTypes.contains(contentType) ||

@@ -64,12 +64,6 @@ class _HomeTabPageState extends State<HomeTabPage> {
   ];
   static const List<_HomeShortcut> _shortcuts = <_HomeShortcut>[
     _HomeShortcut(
-      label: 'Live',
-      icon: JamIcons.play_circle_f,
-      contentType: PrismCatalogDataSource.liveContentType,
-      accent: Color(0xFF2EA8FF),
-    ),
-    _HomeShortcut(
       label: 'Artwork',
       icon: JamIcons.picture_f,
       contentType: PrismCatalogDataSource.regularContentType,
@@ -227,7 +221,6 @@ class _HomeTabPageState extends State<HomeTabPage> {
       }
     }
 
-    addCatalog(title: 'Live Wallpapers', contentType: PrismCatalogDataSource.liveContentType, kind: _SectionKind.live);
     addCatalog(title: 'For You', contentType: PrismCatalogDataSource.regularContentType);
     addCatalog(title: '3D Spatial', contentType: PrismCatalogDataSource.parallaxContentType);
     addCatalog(title: 'Matching', contentType: PrismCatalogDataSource.matchingContentType, kind: _SectionKind.matching);
@@ -246,6 +239,9 @@ class _HomeTabPageState extends State<HomeTabPage> {
 
     final sections = <_HomeSection>[];
     for (final section in bootstrap.sections) {
+      if (section.contentType == PrismCatalogDataSource.liveContentType) {
+        continue;
+      }
       final items = _uniqueItems(section.items).toList(growable: false);
       if (items.isEmpty) {
         continue;
@@ -306,11 +302,6 @@ class _HomeTabPageState extends State<HomeTabPage> {
     }
 
     await Future.wait<void>(<Future<void>>[
-      ensureSection(
-        title: 'Live Wallpapers',
-        contentType: PrismCatalogDataSource.liveContentType,
-        kind: _SectionKind.live,
-      ),
       ensureSection(title: 'For You', contentType: PrismCatalogDataSource.regularContentType),
       ensureSection(title: '3D Spatial', contentType: PrismCatalogDataSource.parallaxContentType),
       ensureSection(
@@ -344,7 +335,6 @@ class _HomeTabPageState extends State<HomeTabPage> {
     if (section.contentType == activeContentType && section.slug == activeSlug) {
       return 0;
     }
-    if (section.contentType == PrismCatalogDataSource.liveContentType) return 10;
     if (section.contentType == PrismCatalogDataSource.regularContentType && section.slug == 'for-you') return 20;
     if (section.contentType == PrismCatalogDataSource.parallaxContentType) return 30;
     if (section.contentType == PrismCatalogDataSource.matchingContentType) return 40;
@@ -354,7 +344,6 @@ class _HomeTabPageState extends State<HomeTabPage> {
 
   _SectionKind _kindForBootstrap(String kind, String contentType) {
     return switch (kind.trim()) {
-      'live' => _SectionKind.live,
       'matching' => _SectionKind.matching,
       'profile' => _SectionKind.profile,
       _ => _kindFor(contentType),
@@ -422,7 +411,6 @@ class _HomeTabPageState extends State<HomeTabPage> {
 
   _SectionKind _kindFor(String? contentType) {
     return switch (contentType) {
-      PrismCatalogDataSource.liveContentType => _SectionKind.live,
       PrismCatalogDataSource.matchingContentType => _SectionKind.matching,
       PrismCatalogDataSource.doubleContentType => _SectionKind.matching,
       PrismCatalogDataSource.profilePictureContentType => _SectionKind.profile,

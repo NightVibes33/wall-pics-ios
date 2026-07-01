@@ -582,7 +582,7 @@ List<_WidgetTemplate> _templatesFor(List<SetupEntity> setups, _WidgetPlacement p
   for (final setup in setups) {
     final title = _widgetTitle(setup, placement);
     final imageUrl = _widgetImageUrl(setup, placement);
-    if (title.isEmpty || imageUrl.isEmpty || _isBlockedWidgetValue(title) || _isBlockedWidgetValue(imageUrl)) {
+    if (title.isEmpty || imageUrl.isEmpty) {
       continue;
     }
     final key = '${placement.name}|${title.toLowerCase()}|$imageUrl';
@@ -606,13 +606,28 @@ List<_WidgetTemplate> _templatesFor(List<SetupEntity> setups, _WidgetPlacement p
 String _widgetTitle(SetupEntity setup, _WidgetPlacement placement) {
   final primary = placement == _WidgetPlacement.home ? setup.widget : setup.widget2;
   final fallback = placement == _WidgetPlacement.home ? setup.name : setup.widget;
-  return _firstNonEmpty(<String?>[primary, fallback, setup.name, 'Photo']).trim();
+  for (final candidate in <String?>[primary, fallback, setup.name, 'Photo']) {
+    final cleaned = _cleanWidgetLabel(candidate ?? '');
+    if (cleaned.isNotEmpty) {
+      return cleaned;
+    }
+  }
+  return '';
 }
 
 String _widgetImageUrl(SetupEntity setup, _WidgetPlacement placement) {
-  final primary = placement == _WidgetPlacement.home ? setup.widgetUrl : setup.widgetUrl2;
-  final fallback = placement == _WidgetPlacement.home ? setup.image : setup.widgetUrl;
-  return _firstNonEmpty(<String?>[primary, fallback, setup.image]).trim();
+  final candidates = <String?>[
+    placement == _WidgetPlacement.home ? setup.widgetUrl : setup.widgetUrl2,
+    placement == _WidgetPlacement.home ? setup.image : setup.widgetUrl,
+    setup.image,
+  ];
+  for (final candidate in candidates) {
+    final cleaned = (candidate ?? '').trim();
+    if (cleaned.isNotEmpty && !_isBlockedWidgetValue(cleaned)) {
+      return cleaned;
+    }
+  }
+  return '';
 }
 
 bool _isWideWidget(String title, String imageUrl, int ordinal) {
@@ -623,6 +638,15 @@ bool _isWideWidget(String title, String imageUrl, int ordinal) {
 bool _isBlockedWidgetValue(String value) {
   final normalized = _normalize(value);
   return normalized.contains('wallpics') || normalized.contains('watermark');
+}
+
+String _cleanWidgetLabel(String value) {
+  final cleaned = value
+      .replaceAll(RegExp(r'(?i)\bwallpics\b'), '')
+      .replaceAll(RegExp(r'(?i)\bwatermark\b'), '')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+  return cleaned;
 }
 
 String _firstNonEmpty(Iterable<String?> values) {

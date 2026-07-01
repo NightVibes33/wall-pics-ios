@@ -12,15 +12,6 @@ const List<CategoryDefinition> categoryDefinitions = <CategoryDefinition>[
     catalogContentType: 'regular_wallpaper',
   ),
   CategoryDefinition(
-    name: 'Live Photos',
-    source: WallpaperSource.prism,
-    searchType: CategorySearchType.nonSearch,
-    imageUrl: '',
-    secondaryImageUrl: '',
-    catalogSlug: 'for-you',
-    catalogContentType: 'live_wallpaper',
-  ),
-  CategoryDefinition(
     name: 'Matching Wallpapers',
     source: WallpaperSource.prism,
     searchType: CategorySearchType.nonSearch,

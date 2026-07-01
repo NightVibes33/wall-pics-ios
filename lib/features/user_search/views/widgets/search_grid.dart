@@ -21,7 +21,7 @@ class SearchGrid extends StatefulWidget {
   State<SearchGrid> createState() => _SearchGridState();
 }
 
-enum _SearchResultFilter { all, wallpapers, live, matching, spatial, profile }
+enum _SearchResultFilter { all, wallpapers, matching, spatial, profile }
 
 class _SearchFilterSpec {
   const _SearchFilterSpec({required this.filter, required this.label, required this.icon});
@@ -39,7 +39,6 @@ class _SearchGridState extends State<SearchGrid> {
   static const List<_SearchFilterSpec> _filters = <_SearchFilterSpec>[
     _SearchFilterSpec(filter: _SearchResultFilter.all, label: 'All', icon: JamIcons.grid_f),
     _SearchFilterSpec(filter: _SearchResultFilter.wallpapers, label: 'Wallpapers', icon: JamIcons.picture_f),
-    _SearchFilterSpec(filter: _SearchResultFilter.live, label: 'Live', icon: JamIcons.play_circle_f),
     _SearchFilterSpec(filter: _SearchResultFilter.matching, label: 'Matching', icon: JamIcons.pictures_f),
     _SearchFilterSpec(filter: _SearchResultFilter.spatial, label: '3D', icon: JamIcons.box_f),
     _SearchFilterSpec(filter: _SearchResultFilter.profile, label: 'PFP', icon: JamIcons.user_circle),
@@ -153,7 +152,6 @@ class _SearchGridState extends State<SearchGrid> {
     final contentType = _catalogContentType(item);
     return switch (filter) {
       _SearchResultFilter.wallpapers => contentType == PrismCatalogDataSource.regularContentType,
-      _SearchResultFilter.live => contentType == PrismCatalogDataSource.liveContentType,
       _SearchResultFilter.matching => contentType == PrismCatalogDataSource.matchingContentType ||
           contentType == PrismCatalogDataSource.doubleContentType,
       _SearchResultFilter.spatial => contentType == PrismCatalogDataSource.parallaxContentType,
@@ -450,7 +448,6 @@ class _EmptyFilteredResults extends StatelessWidget {
   Widget build(BuildContext context) {
     final label = switch (filter) {
       _SearchResultFilter.wallpapers => 'wallpapers',
-      _SearchResultFilter.live => 'live photos',
       _SearchResultFilter.matching => 'matching sets',
       _SearchResultFilter.spatial => '3D wallpapers',
       _SearchResultFilter.profile => 'PFPs',
