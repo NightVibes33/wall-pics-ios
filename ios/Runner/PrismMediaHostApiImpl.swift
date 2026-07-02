@@ -103,7 +103,7 @@ final class PrismMediaHostApiImpl: PrismMediaHostApi {
         throw PrismMediaSaveError.localFileMissing(path: normalizedPath)
       }
       do {
-        return try Data(contentsOf: URL(fileURLWithPath: normalizedPath))
+        return try Data(contentsOf: URL(fileURLWithPath: normalizedPath), options: [.mappedIfSafe])
       } catch {
         throw PrismMediaSaveError.localReadFailed(path: normalizedPath, underlying: error)
       }

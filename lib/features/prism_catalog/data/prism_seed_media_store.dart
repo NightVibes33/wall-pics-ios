@@ -30,6 +30,7 @@ class PrismSeedMediaStore {
   final Map<String, Future<File?>> _fileLoadsByKey = <String, Future<File?>>{};
   int _decodedMemoryBytes = 0;
   Future<void>? _warmFuture;
+  Future<Directory>? _tempDirectoryFuture;
   bool _loaded = false;
 
   bool get isLoaded => _loaded;
@@ -93,11 +94,7 @@ class PrismSeedMediaStore {
     if (match != null) {
       return _fileLoadsByKey.putIfAbsent(match.key, () async {
         try {
-          final tempDir = await getTemporaryDirectory();
-          final directory = Directory('${tempDir.path}/prism_seed_media');
-          if (!await directory.exists()) {
-            await directory.create(recursive: true);
-          }
+          final directory = await _seedMediaDirectory();
           final extension = match.entry.extension.isNotEmpty ? match.entry.extension : _extensionForUrl(url);
           final file = File('${directory.path}/${match.key}$extension');
           if (await file.exists() && await file.length() == match.entry.length) {
@@ -122,11 +119,7 @@ class PrismSeedMediaStore {
     final key = cacheKeyForUrl(url);
     return _fileLoadsByKey.putIfAbsent(key, () async {
       try {
-        final tempDir = await getTemporaryDirectory();
-        final directory = Directory('${tempDir.path}/prism_seed_media');
-        if (!await directory.exists()) {
-          await directory.create(recursive: true);
-        }
+        final directory = await _seedMediaDirectory();
         final file = File('${directory.path}/$key${_extensionForUrl(url)}');
         if (!await file.exists()) {
           await file.writeAsBytes(legacyBytes, flush: false);
@@ -138,6 +131,17 @@ class PrismSeedMediaStore {
         _fileLoadsByKey.remove(key);
       }
     });
+  }
+
+  Future<Directory> _seedMediaDirectory() {
+    return _tempDirectoryFuture ??= () async {
+      final tempDir = await getTemporaryDirectory();
+      final directory = Directory('${tempDir.path}/prism_seed_media');
+      if (!await directory.exists()) {
+        await directory.create(recursive: true);
+      }
+      return directory;
+    }();
   }
 
   Future<void> _load() async {

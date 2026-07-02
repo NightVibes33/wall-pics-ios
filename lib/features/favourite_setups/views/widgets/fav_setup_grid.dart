@@ -197,7 +197,7 @@ class _FavouriteSetupGridState extends State<FavouriteSetupGrid> with SingleTick
                     },
                     child: GridView.builder(
                       shrinkWrap: true,
-                      cacheExtent: 50000,
+                      cacheExtent: MediaQuery.sizeOf(context).height * 1.5,
                       padding: const EdgeInsets.fromLTRB(5, 4, 5, 4),
                       itemCount: context.favouriteSetupsAdapter().liked!.length,
                       gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(

@@ -212,9 +212,6 @@ Future<void> main() async {
         localPrefs.put("themeMode", currentMode),
         localPrefs.put("lightAccent", lightAccentValue),
         localPrefs.put("darkAccent", darkAccentValue),
-        localPrefs.put('optimisedWallpapers', false),
-        localPrefs.put('WHcategories', categories == 100 ? 100 : 111),
-        localPrefs.put('WHpurity', purity == 100 ? 100 : 110),
       ]);
 
       configureDependencies();

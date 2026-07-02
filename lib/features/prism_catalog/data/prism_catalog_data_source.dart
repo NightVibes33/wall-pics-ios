@@ -301,14 +301,14 @@ class PrismCatalogDataSource {
     }
   }
 
-  Future<void> warmCatalogCache({bool prefetchMedia = true}) async {
+  Future<void> warmCatalogCache({bool prefetchMedia = false}) async {
     await Future.wait<void>(<Future<void>>[
       warmHomeBootstrapCache(prefetchMedia: prefetchMedia),
       _warmCatalogJsonFiles(),
     ]);
   }
 
-  Future<void> warmHomeBootstrapCache({bool prefetchMedia = true}) async {
+  Future<void> warmHomeBootstrapCache({bool prefetchMedia = false}) async {
     final bootstrap = await fetchHomeBootstrap(refresh: true);
     if (bootstrap == null || !prefetchMedia) {
       return;

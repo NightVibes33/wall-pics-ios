@@ -199,7 +199,7 @@ class _FavouriteGridState extends State<FavouriteGrid> with SingleTickerProvider
                     },
                     child: GridView.builder(
                       shrinkWrap: true,
-                      cacheExtent: 50000,
+                      cacheExtent: MediaQuery.sizeOf(context).height * 1.5,
                       padding: EdgeInsets.zero,
                       itemCount: context.favouriteWallsAdapter().liked!.length,
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(

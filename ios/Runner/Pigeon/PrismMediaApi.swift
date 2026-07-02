@@ -422,11 +422,13 @@ class PrismMediaHostApiSetup {
       saveMediaChannel.setMessageHandler { message, reply in
         let args = message as! [Any?]
         let requestArg = args[0] as! SaveMediaRequest
-        do {
-          let result = try api.saveMedia(request: requestArg)
-          reply(wrapResult(result))
-        } catch {
-          reply(wrapError(error))
+        DispatchQueue.global(qos: .userInitiated).async {
+          do {
+            let result = try api.saveMedia(request: requestArg)
+            reply(wrapResult(result))
+          } catch {
+            reply(wrapError(error))
+          }
         }
       }
     } else {
@@ -437,11 +439,13 @@ class PrismMediaHostApiSetup {
       enqueueDownloadChannel.setMessageHandler { message, reply in
         let args = message as! [Any?]
         let requestArg = args[0] as! DownloadRequest
-        do {
-          let result = try api.enqueueDownload(request: requestArg)
-          reply(wrapResult(result))
-        } catch {
-          reply(wrapError(error))
+        DispatchQueue.global(qos: .userInitiated).async {
+          do {
+            let result = try api.enqueueDownload(request: requestArg)
+            reply(wrapResult(result))
+          } catch {
+            reply(wrapError(error))
+          }
         }
       }
     } else {

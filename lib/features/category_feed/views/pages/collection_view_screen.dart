@@ -266,7 +266,7 @@ class _CategoryFeedContentState extends State<_CategoryFeedContent> {
       onRefresh: _refresh,
       child: GridView.builder(
         controller: _scrollController,
-        cacheExtent: MediaQuery.sizeOf(context).height * 2,
+        cacheExtent: MediaQuery.sizeOf(context).height * 1.5,
         padding: const EdgeInsets.fromLTRB(0, 5, 0, 140),
         itemCount: items.length + loadingTileCount,
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(

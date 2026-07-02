@@ -45,10 +45,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.initState();
     _notifWotd = _settingsLocal.get<bool>(PersistenceKeys.notifWotd, defaultValue: true);
     _notifPromo = _settingsLocal.get<bool>(PersistenceKeys.notifPromo, defaultValue: true);
-    final savedDownloadQuality = _settingsLocal.get<String>(PersistenceKeys.downloadQuality, defaultValue: 'original');
-    if (savedDownloadQuality != 'original') {
-      _settingsLocal.set(PersistenceKeys.downloadQuality, 'original');
-    }
   }
 
   void _trackSettingsAction(AnalyticsActionValue action) {

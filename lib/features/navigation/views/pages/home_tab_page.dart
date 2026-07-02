@@ -458,7 +458,7 @@ class _HomeTabPageState extends State<HomeTabPage> {
           return thumbnailUrl;
         })
         .where((url) => url.isNotEmpty)
-        .take(24)
+        .take(8)
         .where(_precachedUrls.add)
         .toList(growable: false);
     if (imageUrls.isEmpty) {
@@ -490,7 +490,12 @@ class _HomeTabPageState extends State<HomeTabPage> {
               builder: (context, snapshot) {
                 final data = snapshot.data;
                 if (data != null) {
-                  _precacheDashboardMedia(data);
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!mounted || snapshot.data != data) {
+                      return;
+                    }
+                    _precacheDashboardMedia(data);
+                  });
                 }
                 return RefreshIndicator(
                   color: Colors.white,
@@ -1010,7 +1015,7 @@ class _WallpaperSection extends StatelessWidget {
             child: ListView.separated(
               padding: const EdgeInsets.only(right: 18),
               scrollDirection: Axis.horizontal,
-              cacheExtent: cardWidth * 14,
+              cacheExtent: cardWidth * 4,
               itemBuilder: (context, index) {
                 return SizedBox(
                   width: cardWidth,

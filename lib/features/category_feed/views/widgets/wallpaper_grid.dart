@@ -27,9 +27,9 @@ class WallpaperGrid extends StatefulWidget {
 }
 
 class _WallpaperGridState extends State<WallpaperGrid> {
-  static const int _lookAheadPrecacheCount = 48;
-  static const int _lookAheadVideoPrecacheCount = 24;
-  static const Duration _thumbnailPrecacheTimeout = Duration(seconds: 3);
+  static const int _lookAheadPrecacheCount = 18;
+  static const int _lookAheadVideoPrecacheCount = 6;
+  static const Duration _thumbnailPrecacheTimeout = Duration(seconds: 2);
 
   final GlobalKey<RefreshIndicatorState> refreshHomeKey = GlobalKey<RefreshIndicatorState>();
   final ScrollMilestoneTracker _scrollMilestoneTracker = ScrollMilestoneTracker();
@@ -98,31 +98,25 @@ class _WallpaperGridState extends State<WallpaperGrid> {
   }
 
   Future<void> _precacheThumbnailUrls(BuildContext context, Iterable<String> urls, {required Duration timeout}) async {
-    final futures = <Future<void>>[];
     for (final url in urls) {
       if (PrismSeedMediaStore.instance.hasUrlSync(url) || !_prefetchedThumbnailUrls.add(url)) {
         continue;
       }
-      futures.add(
-        precacheImage(CachedNetworkImageProvider(url), context)
-            .timeout(timeout)
-            .catchError((Object _) {}),
-      );
+      try {
+        await precacheImage(CachedNetworkImageProvider(url), context).timeout(timeout);
+      } catch (_) {}
     }
-    await Future.wait<void>(futures);
   }
 
   Future<void> _precacheVideoUrls(Iterable<String> urls) async {
-    final futures = <Future<void>>[];
     for (final url in urls) {
       if (PrismSeedMediaStore.instance.hasUrlSync(url) || !_prefetchedVideoUrls.add(url)) {
         continue;
       }
-      futures.add(
-        DefaultCacheManager().downloadFile(url).timeout(const Duration(seconds: 24)).then((_) {}).catchError((Object _) {}),
-      );
+      try {
+        await DefaultCacheManager().downloadFile(url).timeout(const Duration(seconds: 8));
+      } catch (_) {}
     }
-    await Future.wait<void>(futures);
   }
 
   String _batchKey(List<PrismFeedItem> items, int count) {
@@ -241,7 +235,7 @@ class _WallpaperGridState extends State<WallpaperGrid> {
           },
           child: GridView.builder(
             physics: const ScrollPhysics(),
-            cacheExtent: MediaQuery.sizeOf(context).height * 2.5,
+            cacheExtent: MediaQuery.sizeOf(context).height * 1.5,
             padding: EdgeInsets.zero,
             itemCount: showSkeletonTiles ? 20 : subWalls.length + (state.hasMore ? 1 : 0),
             shrinkWrap: true,

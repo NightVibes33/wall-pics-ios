@@ -33,9 +33,9 @@ class _SearchFilterSpec {
 
 class _SearchGridState extends State<SearchGrid> {
   final GlobalKey<RefreshIndicatorState> _refreshKey = GlobalKey<RefreshIndicatorState>();
-  static const Duration _thumbnailPrecacheTimeout = Duration(seconds: 5);
-  static const int _maxWarmImages = 420;
-  static const int _maxWarmVideos = 96;
+  static const Duration _thumbnailPrecacheTimeout = Duration(seconds: 2);
+  static const int _maxWarmImages = 36;
+  static const int _maxWarmVideos = 8;
   static const List<_SearchFilterSpec> _filters = <_SearchFilterSpec>[
     _SearchFilterSpec(filter: _SearchResultFilter.all, label: 'All', icon: JamIcons.grid_f),
     _SearchFilterSpec(filter: _SearchResultFilter.wallpapers, label: 'Wallpapers', icon: JamIcons.picture_f),
@@ -177,7 +177,7 @@ class _SearchGridState extends State<SearchGrid> {
   }
 
   double _gridAspectRatio(List<FeedItemEntity> displayItems) {
-    if (_activeFilter == _SearchResultFilter.profile) {
+    if (_activeFilter == _SearchResultFilter.profile || _activeFilter == _SearchResultFilter.spatial) {
       return 1.0;
     }
     final sample = displayItems.take(12).toList(growable: false);
@@ -190,14 +190,11 @@ class _SearchGridState extends State<SearchGrid> {
 
   Future<void> _precacheMedia(Iterable<PrismFeedItem> items) async {
     final expandedItems = WallpaperTile.expandMatchingItemsForDisplay(items).toList(growable: false);
-    await Future.wait<void>(<Future<void>>[
-      _precacheThumbnails(expandedItems),
-      _warmVideos(expandedItems),
-    ]);
+    unawaited(_precacheThumbnails(expandedItems));
+    unawaited(_warmVideos(expandedItems));
   }
 
   Future<void> _precacheThumbnails(Iterable<FeedItemEntity> items) async {
-    final futures = <Future<void>>[];
     var scheduled = 0;
     for (final item in items) {
       if (scheduled >= _maxWarmImages) {
@@ -209,17 +206,13 @@ class _SearchGridState extends State<SearchGrid> {
         continue;
       }
       scheduled += 1;
-      futures.add(
-        precacheImage(CachedNetworkImageProvider(url), context)
-            .timeout(_thumbnailPrecacheTimeout)
-            .catchError((Object _) {}),
-      );
+      try {
+        await precacheImage(CachedNetworkImageProvider(url), context).timeout(_thumbnailPrecacheTimeout);
+      } catch (_) {}
     }
-    await Future.wait<void>(futures);
   }
 
   Future<void> _warmVideos(Iterable<FeedItemEntity> items) async {
-    final futures = <Future<void>>[];
     var scheduled = 0;
     for (final item in items) {
       if (scheduled >= _maxWarmVideos) {
@@ -230,11 +223,10 @@ class _SearchGridState extends State<SearchGrid> {
         continue;
       }
       scheduled += 1;
-      futures.add(
-        DefaultCacheManager().downloadFile(videoUrl).timeout(const Duration(seconds: 24)).then((_) {}).catchError((Object _) {}),
-      );
+      try {
+        await DefaultCacheManager().downloadFile(videoUrl).timeout(const Duration(seconds: 8));
+      } catch (_) {}
     }
-    await Future.wait<void>(futures);
   }
 
   @override
@@ -283,7 +275,7 @@ class _SearchGridState extends State<SearchGrid> {
                     ? _EmptyFilteredResults(filter: _activeFilter)
                     : GridView.builder(
                         padding: const EdgeInsets.fromLTRB(5, 6, 5, 120),
-                        cacheExtent: 16000,
+                        cacheExtent: MediaQuery.sizeOf(context).height * 1.5,
                         itemCount: displayItems.length,
                         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: MediaQuery.of(context).orientation == Orientation.portrait ? 3 : 5,

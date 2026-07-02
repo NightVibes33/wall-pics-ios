@@ -20,6 +20,20 @@ class ParallaxArchiveFrame {
   final int height;
 }
 
+class _ParallaxLayerSource {
+  const _ParallaxLayerSource({required this.file, required this.config});
+
+  final File file;
+  final Map<String, Object?> config;
+}
+
+class _ParallaxDecodedLayer {
+  const _ParallaxDecodedLayer({required this.image, required this.config});
+
+  final ui.Image image;
+  final Map<String, Object?> config;
+}
+
 class ParallaxArchiveCache {
   ParallaxArchiveCache._();
 
@@ -69,25 +83,33 @@ class ParallaxArchiveCache {
         .toList(growable: false)
       ..sort((a, b) => _int(a['index']).compareTo(_int(b['index'])));
 
-    final files = <File>[];
+    final layerSources = <_ParallaxLayerSource>[];
     for (final layer in layerConfigs) {
       final file = _findLayerFile(cacheDir, layer['filename']?.toString() ?? '');
-      if (file != null) files.add(file);
+      if (file != null) {
+        layerSources.add(_ParallaxLayerSource(file: file, config: layer));
+      }
     }
-    if (files.isEmpty) {
-      files.addAll(cacheDir.listSync().whereType<File>().where(_isSupportedImageFile));
+    if (layerSources.isEmpty) {
+      final fallbackFiles = cacheDir.listSync().whereType<File>().where(_isSupportedImageFile).toList(growable: false)
+        ..sort((a, b) => a.path.compareTo(b.path));
+      layerSources.addAll(
+        fallbackFiles.map((file) => _ParallaxLayerSource(file: file, config: const <String, Object?>{})),
+      );
     }
-    if (files.isEmpty) return null;
+    if (layerSources.isEmpty) return null;
 
-    final decoded = <ui.Image>[];
+    final decoded = <_ParallaxDecodedLayer>[];
     try {
-      for (final file in files) {
-        decoded.add(await _decodeImage(file));
+      for (final layer in layerSources) {
+        decoded.add(_ParallaxDecodedLayer(image: await _decodeImage(layer.file), config: layer.config));
       }
 
       final resolution = config['resolution'] is Map ? Map<String, Object?>.from(config['resolution'] as Map) : const <String, Object?>{};
-      final sourceWidth = _int(resolution['width'], fallback: decoded.first.width);
-      final sourceHeight = _int(resolution['height'], fallback: decoded.first.height);
+      final fallbackWidth = decoded.map((layer) => layer.image.width).fold<int>(0, math.max);
+      final fallbackHeight = decoded.map((layer) => layer.image.height).fold<int>(0, math.max);
+      final sourceWidth = _int(resolution['width'], fallback: fallbackWidth > 0 ? fallbackWidth : decoded.first.image.width);
+      final sourceHeight = _int(resolution['height'], fallback: fallbackHeight > 0 ? fallbackHeight : decoded.first.image.height);
       final targetSize = _highResolutionSize(width: sourceWidth, height: sourceHeight);
       final width = targetSize.width;
       final height = targetSize.height;
@@ -96,11 +118,17 @@ class ParallaxArchiveCache {
       canvas.drawRect(Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()), Paint()..color = _backgroundColor(config['backgroundColor']));
       final target = Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble());
       final paint = Paint()..filterQuality = FilterQuality.high;
-      for (final image in decoded) {
+      for (var index = 0; index < decoded.length; index++) {
+        final layer = decoded[index];
+        final destination = _destinationRectForLayer(
+          layer: layer,
+          target: target,
+          isBaseLayer: index == 0,
+        );
         canvas.drawImageRect(
-          image,
-          Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
-          target,
+          layer.image,
+          Rect.fromLTWH(0, 0, layer.image.width.toDouble(), layer.image.height.toDouble()),
+          destination,
           paint,
         );
       }
@@ -113,8 +141,8 @@ class ParallaxArchiveCache {
       await output.writeAsBytes(png.buffer.asUint8List(), flush: true);
       return ParallaxArchiveFrame(imagePath: output.path, width: width, height: height);
     } finally {
-      for (final image in decoded) {
-        image.dispose();
+      for (final layer in decoded) {
+        layer.image.dispose();
       }
     }
   }
@@ -160,6 +188,23 @@ class ParallaxArchiveCache {
     final size = (width: image.width, height: image.height);
     image.dispose();
     return size;
+  }
+
+  static Rect _destinationRectForLayer({
+    required _ParallaxDecodedLayer layer,
+    required Rect target,
+    required bool isBaseLayer,
+  }) {
+    final isStatic = layer.config['static'] == true;
+    final fit = isBaseLayer || isStatic ? BoxFit.cover : BoxFit.contain;
+    final fitted = applyBoxFit(
+      fit,
+      Size(layer.image.width.toDouble(), layer.image.height.toDouble()),
+      target.size,
+    );
+    final left = target.left + (target.width - fitted.destination.width) / 2;
+    final top = target.top + (target.height - fitted.destination.height) / 2;
+    return Rect.fromLTWH(left, top, fitted.destination.width, fitted.destination.height);
   }
 
   static int _int(Object? value, {int fallback = 0}) {
