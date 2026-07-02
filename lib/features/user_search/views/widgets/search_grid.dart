@@ -288,7 +288,7 @@ class _SearchGridState extends State<SearchGrid> {
                             item: displayItems[index],
                             index: index,
                             galleryItems: displayItems,
-                            playVideoPreview: true,
+                            playVideoPreview: false,
                           );
                         },
                       ),

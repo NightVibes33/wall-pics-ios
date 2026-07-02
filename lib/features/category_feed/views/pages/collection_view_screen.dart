@@ -283,7 +283,7 @@ class _CategoryFeedContentState extends State<_CategoryFeedContent> {
             item: items[index],
             index: index,
             galleryItems: items,
-            playVideoPreview: true,
+            playVideoPreview: false,
           );
         },
       ),

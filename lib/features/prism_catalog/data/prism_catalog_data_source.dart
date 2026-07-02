@@ -2473,7 +2473,9 @@ String _resolveCatalogUrl(Object? value, {required String sourceBase}) {
 
 String _fastTileImageUrl(String rawUrl, {int width = 1920, int quality = 96}) {
   final source = rawUrl.trim();
-  if (!_isProxyableCatalogImageUrl(source) || _isCatalogPreviewAssetUrl(source)) {
+  if (!_isProxyableCatalogImageUrl(source) ||
+      _isCatalogPreviewAssetUrl(source) ||
+      _isCatalogBrandedAssetUrl(source)) {
     return '';
   }
   final base = _workerMediaBaseUrl();
@@ -2495,7 +2497,7 @@ String _fastTileImageUrl(String rawUrl, {int width = 1920, int quality = 96}) {
 
 String _fastTileOrOriginal(String rawUrl, {int width = 480, int quality = 72}) {
   final source = rawUrl.trim();
-  if (_isCatalogPreviewAssetUrl(source)) {
+  if (_isCatalogPreviewAssetUrl(source) || _isCatalogBrandedAssetUrl(source)) {
     return '';
   }
   final fastUrl = _fastTileImageUrl(source, width: width, quality: quality);
@@ -2513,7 +2515,9 @@ String _fastVideoOrOriginal(String rawUrl) {
 
 String _fastVideoUrl(String rawUrl) {
   final source = rawUrl.trim();
-  if (!_isProxyableCatalogVideoUrl(source) || _isCatalogPreviewAssetUrl(source)) {
+  if (!_isProxyableCatalogVideoUrl(source) ||
+      _isCatalogPreviewAssetUrl(source) ||
+      _isCatalogBrandedAssetUrl(source)) {
     return '';
   }
   final base = _workerMediaBaseUrl();
@@ -2590,7 +2594,8 @@ bool _isCatalogImageAssetUrl(String value) {
   return _hasCatalogImageExtension(raw) || _isPotentialCatalogImageUrl(raw);
 }
 
-bool _isActualCatalogImageUrl(String value) => _isCatalogImageAssetUrl(value) && !_isCatalogPreviewAssetUrl(value);
+bool _isActualCatalogImageUrl(String value) =>
+    _isCatalogImageAssetUrl(value) && !_isCatalogPreviewAssetUrl(value) && !_isCatalogBrandedAssetUrl(value);
 
 String _catalogAssetPathProbe(String value) {
   final raw = value.trim();

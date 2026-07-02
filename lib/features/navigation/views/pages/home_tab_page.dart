@@ -6,7 +6,6 @@ import 'package:Prism/core/interaction/prism_tap_scale.dart';
 import 'package:Prism/core/purchases/paywall_orchestrator.dart';
 import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/wallpaper/wallpaper_source.dart';
-import 'package:Prism/core/widgets/common/autoplay_video_preview.dart';
 import 'package:Prism/data/categories/categories.dart';
 import 'package:Prism/data/categories/category_definition.dart';
 import 'package:Prism/features/category_feed/domain/entities/category_entity.dart';
@@ -177,59 +176,27 @@ class _HomeTabPageState extends State<HomeTabPage> {
       final bootstrap = await PrismCatalogDataSource.instance.fetchHomeBootstrap();
       final bootstrapped = _dashboardFromBootstrap(bootstrap, activeTab);
       if (bootstrapped != null) {
-        return _fillMissingBootstrapSections(bootstrapped, activeTab);
+        return bootstrapped;
       }
     }
 
-    final futures = <Future<_HomeSection>>[];
-    final keys = <String>{};
-
-    void addCatalog({
-      required String title,
-      required String contentType,
-      String slug = 'for-you',
-      _SectionKind kind = _SectionKind.wallpaper,
-    }) {
-      final key = '$title|$contentType|$slug';
-      if (!keys.add(key)) {
-        return;
-      }
-      futures.add(_loadCatalogSection(title: title, contentType: contentType, slug: slug, kind: kind));
-    }
-
-    void addSearch({required String title, required String query}) {
-      final key = 'search|$title|$query';
-      if (!keys.add(key)) {
-        return;
-      }
-      futures.add(_loadSearchSection(title: title, query: query));
-    }
-
+    late final _HomeSection primarySection;
     if (query.isNotEmpty) {
-      addSearch(title: 'For You', query: query);
+      primarySection = await _loadSearchSection(title: 'For You', query: query);
+    } else if (activeTab.query != null) {
+      primarySection = await _loadSearchSection(title: activeTab.title, query: activeTab.query!);
     } else {
-      final tab = _tabs[_activeTabIndex];
-      if (tab.query != null) {
-        addSearch(title: tab.title, query: tab.query!);
-      } else {
-        addCatalog(
-          title: tab.title,
-          contentType: tab.contentType ?? PrismCatalogDataSource.regularContentType,
-          slug: tab.slug ?? 'for-you',
-          kind: _kindFor(tab.contentType),
-        );
-      }
+      primarySection = await _loadCatalogSection(
+        title: activeTab.title,
+        contentType: activeTab.contentType ?? PrismCatalogDataSource.regularContentType,
+        slug: activeTab.slug ?? 'for-you',
+        kind: _kindFor(activeTab.contentType),
+      );
     }
 
-    addCatalog(title: 'For You', contentType: PrismCatalogDataSource.regularContentType);
-    addCatalog(title: '3D Spatial', contentType: PrismCatalogDataSource.parallaxContentType);
-    addCatalog(title: 'Matching', contentType: PrismCatalogDataSource.matchingContentType, kind: _SectionKind.matching);
-    addCatalog(title: 'Profile Pictures', contentType: PrismCatalogDataSource.profilePictureContentType, kind: _SectionKind.profile);
-
-    final sections = (await Future.wait<_HomeSection>(futures))
-        .where((section) => section.items.isNotEmpty)
-        .toList(growable: false);
-    return _HomeDashboardData(sections: sections);
+    return _HomeDashboardData(
+      sections: primarySection.items.isEmpty ? const <_HomeSection>[] : <_HomeSection>[primarySection],
+    );
   }
 
   _HomeDashboardData? _dashboardFromBootstrap(PrismCatalogHomeBootstrap? bootstrap, _HomeTabSpec activeTab) {
@@ -364,7 +331,7 @@ class _HomeTabPageState extends State<HomeTabPage> {
           catalogSlug: slug,
           catalogContentType: contentType,
         ),
-        refresh: false,
+        refresh: true,
       );
       return _HomeSection(
         title: title,
@@ -1055,11 +1022,8 @@ class _HomeWallpaperCard extends StatelessWidget {
     final isProfile = section.kind == _SectionKind.profile ||
         section.title.toLowerCase().startsWith('profile') ||
         WallpaperTile.isProfilePictureItem(item);
-    final videoUrl = WallpaperTile.videoUrlForItem(item);
     final imageUrl = WallpaperTile.imageUrlForItem(item);
-    final rawImage = videoUrl.isNotEmpty
-        ? AutoplayVideoPreview(videoUrl: videoUrl, posterUrl: imageUrl, playing: true)
-        : _image(context, imageUrl, isProfile: isProfile);
+    final rawImage = _image(context, imageUrl, isProfile: isProfile);
     final image = isProfile ? ClipOval(child: rawImage) : rawImage;
     final shape = isProfile ? const CircleBorder() : RoundedRectangleBorder(borderRadius: BorderRadius.circular(8));
     final content = Stack(

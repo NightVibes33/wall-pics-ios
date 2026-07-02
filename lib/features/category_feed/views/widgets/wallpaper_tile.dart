@@ -393,7 +393,7 @@ class WallpaperTile extends StatelessWidget {
     final cacheWidth = (width * pixelRatio).ceil();
     final cacheHeight = (height * pixelRatio).ceil();
     final videoUrl = videoUrlForItem(item);
-    final shouldPlayVideo = videoUrl.isNotEmpty || playVideoPreview;
+    final shouldPlayVideo = playVideoPreview && videoUrl.isNotEmpty;
     final tileImageUrl = imageUrlForItem(item);
     final image = shouldPlayVideo && videoUrl.isNotEmpty
         ? AutoplayVideoPreview(videoUrl: videoUrl, posterUrl: tileImageUrl, playing: true)
