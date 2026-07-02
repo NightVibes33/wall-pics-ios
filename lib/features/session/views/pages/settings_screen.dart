@@ -13,6 +13,8 @@ import 'package:Prism/core/persistence/data_sources/favorites_local_data_source.
 import 'package:Prism/core/persistence/data_sources/settings_local_data_source.dart';
 import 'package:Prism/core/persistence/persistence_keys.dart';
 import 'package:Prism/core/platform/pigeon/prism_media_api.g.dart';
+import 'package:Prism/core/purchases/paywall_orchestrator.dart';
+import 'package:Prism/core/purchases/subscription_tier.dart';
 import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/state/auth_runtime.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
@@ -75,6 +77,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int get _selectedInterestCount => _selectedInterests.length;
 
   bool get _isSignedIn => app_state.prismUser.loggedIn;
+
+  SubscriptionTier get _subscriptionTier => SubscriptionTier.fromValue(app_state.prismUser.subscriptionTier);
+
+  String get _subscriptionLabel {
+    return switch (_subscriptionTier) {
+      SubscriptionTier.free => 'Free plan',
+      SubscriptionTier.pro => 'Prism Pro',
+      SubscriptionTier.lifetime => 'Lifetime access',
+    };
+  }
+
+  String get _entitlementLabel {
+    return switch (_subscriptionTier) {
+      SubscriptionTier.free => 'No premium entitlement',
+      SubscriptionTier.pro => 'Recurring premium access active',
+      SubscriptionTier.lifetime => 'Permanent premium access active',
+    };
+  }
 
   String _normalizedDownloadQuality(String raw) {
     final value = raw.trim().toLowerCase();
@@ -188,7 +208,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _settingsHeader() {
     final user = app_state.prismUser;
     final ColorScheme cs = Theme.of(context).colorScheme;
-    final String tier = user.premium ? 'Prism Pro' : 'Free';
+    final String tier = _subscriptionLabel;
     final String syncState = _isSignedIn ? 'Cloud sync enabled' : 'Local-only mode';
     final String headline = _isSignedIn ? (user.name.trim().isEmpty ? 'Your account' : user.name.trim()) : 'Settings';
     final String subhead = _isSignedIn ? (user.email.trim().isEmpty ? syncState : user.email.trim()) : 'Control app behavior, storage and account access';
@@ -239,8 +259,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: <Widget>[
                   _StatPill(label: tier, icon: user.premium ? Icons.workspace_premium_outlined : Icons.lock_open_outlined),
                   _StatPill(label: syncState, icon: _isSignedIn ? Icons.cloud_done_outlined : Icons.phone_iphone_outlined),
+                  _StatPill(label: _entitlementLabel, icon: user.premium ? Icons.verified_outlined : Icons.lock_outline),
                   _StatPill(label: '${user.followers.length} followers', icon: Icons.people_outline),
-                  _StatPill(label: '${user.uploadsThisWeek} uploads this week', icon: Icons.upload_outlined),
                 ],
               ),
             ],
@@ -281,14 +301,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     final user = app_state.prismUser;
     final syncLabel = user.email.trim().isEmpty ? 'Signed in' : user.email.trim();
+    final bool isPaid = _subscriptionTier.isPaid || user.premium;
     return _sectionCard(
       title: 'ACCOUNT',
       children: <Widget>[
         ListTile(
           leading: const Icon(Icons.verified_user_outlined),
-          title: Text('Access status', style: _titleStyle),
-          subtitle: Text('${user.premium ? 'Prism Pro' : 'Free'} • $syncLabel', style: _subtitleStyle),
+          title: Text('Plan', style: _titleStyle),
+          subtitle: Text('$_subscriptionLabel • $syncLabel', style: _subtitleStyle),
         ),
+        ListTile(
+          leading: Icon(isPaid ? Icons.workspace_premium_outlined : Icons.lock_outline),
+          title: Text('Entitlement status', style: _titleStyle),
+          subtitle: Text(_entitlementLabel, style: _subtitleStyle),
+        ),
+        if (!isPaid)
+          ListTile(
+            leading: const Icon(Icons.upgrade_outlined),
+            title: Text('Upgrade to Prism Pro', style: _titleStyle),
+            subtitle: const Text('Unlock premium wallpapers, premium setup access and Pro-only perks', style: _subtitleStyle),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => PaywallOrchestrator.instance.present(
+              context,
+              placement: PaywallPlacement.mainUpsell,
+              source: 'settings_account_upgrade',
+            ),
+          ),
         ListTile(
           leading: const Icon(Icons.cloud_sync_outlined),
           title: Text('Sync mode', style: _titleStyle),
@@ -298,7 +336,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           leading: const Icon(Icons.manage_accounts_outlined),
           title: Text('Profile data', style: _titleStyle),
           subtitle: Text(
-            '${user.following.length} following • ${user.followers.length} followers • ${user.badges.length} badges',
+            '${user.following.length} following • ${user.followers.length} followers • ${user.badges.length} badges • ${user.subPrisms.length} subscriptions',
+            style: _subtitleStyle,
+          ),
+        ),
+        ListTile(
+          leading: const Icon(Icons.history_outlined),
+          title: Text('Account activity', style: _titleStyle),
+          subtitle: Text(
+            '${user.transactions.length} account records • ${user.uploadsThisWeek} uploads this week',
             style: _subtitleStyle,
           ),
         ),
