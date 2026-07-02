@@ -52,6 +52,14 @@ class FavoritesLocalDataSource {
     return isWallFavourite(userId, itemId) || isSetupFavourite(userId, itemId);
   }
 
+  int wallFavouriteCount(String userId) {
+    return _wallSet(_scope(userId)).length;
+  }
+
+  int setupFavouriteCount(String userId) {
+    return _setupSet(_scope(userId)).length;
+  }
+
   Future<void> setWallFavourite(String userId, String itemId, bool value) async {
     final scope = _scope(userId);
     final ids = _wallSet(scope);

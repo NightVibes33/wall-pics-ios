@@ -2,17 +2,24 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:Prism/analytics/analytics_service.dart';
+import 'package:Prism/auth/apple_auth.dart';
 import 'package:Prism/auth/google_auth.dart';
 import 'package:Prism/core/account/delete_account_service.dart';
 import 'package:Prism/core/analytics/events/events.dart';
+import 'package:Prism/core/constants/app_constants.dart';
 import 'package:Prism/core/di/injection.dart';
 import 'package:Prism/core/persistence/data_sources/cache_maintenance_service.dart';
+import 'package:Prism/core/persistence/data_sources/favorites_local_data_source.dart';
 import 'package:Prism/core/persistence/data_sources/settings_local_data_source.dart';
 import 'package:Prism/core/persistence/persistence_keys.dart';
 import 'package:Prism/core/platform/pigeon/prism_media_api.g.dart';
 import 'package:Prism/core/router/app_router.dart';
+import 'package:Prism/core/state/auth_runtime.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
+import 'package:Prism/env/env.dart';
+import 'package:Prism/features/navigation/views/widgets/personalized_feed_settings_bottom_sheet.dart';
 import 'package:Prism/core/widgets/home/core/headingChipBar.dart';
+import 'package:Prism/features/onboarding_v2/src/common/onboarding_v2_keys.dart';
 import 'package:Prism/features/favourite_walls/views/favourite_walls_bloc_adapter.dart';
 import 'package:Prism/logger/logger.dart';
 import 'package:Prism/main.dart' as main;
@@ -30,21 +37,88 @@ class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
   @override
-  _SettingsScreenState createState() => _SettingsScreenState();
+  State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final CacheMaintenanceService _cacheMaintenance = getIt<CacheMaintenanceService>();
   final SettingsLocalDataSource _settingsLocal = getIt<SettingsLocalDataSource>();
+  final FavoritesLocalDataSource _favoritesLocal = getIt<FavoritesLocalDataSource>();
 
   late bool _notifWotd;
   late bool _notifPromo;
+  late String _downloadQuality;
+  late String _feedMix;
+  late List<String> _selectedInterests;
+
+  bool _loadingStorage = true;
+  bool _authBusy = false;
+  int _downloadCount = 0;
+  int _favoriteWallCount = 0;
+  int _favoriteSetupCount = 0;
 
   @override
   void initState() {
     super.initState();
     _notifWotd = _settingsLocal.get<bool>(PersistenceKeys.notifWotd, defaultValue: true);
     _notifPromo = _settingsLocal.get<bool>(PersistenceKeys.notifPromo, defaultValue: true);
+    _downloadQuality = _normalizedDownloadQuality(
+      _settingsLocal.get<String>(PersistenceKeys.downloadQuality, defaultValue: 'original'),
+    );
+    _feedMix = _normalizedFeedMix(_settingsLocal.get<String>(personalizedFeedMixLocalKey, defaultValue: 'balanced'));
+    _selectedInterests = _readSelectedInterests();
+    unawaited(_reloadStorageStats());
+  }
+
+  String get _userScope => app_state.prismUser.id.trim();
+
+  int get _selectedInterestCount => _selectedInterests.length;
+
+  bool get _isSignedIn => app_state.prismUser.loggedIn;
+
+  String _normalizedDownloadQuality(String raw) {
+    final value = raw.trim().toLowerCase();
+    return value == 'compressed' ? 'compressed' : 'original';
+  }
+
+  String _normalizedFeedMix(String raw) {
+    final value = raw.trim().toLowerCase();
+    if (value == 'catalog' || value == 'balanced') {
+      return value;
+    }
+    return 'balanced';
+  }
+
+  List<String> _readSelectedInterests() {
+    final raw = _settingsLocal.get<String>(OnboardingV2Keys.selectedInterests, defaultValue: '');
+    return raw
+        .split(',')
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  Future<void> _reloadStorageStats() async {
+    int downloads = _downloadCount;
+    try {
+      final result = await PrismMediaHostApi().listDownloads();
+      if (result.success) {
+        downloads = result.items.length;
+      }
+    } catch (error, stackTrace) {
+      logger.w('Failed to load download stats.', error: error, stackTrace: stackTrace);
+    }
+
+    final wallScope = _userScope;
+    final wallCount = _favoritesLocal.wallFavouriteCount(wallScope);
+    final setupCount = _favoritesLocal.setupFavouriteCount(wallScope);
+    if (!mounted) return;
+    setState(() {
+      _downloadCount = downloads;
+      _favoriteWallCount = wallCount;
+      _favoriteSetupCount = setupCount;
+      _loadingStorage = false;
+    });
   }
 
   void _trackSettingsAction(AnalyticsActionValue action) {
@@ -67,12 +141,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     unawaited(analytics.track(SettingsAuthActionResultEvent(action: action, result: result, reason: reason)));
   }
 
-  // ── Helpers ─────────────────────────────────────────────────────────────────
-
   Color get _accentColor {
     final c = Theme.of(context).colorScheme.error;
     return c == Colors.black ? Colors.grey : c;
   }
+
+  TextStyle get _titleStyle => TextStyle(
+    color: Theme.of(context).colorScheme.secondary,
+    fontWeight: FontWeight.w600,
+    fontFamily: 'Proxima Nova',
+  );
+
+  static const TextStyle _subtitleStyle = TextStyle(fontSize: 12);
 
   Widget _sectionCard({required String title, required List<Widget> children}) {
     return Padding(
@@ -83,9 +163,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+          children: <Widget>[
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
               child: Text(
                 title,
                 style: TextStyle(
@@ -105,25 +185,178 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  TextStyle get _titleStyle => TextStyle(
-    color: Theme.of(context).colorScheme.secondary,
-    fontWeight: FontWeight.w500,
-    fontFamily: 'Proxima Nova',
-  );
+  Widget _settingsHeader() {
+    final user = app_state.prismUser;
+    final ColorScheme cs = Theme.of(context).colorScheme;
+    final String tier = user.premium ? 'Prism Pro' : 'Free';
+    final String syncState = _isSignedIn ? 'Cloud sync enabled' : 'Local-only mode';
+    final String headline = _isSignedIn ? (user.name.trim().isEmpty ? 'Your account' : user.name.trim()) : 'Settings';
+    final String subhead = _isSignedIn ? (user.email.trim().isEmpty ? syncState : user.email.trim()) : 'Control app behavior, storage and account access';
 
-  static const TextStyle _subtitleStyle = TextStyle(fontSize: 12);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: LinearGradient(
+            colors: <Color>[
+              cs.surfaceContainerHighest.withValues(alpha: 0.92),
+              cs.surfaceContainerHigh.withValues(alpha: 0.96),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundImage: user.profilePhoto.trim().isNotEmpty ? NetworkImage(user.profilePhoto.trim()) : null,
+                    child: user.profilePhoto.trim().isEmpty ? const Icon(Icons.person_outline) : null,
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(headline, maxLines: 1, overflow: TextOverflow.ellipsis, style: _titleStyle.copyWith(fontSize: 20)),
+                        const SizedBox(height: 4),
+                        Text(subhead, maxLines: 2, overflow: TextOverflow.ellipsis, style: _subtitleStyle.copyWith(color: cs.onSurfaceVariant)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: <Widget>[
+                  _StatPill(label: tier, icon: user.premium ? Icons.workspace_premium_outlined : Icons.lock_open_outlined),
+                  _StatPill(label: syncState, icon: _isSignedIn ? Icons.cloud_done_outlined : Icons.phone_iphone_outlined),
+                  _StatPill(label: '${user.followers.length} followers', icon: Icons.people_outline),
+                  _StatPill(label: '${user.uploadsThisWeek} uploads this week', icon: Icons.upload_outlined),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
-  // ── Sections ─────────────────────────────────────────────────────────────────
+  Widget _accountSection() {
+    if (!_isSignedIn) {
+      return _sectionCard(
+        title: 'ACCOUNT',
+        children: <Widget>[
+          ListTile(
+            leading: const Icon(JamIcons.log_in),
+            title: Text('Sign in with Google', style: _titleStyle),
+            subtitle: const Text('Enable cloud sync for favorites, profile and notifications', style: _subtitleStyle),
+            trailing: _authBusy ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : null,
+            onTap: _authBusy ? null : () => _signInWithGoogle(),
+          ),
+          if (!Env.sideloadBuild)
+            ListTile(
+              leading: const Icon(Icons.apple),
+              title: Text('Sign in with Apple', style: _titleStyle),
+              subtitle: const Text('Use your Apple account for Prism access', style: _subtitleStyle),
+              trailing: _authBusy ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : null,
+              onTap: _authBusy ? null : () => _signInWithApple(),
+            ),
+          ListTile(
+            leading: const Icon(Icons.info_outline),
+            title: Text('What account access enables', style: _titleStyle),
+            subtitle: const Text('Sync preferences, in-app notifications, favorites and creator activity across devices', style: _subtitleStyle),
+          ),
+        ],
+      );
+    }
 
+    final user = app_state.prismUser;
+    final syncLabel = user.email.trim().isEmpty ? 'Signed in' : user.email.trim();
+    return _sectionCard(
+      title: 'ACCOUNT',
+      children: <Widget>[
+        ListTile(
+          leading: const Icon(Icons.verified_user_outlined),
+          title: Text('Access status', style: _titleStyle),
+          subtitle: Text('${user.premium ? 'Prism Pro' : 'Free'} • $syncLabel', style: _subtitleStyle),
+        ),
+        ListTile(
+          leading: const Icon(Icons.cloud_sync_outlined),
+          title: Text('Sync mode', style: _titleStyle),
+          subtitle: const Text('Favorites, profile and feed preferences are tied to this account', style: _subtitleStyle),
+        ),
+        ListTile(
+          leading: const Icon(Icons.manage_accounts_outlined),
+          title: Text('Profile data', style: _titleStyle),
+          subtitle: Text(
+            '${user.following.length} following • ${user.followers.length} followers • ${user.badges.length} badges',
+            style: _subtitleStyle,
+          ),
+        ),
+        ListTile(
+          leading: Icon(JamIcons.log_out, color: _accentColor),
+          title: Text('Sign out', style: _titleStyle.copyWith(color: _accentColor)),
+          subtitle: const Text('Keep app data on this device, disconnect cloud access', style: _subtitleStyle),
+          onTap: _authBusy ? null : _signOut,
+        ),
+        ListTile(
+          leading: Icon(Icons.delete_forever_rounded, color: Colors.red[400]),
+          title: Text('Delete account', style: _titleStyle.copyWith(color: Colors.red[400])),
+          subtitle: const Text('Permanently delete your Prism account and remote data', style: _subtitleStyle),
+          onTap: _showDeleteAccountDialog,
+        ),
+      ],
+    );
+  }
+
+  Widget _personalizationSection() {
+    final String mixLabel = switch (_feedMix) {
+      'catalog' => 'Catalog-first',
+      _ => 'Balanced',
+    };
+    final String interestsLabel = _selectedInterestCount == 0
+        ? 'No interests selected yet'
+        : '$_selectedInterestCount interests selected';
+    return _sectionCard(
+      title: 'PERSONALIZATION',
+      children: <Widget>[
+        ListTile(
+          leading: const Icon(Icons.tune_outlined),
+          title: Text('Feed preferences', style: _titleStyle),
+          subtitle: Text('$interestsLabel • $mixLabel mix', style: _subtitleStyle),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: _openFeedPreferences,
+        ),
+        ListTile(
+          leading: const Icon(Icons.restart_alt_outlined),
+          title: Text('Reset feed personalization', style: _titleStyle),
+          subtitle: const Text('Clear selected interests and revert to the default feed mix', style: _subtitleStyle),
+          onTap: _resetFeedPersonalization,
+        ),
+      ],
+    );
+  }
 
   Widget _downloadsSection() {
+    final String qualityLabel = _downloadQuality == 'compressed' ? 'Faster, smaller files' : 'Original resolution';
     return _sectionCard(
       title: 'DOWNLOADS',
-      children: [
+      children: <Widget>[
         ListTile(
           leading: const Icon(Icons.high_quality_outlined),
-          title: Text('Download Quality', style: _titleStyle),
-          subtitle: Text('Original resolution', style: _subtitleStyle),
+          title: Text('Download quality', style: _titleStyle),
+          subtitle: Text(qualityLabel, style: _subtitleStyle),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: _showDownloadQualitySheet,
         ),
       ],
     );
@@ -132,27 +365,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _notificationsSection() {
     return _sectionCard(
       title: 'NOTIFICATIONS',
-      children: [
+      children: <Widget>[
+        ListTile(
+          leading: const Icon(Icons.notifications_active_outlined),
+          title: Text('Notification delivery', style: _titleStyle),
+          subtitle: Text(
+            _isSignedIn
+                ? 'This build uses in-app and local alerts. Remote topic subscriptions are not active here.'
+                : 'Available as local preferences now. Sign in if you want them tied to your account later.',
+            style: _subtitleStyle,
+          ),
+        ),
         SwitchListTile(
           activeThumbColor: _accentColor,
           secondary: const Icon(Icons.wb_sunny_outlined),
           value: _notifWotd,
           title: Text('Wall of the Day', style: _titleStyle),
-          subtitle: const Text('Daily wallpaper recommendation alert', style: TextStyle(fontSize: 12)),
-          onChanged: (value) {
+          subtitle: const Text('Daily wallpaper recommendation alert', style: _subtitleStyle),
+          onChanged: (value) async {
             setState(() => _notifWotd = value);
-            _settingsLocal.set(PersistenceKeys.notifWotd, value);
+            await _settingsLocal.set(PersistenceKeys.notifWotd, value);
           },
         ),
         SwitchListTile(
           activeThumbColor: _accentColor,
           secondary: const Icon(Icons.campaign_outlined),
           value: _notifPromo,
-          title: Text('Promotional Alerts', style: _titleStyle),
-          subtitle: const Text('New features, events & announcements', style: TextStyle(fontSize: 12)),
-          onChanged: (value) {
+          title: Text('Promotional alerts', style: _titleStyle),
+          subtitle: const Text('New features, events and release announcements', style: _subtitleStyle),
+          onChanged: (value) async {
             setState(() => _notifPromo = value);
-            _settingsLocal.set(PersistenceKeys.notifPromo, value);
+            await _settingsLocal.set(PersistenceKeys.notifPromo, value);
           },
         ),
       ],
@@ -160,27 +403,258 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _storageSection() {
+    final String subtitle = _loadingStorage
+        ? 'Loading device usage…'
+        : '$_downloadCount downloads • $_favoriteWallCount favorite walls • $_favoriteSetupCount favorite setups';
     return _sectionCard(
       title: 'STORAGE',
-      children: [
+      children: <Widget>[
         ListTile(
           leading: const Icon(JamIcons.pie_chart_alt),
-          title: Text('Clear Cache', style: _titleStyle),
-          subtitle: const Text('Clear locally cached images', style: TextStyle(fontSize: 12)),
+          title: Text('Device data summary', style: _titleStyle),
+          subtitle: Text(subtitle, style: _subtitleStyle),
+          trailing: _loadingStorage ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : null,
+        ),
+        ListTile(
+          leading: const Icon(Icons.cleaning_services_outlined),
+          title: Text('Clear cache', style: _titleStyle),
+          subtitle: const Text('Remove cached images, feed cache and notification cache', style: _subtitleStyle),
           onTap: () async {
             _trackSettingsAction(AnalyticsActionValue.clearCacheTapped);
             await _cacheMaintenance.clearTransientCache();
-            toasts.codeSend('Cleared cache!');
+            if (!mounted) return;
+            toasts.codeSend('Cleared cache.');
+            unawaited(_reloadStorageStats());
           },
         ),
         ListTile(
           leading: const Icon(JamIcons.trash_alt),
-          title: Text('Clear all Downloads', style: _titleStyle),
-          subtitle: const Text('Remove all downloaded wallpapers', style: TextStyle(fontSize: 12)),
-          onTap: () => _showClearDownloadsDialog(),
+          title: Text('Clear downloads', style: _titleStyle),
+          subtitle: const Text('Remove downloaded wallpapers from device storage', style: _subtitleStyle),
+          onTap: _showClearDownloadsDialog,
+        ),
+        ListTile(
+          leading: const Icon(JamIcons.heart),
+          title: Text('Clear favorites', style: _titleStyle),
+          subtitle: const Text('Remove locally saved favorite walls and setups', style: _subtitleStyle),
+          onTap: _showClearFavoritesDialog,
         ),
       ],
     );
+  }
+
+  Widget _supportSection() {
+    return _sectionCard(
+      title: 'SUPPORT',
+      children: <Widget>[
+        ListTile(
+          leading: const Icon(JamIcons.info),
+          title: Text('About Prism', style: _titleStyle),
+          subtitle: Text('Version ${app_state.currentAppVersion} (${app_state.currentAppVersionCode})', style: _subtitleStyle),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: () => context.router.push(const AboutRoute()),
+        ),
+        ListTile(
+          leading: const Icon(JamIcons.bug),
+          title: Text('Report a bug', style: _titleStyle),
+          subtitle: const Text('Open an email draft with device info and logs attached', style: _subtitleStyle),
+          onTap: _sendBugReport,
+        ),
+        ListTile(
+          leading: const Icon(JamIcons.refresh),
+          title: Text('Restart app', style: _titleStyle),
+          subtitle: const Text('Restart the app after account or storage changes', style: _subtitleStyle),
+          onTap: () {
+            _trackSettingsAction(AnalyticsActionValue.restartAppTapped);
+            main.RestartWidget.restartApp(context);
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _adminSection() {
+    if (!app_state.isAdminUser()) return const SizedBox.shrink();
+    return _sectionCard(
+      title: 'ADMIN',
+      children: <Widget>[
+        ListTile(
+          leading: const Icon(Icons.bug_report_outlined),
+          title: Text('Debug panel', style: _titleStyle),
+          subtitle: const Text('Logs, network, tools and storage inspector', style: _subtitleStyle),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: () => context.router.pushPath('/debug-panel'),
+        ),
+        ListTile(
+          leading: const Icon(JamIcons.file),
+          title: Text('Remote Store telemetry', style: _titleStyle),
+          subtitle: const Text('Database usage and telemetry stats', style: _subtitleStyle),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: () => context.router.push(const RemoteStoreTelemetryRoute()),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _openFeedPreferences() async {
+    await openPersonalizedFeedSettingsBottomSheet(
+      context,
+      onPreferencesSaved: () {
+        if (!mounted) return;
+        setState(() {
+          _feedMix = _normalizedFeedMix(_settingsLocal.get<String>(personalizedFeedMixLocalKey, defaultValue: 'balanced'));
+          _selectedInterests = _readSelectedInterests();
+        });
+      },
+    );
+    if (!mounted) return;
+    setState(() {
+      _feedMix = _normalizedFeedMix(_settingsLocal.get<String>(personalizedFeedMixLocalKey, defaultValue: 'balanced'));
+      _selectedInterests = _readSelectedInterests();
+    });
+  }
+
+  Future<void> _resetFeedPersonalization() async {
+    await _settingsLocal.set(OnboardingV2Keys.selectedInterests, '');
+    await _settingsLocal.set(personalizedFeedMixLocalKey, 'balanced');
+    if (!mounted) return;
+    setState(() {
+      _feedMix = 'balanced';
+      _selectedInterests = const <String>[];
+    });
+    toasts.codeSend('Feed preferences reset.');
+  }
+
+  Future<void> _showDownloadQualitySheet() async {
+    final String? selected = await showModalBottomSheet<String>(
+      context: context,
+      useSafeArea: true,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              ListTile(
+                title: Text('Download quality', style: _titleStyle),
+                subtitle: const Text('Choose how wallpaper downloads are saved', style: _subtitleStyle),
+              ),
+              RadioListTile<String>(
+                value: 'original',
+                groupValue: _downloadQuality,
+                activeColor: _accentColor,
+                title: const Text('Original resolution'),
+                subtitle: const Text('Best quality, larger downloads'),
+                onChanged: (value) => Navigator.of(context).pop(value),
+              ),
+              RadioListTile<String>(
+                value: 'compressed',
+                groupValue: _downloadQuality,
+                activeColor: _accentColor,
+                title: const Text('Compressed'),
+                subtitle: const Text('Smaller files, faster saves'),
+                onChanged: (value) => Navigator.of(context).pop(value),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+    if (selected == null) return;
+    final normalized = _normalizedDownloadQuality(selected);
+    await _settingsLocal.set(PersistenceKeys.downloadQuality, normalized);
+    if (!mounted) return;
+    setState(() => _downloadQuality = normalized);
+  }
+
+  Future<void> _signInWithGoogle() async {
+    await _runAuthAction(
+      action: AnalyticsActionValue.signInTapped,
+      runner: () => app_state.gAuth.signInWithGoogle(),
+      isCancelled: (result) => result == GoogleAuth.signInCancelledResult,
+    );
+  }
+
+  Future<void> _signInWithApple() async {
+    await _runAuthAction(
+      action: AnalyticsActionValue.signInTapped,
+      runner: () => globalAppleAuth.signInWithApple(),
+      isCancelled: (result) => result == AppleAuth.signInCancelledResult,
+    );
+  }
+
+  Future<void> _runAuthAction({
+    required AnalyticsActionValue action,
+    required Future<String> Function() runner,
+    required bool Function(String result) isCancelled,
+  }) async {
+    if (_authBusy) return;
+    _trackSettingsAction(action);
+    setState(() => _authBusy = true);
+    try {
+      final result = await runner();
+      if (!mounted) return;
+      if (isCancelled(result)) {
+        _trackSettingsAuthResult(
+          action: action,
+          result: EventResultValue.cancelled,
+          reason: AnalyticsReasonValue.userCancelled,
+        );
+        toasts.codeSend('Sign in cancelled.');
+        return;
+      }
+      _trackSettingsAuthResult(action: action, result: EventResultValue.success);
+      toasts.codeSend('Login successful.');
+      main.RestartWidget.restartApp(context);
+    } catch (error, stackTrace) {
+      logger.e('Sign in failed from settings.', error: error, stackTrace: stackTrace);
+      _trackSettingsAuthResult(
+        action: action,
+        result: EventResultValue.failure,
+        reason: AnalyticsReasonValue.error,
+      );
+      if (mounted) {
+        toasts.error('Something went wrong, please try again.');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _authBusy = false);
+      }
+    }
+  }
+
+  Future<void> _signOut() async {
+    _trackSettingsAction(AnalyticsActionValue.logoutTapped);
+    setState(() => _authBusy = true);
+    try {
+      final bool signedOut = await app_state.gAuth.signOutGoogle();
+      _trackSettingsAuthResult(
+        action: AnalyticsActionValue.logoutTapped,
+        result: signedOut ? EventResultValue.success : EventResultValue.failure,
+        reason: signedOut ? null : AnalyticsReasonValue.error,
+      );
+      if (!signedOut) {
+        toasts.error('Something went wrong, please try again.');
+        return;
+      }
+      if (!mounted) return;
+      toasts.codeSend('Signed out.');
+      main.RestartWidget.restartApp(context);
+    } catch (error, stackTrace) {
+      logger.e('Sign out failed from settings.', error: error, stackTrace: stackTrace);
+      _trackSettingsAuthResult(
+        action: AnalyticsActionValue.logoutTapped,
+        result: EventResultValue.failure,
+        reason: AnalyticsReasonValue.error,
+      );
+      if (mounted) {
+        toasts.error('Something went wrong, please try again.');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _authBusy = false);
+      }
+    }
   }
 
   void _showClearDownloadsDialog() {
@@ -193,7 +667,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           width: 250,
           child: Center(child: Text('Do you want to remove all your downloads?')),
         ),
-        actions: [
+        actions: <Widget>[
           MaterialButton(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
             onPressed: () async {
@@ -202,15 +676,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
               try {
                 final result = await PrismMediaHostApi().clearDownloads();
                 deleted = result.success;
-              } catch (e) {
-                logger.d(e.toString());
+              } catch (error, stackTrace) {
+                logger.e('Failed to clear downloads.', error: error, stackTrace: stackTrace);
               }
+              if (!mounted) return;
               Fluttertoast.showToast(
-                msg: deleted ? 'Deleted all downloads!' : 'No downloads found.',
+                msg: deleted ? 'Deleted all downloads.' : 'No downloads found.',
                 toastLength: Toast.LENGTH_LONG,
                 textColor: Colors.white,
                 backgroundColor: deleted ? Colors.green[400] : Colors.red[400],
               );
+              unawaited(_reloadStorageStats());
             },
             child: Text('YES', style: TextStyle(fontSize: 16.0, color: _accentColor)),
           ),
@@ -229,156 +705,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _accountSection() {
-    if (!app_state.prismUser.loggedIn) {
-      return _sectionCard(
-        title: 'ACCOUNT',
-        children: [
-          ListTile(
-            leading: const Icon(JamIcons.log_in),
-            title: Text('Sign in', style: _titleStyle),
-            subtitle: const Text('Sign in to sync data across devices', style: TextStyle(fontSize: 12)),
-            onTap: () async {
-              _trackSettingsAction(AnalyticsActionValue.signInTapped);
-              final loaderDialog = Dialog(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    color: Theme.of(context).primaryColor,
-                  ),
-                  width: MediaQuery.of(context).size.width * .7,
-                  height: MediaQuery.of(context).size.height * .3,
-                  child: const Center(child: CircularProgressIndicator()),
-                ),
-              );
-              showDialog(barrierDismissible: false, context: context, builder: (_) => loaderDialog);
-              try {
-                final String signInResult = await app_state.gAuth.signInWithGoogle();
-                if (!mounted) return;
-                if (signInResult == GoogleAuth.signInCancelledResult) {
-                  Navigator.pop(context);
-                  app_state.prismUser.loggedIn = false;
-                  app_state.persistPrismUser();
-                  _trackSettingsAuthResult(
-                    action: AnalyticsActionValue.signInTapped,
-                    result: EventResultValue.cancelled,
-                    reason: AnalyticsReasonValue.userCancelled,
-                  );
-                  toasts.codeSend('Sign in cancelled.');
-                  return;
-                }
-                toasts.codeSend('Login Successful!');
-                _trackSettingsAuthResult(action: AnalyticsActionValue.signInTapped, result: EventResultValue.success);
-                app_state.prismUser.loggedIn = true;
-                app_state.persistPrismUser();
-                Navigator.pop(context);
-                main.RestartWidget.restartApp(context);
-              } catch (e) {
-                if (!mounted) return;
-                logger.d(e);
-                Navigator.pop(context);
-                _trackSettingsAuthResult(
-                  action: AnalyticsActionValue.signInTapped,
-                  result: EventResultValue.failure,
-                  reason: AnalyticsReasonValue.error,
-                );
-                app_state.prismUser.loggedIn = false;
-                app_state.persistPrismUser();
-                toasts.error('Something went wrong, please try again!');
-              }
-            },
-          ),
-        ],
-      );
-    }
-
-    return _sectionCard(
-      title: 'ACCOUNT',
-      children: [
-        ListTile(
-          leading: CircleAvatar(
-            radius: 16,
-            backgroundImage: app_state.prismUser.profilePhoto.isNotEmpty
-                ? NetworkImage(app_state.prismUser.profilePhoto)
-                : null,
-            child: app_state.prismUser.profilePhoto.isEmpty ? const Icon(Icons.person, size: 16) : null,
-          ),
-          title: Text(app_state.prismUser.name, style: _titleStyle),
-          subtitle: Text(app_state.prismUser.email, style: _subtitleStyle),
-        ),
-        const Divider(height: 1, indent: 16, endIndent: 16),
-        ListTile(
-          leading: const Icon(JamIcons.heart),
-          title: Text('Clear favourite walls', style: _titleStyle),
-          subtitle: const Text('Remove all favourite wallpapers', style: TextStyle(fontSize: 12)),
-          onTap: () {
-            _trackSettingsAction(AnalyticsActionValue.clearFavouriteWallsTapped);
-            _showClearFavWallsDialog();
-          },
-        ),
-        ListTile(
-          leading: Icon(Icons.delete_forever_rounded, color: Colors.red[400]),
-          title: Text('Delete Account', style: _titleStyle.copyWith(color: Colors.red[400])),
-          subtitle: const Text('Permanently delete your account and data', style: TextStyle(fontSize: 12)),
-          onTap: () => _showDeleteAccountDialog(),
-        ),
-        ListTile(
-          leading: Icon(JamIcons.log_out, color: _accentColor),
-          title: Text('Logout', style: _titleStyle.copyWith(color: _accentColor)),
-          subtitle: Text(app_state.prismUser.email, style: _subtitleStyle),
-          onTap: () async {
-            _trackSettingsAction(AnalyticsActionValue.logoutTapped);
-            try {
-              final bool signedOut = await app_state.gAuth.signOutGoogle();
-              _trackSettingsAuthResult(
-                action: AnalyticsActionValue.logoutTapped,
-                result: signedOut ? EventResultValue.success : EventResultValue.failure,
-                reason: signedOut ? null : AnalyticsReasonValue.error,
-              );
-              if (signedOut) {
-                toasts.codeSend('Log out Successful!');
-                final settingsLocal = getIt<SettingsLocalDataSource>();
-                await settingsLocal.set('onboarded_v2_new', false);
-                await settingsLocal.set('onboarding_v2_interests', '');
-                if (context.mounted) {
-                  // ignore: use_build_context_synchronously
-                  main.RestartWidget.restartApp(context);
-                }
-              }
-            } catch (error, stackTrace) {
-              logger.e('Sign out failed from settings.', error: error, stackTrace: stackTrace);
-              _trackSettingsAuthResult(
-                action: AnalyticsActionValue.logoutTapped,
-                result: EventResultValue.failure,
-                reason: AnalyticsReasonValue.error,
-              );
-              toasts.error('Something went wrong, please try again!');
-            }
-          },
-        ),
-      ],
-    );
-  }
-
-  void _showClearFavWallsDialog() {
+  void _showClearFavoritesDialog() {
     showModal(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(10))),
         content: const SizedBox(
-          height: 50,
+          height: 60,
           width: 250,
-          child: Center(child: Text('Do you want to remove all your favourite wallpapers?')),
+          child: Center(child: Text('Do you want to remove all your favorite walls and setups?')),
         ),
-        actions: [
+        actions: <Widget>[
           MaterialButton(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
-            onPressed: () {
-              _trackSettingsAction(AnalyticsActionValue.clearFavouriteWallsConfirmed);
+            onPressed: () async {
               Navigator.of(ctx).pop();
-              toasts.error('Cleared all favourite wallpapers!');
-              context.favouriteWallsAdapter(listen: false).deleteData();
+              final scope = _userScope;
+              await _favoritesLocal.clearWallFavourites(scope);
+              await _favoritesLocal.clearSetupFavourites(scope);
+              if (mounted) {
+                context.favouriteWallsAdapter(listen: false).deleteData();
+                toasts.codeSend('Cleared favorites.');
+              }
+              unawaited(_reloadStorageStats());
             },
             child: Text('YES', style: TextStyle(fontSize: 16.0, color: _accentColor)),
           ),
@@ -406,10 +755,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         content: const SizedBox(
           width: 250,
           child: Text(
-            'This will permanently delete your account data and sign you out.\n\nThis action cannot be undone.',
+            'This will permanently delete your account data, remove cloud access and sign you out. This action cannot be undone.',
           ),
         ),
-        actions: [
+        actions: <Widget>[
           MaterialButton(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
             color: Colors.red[400],
@@ -427,7 +776,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: const Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
-                      children: [CircularProgressIndicator(), SizedBox(height: 16), Text('Deleting account...')],
+                      children: <Widget>[
+                        CircularProgressIndicator(),
+                        SizedBox(height: 16),
+                        Text('Deleting account...'),
+                      ],
                     ),
                   ),
                 ),
@@ -438,15 +791,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 if (!mounted) return;
                 Navigator.pop(context);
                 main.RestartWidget.restartApp(context);
-              } catch (error) {
+              } catch (error, stackTrace) {
                 if (!mounted) return;
                 Navigator.pop(context);
-                if (error is WrongAccountException) {
-                  logger.w('Delete account cancelled: wrong account selected.', error: error);
-                  toasts.error('Please select the account you are currently signed in with.');
-                  return;
-                }
-                logger.e('Delete account failed.', error: error);
+                logger.e('Delete account failed.', error: error, stackTrace: stackTrace);
                 final String message = error.toString().contains('requires-recent-login')
                     ? 'Please sign out and sign in again, then try deleting your account.'
                     : 'Something went wrong, please try again.';
@@ -469,58 +817,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _adminSection() {
-    if (!app_state.isAdminUser()) return const SizedBox.shrink();
-    return _sectionCard(
-      title: 'ADMIN',
-      children: [
-        ListTile(
-          leading: const Icon(Icons.bug_report_outlined),
-          title: Text('Debug Panel', style: _titleStyle),
-          subtitle: const Text('Logs, network, tools, storage inspector', style: TextStyle(fontSize: 12)),
-          trailing: const Icon(Icons.chevron_right_rounded),
-          onTap: () => context.router.pushPath('/debug-panel'),
-        ),
-        ListTile(
-          leading: const Icon(JamIcons.file),
-          title: Text('Remote Store Telemetry', style: _titleStyle),
-          subtitle: const Text('Database usage and telemetry stats', style: TextStyle(fontSize: 12)),
-          trailing: const Icon(Icons.chevron_right_rounded),
-          onTap: () => context.router.push(const RemoteStoreTelemetryRoute()),
-        ),
-      ],
-    );
-  }
-
-  Widget _aboutSection() {
-    return _sectionCard(
-      title: 'ABOUT',
-      children: [
-        ListTile(
-          leading: const Icon(JamIcons.info),
-          title: Text('About Prism', style: _titleStyle),
-          trailing: const Icon(Icons.chevron_right_rounded),
-          onTap: () => context.router.push(const AboutRoute()),
-        ),
-        ListTile(
-          leading: const Icon(JamIcons.bug),
-          title: Text('Report a Bug', style: _titleStyle),
-          subtitle: const Text('Send a bug report via email', style: TextStyle(fontSize: 12)),
-          onTap: () => _sendBugReport(),
-        ),
-        ListTile(
-          leading: const Icon(JamIcons.refresh),
-          title: Text('Restart App', style: _titleStyle),
-          subtitle: const Text('Force the application to restart', style: TextStyle(fontSize: 12)),
-          onTap: () {
-            _trackSettingsAction(AnalyticsActionValue.restartAppTapped);
-            main.RestartWidget.restartApp(context);
-          },
-        ),
-      ],
-    );
-  }
-
   Future<void> _sendBugReport() async {
     final deviceBody = await _bugReportDeviceBody();
     final String zipPath = await zipLogs();
@@ -534,9 +830,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final mailOptions = MailOptions(
       body: '$deviceBody<br><br>Enter the bug/issue below -<br><br>',
       subject: '[BUG REPORT::PRISM] - $encryptedZipKey',
-      recipients: ['nightvibes33@users.noreply.github.com'],
+      recipients: <String>['nightvibes33@users.noreply.github.com'],
       isHTML: true,
-      attachments: [encryptedZipPath],
+      attachments: <String>[encryptedZipPath],
     );
     await FlutterMailer.send(mailOptions);
     toasts.codeSend('Bug report opened.');
@@ -548,13 +844,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         final info = await DeviceInfoPlugin().iosInfo;
         return '----x-x-x----<br>Device info -<br><br>iOS ${info.systemVersion}<br>Device: ${info.utsname.machine}<br>Name: ${info.name}<br>----x-x-x----';
       }
-    } catch (_) {
-      // Device info is helpful but should not block report creation.
-    }
+    } catch (_) {}
     return '----x-x-x----<br>Device info unavailable<br>----x-x-x----';
   }
-
-  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -566,14 +858,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       body: ListView(
         padding: const EdgeInsets.only(top: 8, bottom: 32),
-        children: [
+        children: <Widget>[
+          _settingsHeader(),
+          _accountSection(),
+          _personalizationSection(),
           _downloadsSection(),
           _notificationsSection(),
           _storageSection(),
-          _accountSection(),
           _adminSection(),
-          _aboutSection(),
+          _supportSection(),
         ],
+      ),
+    );
+  }
+}
+
+class _StatPill extends StatelessWidget {
+  const _StatPill({required this.label, required this.icon});
+
+  final String label;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme cs = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color: cs.surface.withValues(alpha: 0.7),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.4)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(icon, size: 15, color: cs.onSurfaceVariant),
+            const SizedBox(width: 6),
+            Text(label, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12, fontWeight: FontWeight.w600)),
+          ],
+        ),
       ),
     );
   }
