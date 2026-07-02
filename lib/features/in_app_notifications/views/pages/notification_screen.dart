@@ -193,6 +193,7 @@ class _NotificationScreenBodyState extends State<_NotificationScreenBody> {
                         builder: (BuildContext listContext) {
                           final groups = groupInAppNotificationsByTitle(notifications);
                           return ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(12, 10, 12, 120),
                             itemCount: groups.length,
                             itemBuilder: (BuildContext context, int index) {
                               final InAppNotificationTitleGroup group = groups[index];
@@ -220,18 +221,44 @@ class _NotificationScreenBodyState extends State<_NotificationScreenBody> {
         }
 
         return Scaffold(
-          backgroundColor: theme.primaryColor,
+          backgroundColor: const Color(0xFF07080B),
           appBar: AppBar(
             automaticallyImplyLeading: false,
             elevation: 0,
+            backgroundColor: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
             iconTheme: IconThemeData(color: colorScheme.secondary),
-            title: Text('Notifications', style: theme.textTheme.displaySmall?.copyWith(color: colorScheme.secondary)),
-            leading: IconButton(
-              tooltip: 'Close',
-              icon: const Icon(JamIcons.close),
-              onPressed: () {
-                context.router.maybePop();
-              },
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                Text(
+                  'Notifications',
+                  style: theme.textTheme.displaySmall?.copyWith(color: colorScheme.secondary, fontWeight: FontWeight.w900),
+                ),
+                Text(
+                  'Updates, inbox, and account alerts',
+                  style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.secondary.withValues(alpha: 0.68), fontWeight: FontWeight.w600),
+                ) ?? Text(
+                  'Updates, inbox, and account alerts',
+                  style: TextStyle(color: colorScheme.secondary.withValues(alpha: 0.68), fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+            leadingWidth: 68,
+            leading: Padding(
+              padding: const EdgeInsets.only(left: 16, top: 6, bottom: 6),
+              child: Material(
+                color: const Color(0xFF101217),
+                borderRadius: BorderRadius.circular(20),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(20),
+                  onTap: () {
+                    context.router.maybePop();
+                  },
+                  child: const Icon(JamIcons.close),
+                ),
+              ),
             ),
             actions: <Widget>[
               IconButton(
@@ -428,7 +455,7 @@ class _NotificationScreenBodyState extends State<_NotificationScreenBody> {
             label:
                 '${group.displayTitle}. ${groupedListCountActionLine(group, expanded: expanded)}. ${expanded ? 'Expanded' : 'Collapsed'}. ${group.unreadCount > 0 ? 'Has unread. ' : ''}Activate to ${expanded ? 'collapse' : 'expand'}.',
             child: Material(
-              color: theme.primaryColor,
+              color: Colors.transparent,
               child: InkWell(
                 onTap: () {
                   setState(() {
@@ -439,8 +466,14 @@ class _NotificationScreenBodyState extends State<_NotificationScreenBody> {
                     }
                   });
                 },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF101217),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+                  ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -638,12 +671,18 @@ class NotificationCard extends StatelessWidget {
         button: true,
         label: '$semanticLine. $timeStr. ${notification.read ? 'Already read' : 'Not read yet'}',
         child: Material(
-          color: theme.primaryColor,
+          color: Colors.transparent,
           child: InkWell(
             onTap: () => _onTap(context),
             onLongPress: () => HapticFeedback.lightImpact(),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF101217),
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+              ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -684,12 +723,18 @@ class NotificationCard extends StatelessWidget {
       label:
           '${notification.title}. ${notification.body}. $timeStr. ${notification.read ? 'Already read' : 'Not read yet'}',
       child: Material(
-        color: theme.primaryColor,
+        color: Colors.transparent,
         child: InkWell(
           onTap: () => _onTap(context),
           onLongPress: () => HapticFeedback.lightImpact(),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            decoration: BoxDecoration(
+              color: const Color(0xFF101217),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,

@@ -1,5 +1,3 @@
-import 'package:Prism/core/widgets/home/core/headingChipBar.dart';
-import 'package:Prism/core/widgets/home/wallpapers/loading.dart';
 import 'package:Prism/core/wallpaper/wallpaper_source.dart';
 import 'package:Prism/data/categories/category_definition.dart';
 import 'package:Prism/features/category_feed/domain/entities/category_entity.dart';
@@ -74,14 +72,132 @@ class _CollectionViewScreenState extends State<CollectionViewScreen> {
   Widget build(BuildContext context) {
     final title = _isCategoryView ? _decodedCategoryName.capitalize() : widget.collectionName.capitalize();
     return Scaffold(
-      backgroundColor: Theme.of(context).primaryColor,
-      appBar: PreferredSize(
-        preferredSize: const Size(double.infinity, 55),
-        child: HeadingChipBar(current: title),
+      backgroundColor: const Color(0xFF07080B),
+      body: Stack(
+        children: <Widget>[
+          const Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: <Color>[Color(0xFF11151D), Color(0xFF0A0B0F), Color(0xFF060608)],
+                    stops: <double>[0.0, 0.26, 1.0],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SafeArea(
+            bottom: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
+                  child: Row(
+                    children: <Widget>[
+                      Material(
+                        color: const Color(0xFF101217),
+                        borderRadius: BorderRadius.circular(20),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(20),
+                          onTap: () => context.router.maybePop(),
+                          child: const SizedBox(
+                            width: 52,
+                            height: 52,
+                            child: Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 19),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontFamily: 'Satoshi',
+                                fontSize: 30,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              _isCategoryView ? 'Fresh picks from this Prism collection.' : 'Browse curated Prism collections.',
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontFamily: 'Satoshi',
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: <Color>[Color(0xFF152539), Color(0xFF0D1219), Color(0xFF08090C)],
+                      ),
+                      borderRadius: BorderRadius.circular(28),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                    ),
+                    child: Row(
+                      children: <Widget>[
+                        Container(
+                          width: 54,
+                          height: 54,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.06),
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          child: const Icon(Icons.auto_awesome, color: Color(0xFF7DC7FF)),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Text(
+                            _isCategoryView
+                                ? 'Open the full feed and pull for a fresh reload when you want a different mix.'
+                                : 'Use Home and Browse to open a category and jump into a full collection feed.',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontFamily: 'Satoshi',
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              height: 1.3,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Expanded(
+                  child: _isCategoryView
+                      ? _CategoryFeedContent(category: _categoryEntityFromPayload(_decodedCategoryPayload))
+                      : _buildCollectionContent(),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
-      body: _isCategoryView
-          ? _CategoryFeedContent(category: _categoryEntityFromPayload(_decodedCategoryPayload))
-          : _buildCollectionContent(),
     );
   }
 
@@ -92,7 +208,7 @@ class _CollectionViewScreenState extends State<CollectionViewScreen> {
         child: Text(
           'Open a category from Home or Browse.',
           textAlign: TextAlign.center,
-          style: TextStyle(fontFamily: 'Satoshi', fontSize: 16, fontWeight: FontWeight.w700),
+          style: TextStyle(color: Colors.white70, fontFamily: 'Satoshi', fontSize: 16, fontWeight: FontWeight.w700),
         ),
       ),
     );
@@ -235,15 +351,16 @@ class _CategoryFeedContentState extends State<_CategoryFeedContent> {
   Widget build(BuildContext context) {
     final items = WallpaperTile.expandMatchingItemsForDisplay(_rawItems);
     if (_loadingInitial && items.isEmpty) {
-      return const LoadingCards();
+      return const Center(child: CircularProgressIndicator(color: Colors.white));
     }
     if (_error != null && items.isEmpty) {
       return RefreshIndicator(
         onRefresh: _refresh,
         child: ListView(
+          padding: const EdgeInsets.fromLTRB(18, 40, 18, 140),
           children: const <Widget>[
-            SizedBox(height: 220),
-            Center(child: Text("Can't load this catalog. Pull to retry.")),
+            SizedBox(height: 140),
+            _FeedStateCard(title: "Can't load this collection.", subtitle: 'Pull down to retry.'),
           ],
         ),
       );
@@ -252,9 +369,10 @@ class _CategoryFeedContentState extends State<_CategoryFeedContent> {
       return RefreshIndicator(
         onRefresh: _refresh,
         child: ListView(
+          padding: const EdgeInsets.fromLTRB(18, 40, 18, 140),
           children: const <Widget>[
-            SizedBox(height: 220),
-            Center(child: Text('No wallpapers loaded. Pull to retry.')),
+            SizedBox(height: 140),
+            _FeedStateCard(title: 'No wallpapers loaded.', subtitle: 'Pull down to retry.'),
           ],
         ),
       );
@@ -262,30 +380,82 @@ class _CategoryFeedContentState extends State<_CategoryFeedContent> {
 
     final columns = MediaQuery.of(context).orientation == Orientation.portrait ? 3 : 5;
     final loadingTileCount = _loadingMore ? columns : 0;
-    return RefreshIndicator(
-      onRefresh: _refresh,
-      child: GridView.builder(
-        controller: _scrollController,
-        cacheExtent: MediaQuery.sizeOf(context).height * 1.5,
-        padding: const EdgeInsets.fromLTRB(0, 5, 0, 140),
-        itemCount: items.length + loadingTileCount,
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: columns,
-          childAspectRatio: _gridAspectRatio(items),
-          mainAxisSpacing: 0,
-          crossAxisSpacing: 0,
+    return Container(
+      margin: const EdgeInsets.only(top: 2),
+      decoration: BoxDecoration(
+        color: const Color(0xFF050506),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(34)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+      ),
+      child: RefreshIndicator(
+        onRefresh: _refresh,
+        child: GridView.builder(
+          controller: _scrollController,
+          cacheExtent: MediaQuery.sizeOf(context).height * 1.5,
+          padding: const EdgeInsets.fromLTRB(8, 12, 8, 160),
+          itemCount: items.length + loadingTileCount,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            childAspectRatio: _gridAspectRatio(items),
+            mainAxisSpacing: 4,
+            crossAxisSpacing: 4,
+          ),
+          itemBuilder: (context, index) {
+            if (index >= items.length) {
+              return const Center(child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white));
+            }
+            return WallpaperTile(
+              item: items[index],
+              index: index,
+              galleryItems: items,
+              playVideoPreview: false,
+            );
+          },
         ),
-        itemBuilder: (context, index) {
-          if (index >= items.length) {
-            return const Center(child: CircularProgressIndicator(strokeWidth: 2));
-          }
-          return WallpaperTile(
-            item: items[index],
-            index: index,
-            galleryItems: items,
-            playVideoPreview: false,
-          );
-        },
+      ),
+    );
+  }
+}
+
+class _FeedStateCard extends StatelessWidget {
+  const _FeedStateCard({required this.title, required this.subtitle});
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF101217),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        children: <Widget>[
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.white,
+              fontFamily: 'Satoshi',
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontFamily: 'Satoshi',
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }

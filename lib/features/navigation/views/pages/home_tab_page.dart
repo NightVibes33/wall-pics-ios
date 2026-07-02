@@ -150,6 +150,24 @@ class _HomeTabPageState extends State<HomeTabPage> {
     });
   }
 
+  Route<T> _buildPrismRoute<T>(Widget child) {
+    return PageRouteBuilder<T>(
+      transitionDuration: const Duration(milliseconds: 260),
+      reverseTransitionDuration: const Duration(milliseconds: 220),
+      pageBuilder: (_, animation, __) => FadeTransition(
+        opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+        child: child,
+      ),
+      transitionsBuilder: (_, animation, __, child) {
+        final offsetAnimation = Tween<Offset>(
+          begin: const Offset(0, 0.03),
+          end: Offset.zero,
+        ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
+        return SlideTransition(position: offsetAnimation, child: child);
+      },
+    );
+  }
+
   void _submitSearch(String query) {
     final trimmed = query.trim();
     if (trimmed.isEmpty) {
@@ -158,7 +176,7 @@ class _HomeTabPageState extends State<HomeTabPage> {
     FocusManager.instance.primaryFocus?.unfocus();
     _searchController.text = trimmed;
     _searchController.selection = TextSelection.collapsed(offset: trimmed.length);
-    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SearchScreen(initialQuery: trimmed)));
+    Navigator.of(context).push(_buildPrismRoute<void>(SearchScreen(initialQuery: trimmed)));
   }
 
   void _clearSearch() {
@@ -396,8 +414,8 @@ class _HomeTabPageState extends State<HomeTabPage> {
     if (contentType == PrismCatalogDataSource.matchingContentType ||
         contentType == PrismCatalogDataSource.doubleContentType) {
       Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => _MatchingCatalogScreen(title: title, contentType: contentType, slug: slug),
+        _buildPrismRoute<void>(
+          _MatchingCatalogScreen(title: title, contentType: contentType, slug: slug),
         ),
       );
       return;

@@ -274,7 +274,7 @@ class _SearchGridState extends State<SearchGrid> {
                 child: displayItems.isEmpty
                     ? _EmptyFilteredResults(filter: _activeFilter)
                     : GridView.builder(
-                        padding: const EdgeInsets.fromLTRB(5, 6, 5, 120),
+                        padding: const EdgeInsets.fromLTRB(10, 8, 10, 140),
                         cacheExtent: MediaQuery.sizeOf(context).height * 1.5,
                         itemCount: displayItems.length,
                         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -311,33 +311,51 @@ class _SearchResultHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final foreground = Theme.of(context).colorScheme.secondary;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: Text(
-              query.trim(),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: foreground, fontFamily: 'Satoshi', fontSize: 24, fontWeight: FontWeight.w900),
-            ),
-          ),
-          const SizedBox(width: 12),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: foreground.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: foreground.withValues(alpha: 0.12)),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              child: Text(
-                '$resultCount',
-                style: TextStyle(color: foreground, fontFamily: 'Satoshi', fontSize: 14, fontWeight: FontWeight.w800),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF101217),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: foreground.withValues(alpha: 0.08)),
+        ),
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    query.trim(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: foreground, fontFamily: 'Satoshi', fontSize: 24, fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Search results from Prism',
+                    style: TextStyle(color: foreground.withValues(alpha: 0.64), fontFamily: 'Satoshi', fontSize: 13, fontWeight: FontWeight.w700),
+                  ),
+                ],
               ),
             ),
-          ),
-        ],
+            const SizedBox(width: 12),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: foreground.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: foreground.withValues(alpha: 0.10)),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                child: Text(
+                  '$resultCount',
+                  style: TextStyle(color: foreground, fontFamily: 'Satoshi', fontSize: 14, fontWeight: FontWeight.w800),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -359,9 +377,9 @@ class _SearchFilterBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 48,
+      height: 54,
       child: ListView.separated(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         scrollDirection: Axis.horizontal,
         itemCount: filters.length,
         separatorBuilder: (_, _) => const SizedBox(width: 8),
@@ -391,22 +409,22 @@ class _SearchFilterChip extends StatelessWidget {
       borderRadius: BorderRadius.circular(999),
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 140),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? foreground : foreground.withValues(alpha: 0.08),
+          color: selected ? const Color(0xFFEDF5FF) : const Color(0xFF101217),
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: selected ? foreground : foreground.withValues(alpha: 0.12)),
+          border: Border.all(color: selected ? Colors.transparent : foreground.withValues(alpha: 0.10)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Icon(spec.icon, size: 17, color: selected ? Theme.of(context).primaryColor : foreground),
+            Icon(spec.icon, size: 17, color: selected ? const Color(0xFF0A0B0F) : foreground),
             const SizedBox(width: 7),
             Text(
               spec.label,
               style: TextStyle(
-                color: selected ? Theme.of(context).primaryColor : foreground,
+                color: selected ? const Color(0xFF0A0B0F) : foreground,
                 fontFamily: 'Satoshi',
                 fontSize: 14,
                 fontWeight: FontWeight.w800,
@@ -417,7 +435,7 @@ class _SearchFilterChip extends StatelessWidget {
               Text(
                 '$count',
                 style: TextStyle(
-                  color: selected ? Theme.of(context).primaryColor.withValues(alpha: 0.7) : foreground.withValues(alpha: 0.55),
+                  color: selected ? const Color(0xFF0A0B0F).withValues(alpha: 0.68) : foreground.withValues(alpha: 0.55),
                   fontFamily: 'Satoshi',
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
