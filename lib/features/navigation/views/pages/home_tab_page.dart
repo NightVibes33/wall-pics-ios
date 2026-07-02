@@ -53,7 +53,7 @@ class HomeTabPage extends StatefulWidget {
 }
 
 class _HomeTabPageState extends State<HomeTabPage> {
-  static const Color _screenColor = Color(0xFF141416);
+  static const Color _screenColor = Color(0xFF09090B);
   static const List<_HomeTabSpec> _tabs = <_HomeTabSpec>[
     _HomeTabSpec(label: 'FOR YOU', title: 'For You', contentType: PrismCatalogDataSource.regularContentType),
     _HomeTabSpec(label: '3D', title: '3D Spatial', contentType: PrismCatalogDataSource.parallaxContentType),
@@ -450,6 +450,20 @@ class _HomeTabPageState extends State<HomeTabPage> {
       backgroundColor: _screenColor,
       body: Stack(
         children: <Widget>[
+          const Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: <Color>[Color(0xFF11131A), Color(0xFF0A0A0D), Color(0xFF050506)],
+                    stops: <double>[0.0, 0.34, 1.0],
+                  ),
+                ),
+              ),
+            ),
+          ),
           SafeArea(
             bottom: false,
             child: FutureBuilder<_HomeDashboardData>(
@@ -547,7 +561,7 @@ class _SearchHeader extends StatelessWidget {
               height: 64,
               decoration: BoxDecoration(
                 color: const Color(0xFF050506),
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(28),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
               ),
               child: TextField(
@@ -644,11 +658,11 @@ class _HeroBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final url = imageUrl?.trim() ?? '';
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 2, 18, 10),
+      padding: const EdgeInsets.fromLTRB(18, 8, 18, 14),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(28),
         child: SizedBox(
-          height: 104,
+          height: 158,
           child: Stack(
             fit: StackFit.expand,
             children: <Widget>[
@@ -668,20 +682,62 @@ class _HeroBanner extends StatelessWidget {
               DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                    colors: <Color>[Colors.black, Colors.black.withValues(alpha: 0.42), Colors.black.withValues(alpha: 0.08)],
+                    begin: Alignment.bottomLeft,
+                    end: Alignment.topRight,
+                    colors: <Color>[
+                      Colors.black.withValues(alpha: 0.88),
+                      Color(0xFF0C1C33).withValues(alpha: 0.72),
+                      Color(0xFF47AEFF).withValues(alpha: 0.24),
+                    ],
                   ),
                 ),
               ),
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Padding(
-                  padding: EdgeInsets.only(left: 28),
-                  child: Text(
-                    'Prism',
-                    style: TextStyle(color: Colors.white, fontFamily: 'Satoshi', fontSize: 39, fontWeight: FontWeight.w900),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: <Color>[Colors.white.withValues(alpha: 0.06), Colors.transparent],
                   ),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(24, 22, 24, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: <Widget>[
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Color(0x33000000),
+                        borderRadius: BorderRadius.all(Radius.circular(999)),
+                      ),
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        child: Text(
+                          'CURATED FOR IPHONE',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontFamily: 'Satoshi',
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 12),
+                    Text(
+                      'Prism',
+                      style: TextStyle(color: Colors.white, fontFamily: 'Satoshi', fontSize: 42, fontWeight: FontWeight.w900),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Sharper walls, cleaner collections, faster picks.',
+                      style: TextStyle(color: Colors.white70, fontFamily: 'Satoshi', fontSize: 15, fontWeight: FontWeight.w600),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -701,9 +757,9 @@ class _ShortcutRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 86,
+      height: 96,
       child: ListView.separated(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
         scrollDirection: Axis.horizontal,
         itemBuilder: (context, index) => _ShortcutTile(shortcut: shortcuts[index], onTap: () => onSelected(shortcuts[index])),
         separatorBuilder: (_, _) => const SizedBox(width: 10),
@@ -724,29 +780,38 @@ class _ShortcutTile extends StatelessWidget {
     return PrismTapScale(
       pressedScale: 0.94,
       child: SizedBox(
-        width: 78,
+        width: 104,
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            borderRadius: BorderRadius.circular(13),
+            borderRadius: BorderRadius.circular(18),
             onTap: () {
               PrismHaptics.selection();
               onTap();
             },
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: const Color(0xFF202023),
-                borderRadius: BorderRadius.circular(13),
-                border: Border.all(color: shortcut.accent, width: 1.4),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: <Color>[
+                    shortcut.accent.withValues(alpha: 0.28),
+                    const Color(0xFF0E1015),
+                    const Color(0xFF08090C),
+                  ],
+                  stops: const <double>[0.0, 0.38, 1.0],
+                ),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: shortcut.accent.withValues(alpha: 0.78), width: 1.2),
                 boxShadow: <BoxShadow>[
-                  BoxShadow(color: shortcut.accent.withValues(alpha: 0.16), blurRadius: 12, offset: const Offset(0, 6)),
+                  BoxShadow(color: shortcut.accent.withValues(alpha: 0.12), blurRadius: 18, offset: const Offset(0, 8)),
                 ],
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: <Widget>[
                   Icon(shortcut.icon, color: Colors.white, size: 28),
-                  const SizedBox(height: 7),
+                  const SizedBox(height: 10),
                   Text(
                     shortcut.label,
                     maxLines: 1,
@@ -787,11 +852,12 @@ class _CatalogPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(top: 4),
+      margin: const EdgeInsets.only(top: 10),
       padding: const EdgeInsets.only(top: 18),
-      decoration: const BoxDecoration(
-        color: Colors.black,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: const Color(0xFF050506),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -827,9 +893,9 @@ class _HomeCategoryRail extends StatelessWidget {
       return const SizedBox.shrink();
     }
     return SizedBox(
-      height: 70,
+      height: 76,
       child: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(18, 4, 18, 14),
+        padding: const EdgeInsets.fromLTRB(18, 8, 18, 16),
         scrollDirection: Axis.horizontal,
         itemBuilder: (context, index) {
           final category = categories[index];
@@ -846,12 +912,12 @@ class _HomeCategoryRail extends StatelessWidget {
                 },
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: const Color(0xFF151518),
+                    color: const Color(0xFF101114),
                     borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 17, vertical: 11),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                     child: Text(
                       category.name,
                       maxLines: 1,
@@ -881,7 +947,7 @@ class _TopTabs extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 54,
+      height: 64,
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(horizontal: 18),
         scrollDirection: Axis.horizontal,
@@ -895,10 +961,16 @@ class _TopTabs extends StatelessWidget {
                 PrismHaptics.selection();
                 onSelected(index);
               },
-              child: SizedBox(
-                height: 54,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: selected ? const Color(0xFF161B24) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: selected ? Colors.white.withValues(alpha: 0.14) : Colors.transparent),
+                ),
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
@@ -906,15 +978,19 @@ class _TopTabs extends StatelessWidget {
                       style: TextStyle(
                         color: selected ? Colors.white : Colors.white.withValues(alpha: 0.48),
                         fontFamily: 'Satoshi',
-                        fontSize: 18,
+                        fontSize: 17,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
+                    const SizedBox(height: 5),
                     AnimatedContainer(
-                      duration: const Duration(milliseconds: 140),
-                      width: selected ? 72 : 0,
+                      duration: const Duration(milliseconds: 180),
+                      width: selected ? 44 : 18,
                       height: 3,
-                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(999)),
+                      decoration: BoxDecoration(
+                        color: selected ? const Color(0xFF5CB8FF) : Colors.white.withValues(alpha: 0.22),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
                     ),
                   ],
                 ),
@@ -922,7 +998,7 @@ class _TopTabs extends StatelessWidget {
             ),
           );
         },
-        separatorBuilder: (_, _) => const SizedBox(width: 30),
+        separatorBuilder: (_, _) => const SizedBox(width: 10),
         itemCount: tabs.length,
       ),
     );
@@ -948,10 +1024,10 @@ class _WallpaperSection extends StatelessWidget {
         section.title.toLowerCase().startsWith('profile') ||
         (visibleItems.isNotEmpty && visibleItems.every(WallpaperTile.isProfilePictureItem));
     final cardHeight = profileSection ? cardWidth : cardWidth * 1.92;
-    final titleFontSize = section.title.length > 14 ? 23.0 : 27.0;
+    final titleFontSize = section.title.length > 14 ? 22.0 : 26.0;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 24, 0, 0),
+      padding: const EdgeInsets.fromLTRB(18, 26, 0, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -976,7 +1052,7 @@ class _WallpaperSection extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 15),
+          const SizedBox(height: 14),
           SizedBox(
             height: cardHeight,
             child: ListView.separated(
@@ -1037,7 +1113,7 @@ class _HomeWallpaperCard extends StatelessWidget {
                   border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
                 )
               : BoxDecoration(
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
                   borderRadius: BorderRadius.circular(8),
                 ),
         ),
@@ -1079,10 +1155,10 @@ class _HomeWallpaperCard extends StatelessWidget {
   Widget _image(BuildContext context, String rawUrl, {bool isProfile = false}) {
     final url = rawUrl.trim();
     if (url.isEmpty) {
-      return const ColoredBox(color: Color(0xFF111114));
+      return const ColoredBox(color: Color(0xFF0F1013));
     }
     if (_isArchiveUrl(url)) {
-      return const ColoredBox(color: Color(0xFF111114));
+      return const ColoredBox(color: Color(0xFF0F1013));
     }
     final size = MediaQuery.sizeOf(context);
     final pixelRatio = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 3.0);
@@ -1102,8 +1178,8 @@ class _HomeWallpaperCard extends StatelessWidget {
       filterQuality: FilterQuality.high,
       memCacheWidth: cacheWidth,
       memCacheHeight: cacheHeight,
-      placeholder: (_, _) => const ColoredBox(color: Color(0xFF111114)),
-      errorWidget: (_, _, _) => const ColoredBox(color: Color(0xFF111114)),
+      placeholder: (_, _) => const ColoredBox(color: Color(0xFF0F1013)),
+      errorWidget: (_, _, _) => const ColoredBox(color: Color(0xFF0F1013)),
     );
   }
 }
@@ -1153,7 +1229,7 @@ class _MoreButton extends StatelessWidget {
     return PrismTapScale(
       pressedScale: 0.96,
       child: SizedBox(
-        height: 34,
+        height: 38,
         child: OutlinedButton(
           onPressed: () {
             PrismHaptics.selection();
@@ -1161,7 +1237,8 @@ class _MoreButton extends StatelessWidget {
           },
           style: OutlinedButton.styleFrom(
             foregroundColor: Colors.white,
-            side: const BorderSide(color: Colors.white, width: 1.6),
+            backgroundColor: const Color(0xFF111216),
+            side: BorderSide(color: Colors.white.withValues(alpha: 0.14), width: 1.2),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
             padding: const EdgeInsets.only(left: 14, right: 10),
           ),
@@ -1191,7 +1268,7 @@ class _DashboardSkeleton extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           const _SkeletonBox(width: 180, height: 34, radius: 7),
-          const SizedBox(height: 15),
+          const SizedBox(height: 14),
           Row(
             children: <Widget>[
               for (var index = 0; index < 3; index++) ...<Widget>[
@@ -1202,7 +1279,7 @@ class _DashboardSkeleton extends StatelessWidget {
           ),
           const SizedBox(height: 28),
           const _SkeletonBox(width: 132, height: 34, radius: 7),
-          const SizedBox(height: 15),
+          const SizedBox(height: 14),
           Row(
             children: <Widget>[
               for (var index = 0; index < 3; index++) ...<Widget>[
@@ -1719,7 +1796,7 @@ class _MatchingCatalogImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (url.trim().isEmpty) {
-      return const ColoredBox(color: Color(0xFF111114));
+      return const ColoredBox(color: Color(0xFF0F1013));
     }
     final seedImage = _seededCatalogImage(url, fit: BoxFit.cover, cacheWidth: cacheWidth, cacheHeight: cacheHeight);
     if (seedImage != null) {
@@ -1735,8 +1812,8 @@ class _MatchingCatalogImage extends StatelessWidget {
       filterQuality: FilterQuality.high,
       memCacheWidth: cacheWidth,
       memCacheHeight: cacheHeight,
-      placeholder: (_, _) => const ColoredBox(color: Color(0xFF111114)),
-      errorWidget: (_, _, _) => const ColoredBox(color: Color(0xFF111114)),
+      placeholder: (_, _) => const ColoredBox(color: Color(0xFF0F1013)),
+      errorWidget: (_, _, _) => const ColoredBox(color: Color(0xFF0F1013)),
     );
   }
 }

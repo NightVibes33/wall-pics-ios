@@ -651,8 +651,8 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
         onPanelClosed: () => _handlePanelClosed(context, state),
         backdropEnabled: true,
         borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(_panelTopRadius),
-          topRight: Radius.circular(_panelTopRadius),
+          topLeft: Radius.circular(28),
+          topRight: Radius.circular(28),
         ),
         boxShadow: const [],
         minHeight: _panelMinHeight(context),
@@ -661,7 +661,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
         color: Colors.transparent,
         maxHeight: _panelMaxHeight(context),
         controller: panelController,
-        backdropOpacity: 0,
+        backdropOpacity: 0.12,
         panel: _buildInfoPanel(context, state),
         body: _buildImageBody(context, _offsetAnimation, paletteLoading, state),
       ),
@@ -674,7 +674,7 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
   }
 
   double _panelMaxHeight(BuildContext context) {
-    return MediaQuery.sizeOf(context).height * 0.43;
+    return MediaQuery.sizeOf(context).height * 0.47;
   }
 
   double _panelBottomMargin(BuildContext context) {
@@ -695,20 +695,21 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
       width: size.width,
       child: LiquidGlassLayer(
         settings: LiquidGlassSettings(
-          thickness: 40,
-          ambientStrength: 0.2,
-          blur: 4,
-          glassColor: Theme.of(context).primaryColor.withValues(alpha: 0.2),
+          thickness: 28,
+          ambientStrength: 0.22,
+          blur: 6,
+          glassColor: const Color(0xAA0C0E12),
         ),
         fake: defaultTargetPlatform != TargetPlatform.iOS,
         child: LiquidGlass(
-          shape: const LiquidRoundedSuperellipse(borderRadius: 56),
+          shape: const LiquidRoundedSuperellipse(borderRadius: 62),
           child: SizedBox(
             height: panelHeight,
             width: size.width,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const SizedBox(height: 6),
                 _buildCollapseHandle(context, state),
                 if (!collapsed) ...[
                   _buildColorBar(context, state),
@@ -762,9 +763,20 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
           child: ConstrainedBox(
             constraints: const BoxConstraints(minWidth: _minInteractiveTarget, minHeight: _minInteractiveTarget),
             child: Center(
-              child: Icon(
-                isCollapsed ? JamIcons.chevron_up : JamIcons.chevron_down,
-                color: Theme.of(context).colorScheme.secondary,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                width: 54,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                ),
+                child: Icon(
+                  isCollapsed ? JamIcons.chevron_up : JamIcons.chevron_down,
+                  color: Theme.of(context).colorScheme.secondary,
+                  size: 18,
+                ),
               ),
             ),
           ),
@@ -1204,8 +1216,14 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
       );
     }
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: _sheetHPad),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: _sheetHPad),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        ),
         child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: actions),
       ),
     );
@@ -1231,8 +1249,14 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
     ];
 
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: _sheetHPad),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: _sheetHPad),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        ),
         child: Wrap(
           alignment: WrapAlignment.spaceEvenly,
           crossAxisAlignment: WrapCrossAlignment.end,

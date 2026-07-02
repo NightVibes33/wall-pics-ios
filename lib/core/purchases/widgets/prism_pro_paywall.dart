@@ -91,11 +91,15 @@ class _PrismProPaywallState extends State<PrismProPaywall> {
   Widget build(BuildContext context) {
     final bottom = MediaQuery.of(context).padding.bottom;
     return Container(
-      margin: const EdgeInsets.all(10),
-      padding: EdgeInsets.fromLTRB(18, 16, 18, 16 + bottom),
+      margin: const EdgeInsets.fromLTRB(10, 10, 10, 14),
+      padding: EdgeInsets.fromLTRB(20, 18, 20, 16 + bottom),
       decoration: BoxDecoration(
-        color: const Color(0xFF08080A),
-        borderRadius: BorderRadius.circular(28),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[Color(0xFF0A0D12), Color(0xFF060608), Color(0xFF0C1727)],
+        ),
+        borderRadius: BorderRadius.circular(34),
         border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
         boxShadow: const <BoxShadow>[BoxShadow(color: Colors.black54, blurRadius: 28, offset: Offset(0, -8))],
       ),
@@ -110,12 +114,31 @@ class _PrismProPaywallState extends State<PrismProPaywall> {
             children: <Widget>[
               Row(
                 children: <Widget>[
-                  const Icon(JamIcons.crown_f, color: Color(0xFF3DA7FF), size: 30),
-                  const SizedBox(width: 10),
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF122137),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                    ),
+                    child: const Icon(JamIcons.crown_f, color: Color(0xFF6FC5FF), size: 28),
+                  ),
+                  const SizedBox(width: 12),
                   const Expanded(
-                    child: Text(
-                      'Přism Pro',
-                      style: TextStyle(color: Colors.white, fontFamily: 'Satoshi', fontSize: 31, fontWeight: FontWeight.w900),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          'Prism Pro',
+                          style: TextStyle(color: Colors.white, fontFamily: 'Satoshi', fontSize: 31, fontWeight: FontWeight.w900),
+                        ),
+                        SizedBox(height: 3),
+                        Text(
+                          'Built for people who download a lot.',
+                          style: TextStyle(color: Colors.white70, fontFamily: 'Satoshi', fontSize: 14, fontWeight: FontWeight.w600),
+                        ),
+                      ],
                     ),
                   ),
                   IconButton(
@@ -124,10 +147,27 @@ class _PrismProPaywallState extends State<PrismProPaywall> {
                   ),
                 ],
               ),
-              const SizedBox(height: 6),
-              Text(
-                'Unlimited 4K downloads, matching sets, 3D Spatial, and profile pictures.',
-                style: TextStyle(color: Colors.white.withValues(alpha: 0.72), fontFamily: 'Satoshi', fontSize: 16, height: 1.28),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                ),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'What you unlock',
+                      style: TextStyle(color: Colors.white, fontFamily: 'Satoshi', fontSize: 18, fontWeight: FontWeight.w800),
+                    ),
+                    SizedBox(height: 12),
+                    _PaywallFeature(text: 'Infinite wallpaper downloads'),
+                    _PaywallFeature(text: 'Premium wallpaper and setup access'),
+                    _PaywallFeature(text: '3D Spatial, matching sets, and full catalog access'),
+                  ],
+                ),
               ),
               const SizedBox(height: 16),
               if (loading)
@@ -150,7 +190,7 @@ class _PrismProPaywallState extends State<PrismProPaywall> {
                     : const Text('Restore purchases', style: TextStyle(color: Colors.white, fontFamily: 'Satoshi', fontWeight: FontWeight.w700)),
               ),
               Text(
-                'Payments are processed by Apple. Subscriptions renew automatically until canceled in Apple account settings.',
+                'Payments are handled by Apple. Monthly and yearly plans renew automatically until canceled. Lifetime is one-time access.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.white.withValues(alpha: 0.44), fontFamily: 'Satoshi', fontSize: 11, height: 1.25),
               ),
@@ -266,6 +306,36 @@ class _PrismProPaywallState extends State<PrismProPaywall> {
       default:
         return 'Unlock the full catalog';
     }
+  }
+}
+
+
+class _PaywallFeature extends StatelessWidget {
+  const _PaywallFeature({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          const Padding(
+            padding: EdgeInsets.only(top: 2),
+            child: Icon(Icons.check_circle, color: Color(0xFF6FC5FF), size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.84), fontFamily: 'Satoshi', fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
