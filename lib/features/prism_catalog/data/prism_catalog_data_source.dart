@@ -1909,21 +1909,22 @@ class _PrismItem {
       isDisplayImageUrl(fastFullImage) ? fastFullImage : '',
       isDisplayImageUrl(fastLivePoster) ? fastLivePoster : '',
     ]);
+    final cleanFullTile = isDisplayImageUrl(fastFullImage) ? fastFullImage : '';
     final thumb = isLiveContent
         ? _firstString(<Object?>[fastLivePoster, tileImage])
         : isParallaxContent
-            ? _firstString(<Object?>[parallaxTileImage, fastParallaxLayerPreview, fastPreviewThumbImage, parallaxFallbackThumbImage, isDisplayImageUrl(fastFullImage) ? fastFullImage : ''])
-            : tileImage;
+            ? _firstString(<Object?>[parallaxTileImage, fastParallaxLayerPreview, fastPreviewThumbImage, parallaxFallbackThumbImage, cleanFullTile])
+            : _firstString(<Object?>[cleanFullTile, tileImage, fastPreviewThumbImage]);
     final staticThumb = isLiveContent
         ? _firstString(<Object?>[fastLivePoster, thumb])
         : isParallaxContent
             ? _firstString(<Object?>[parallaxTileImage, fastParallaxLayerPreview, thumb, fastPreviewThumbImage, parallaxFallbackThumbImage])
             : _firstString(<Object?>[
+                cleanFullTile,
+                thumb,
                 isDisplayImageUrl(staticThumbnail) ? _fastTileOrOriginal(staticThumbnail) : '',
                 isDisplayImageUrl(hqThumbnail) ? _fastTileOrOriginal(hqThumbnail) : '',
                 isDisplayImageUrl(previewImage) ? _fastTileOrOriginal(previewImage) : '',
-                thumb,
-                isDisplayImageUrl(fastFullImage) ? fastFullImage : '',
               ]);
     final preview = isMatchingContent
         ? _firstString(<Object?>[...pairedDisplayUrls, fullImage, thumb])

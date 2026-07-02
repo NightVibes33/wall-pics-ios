@@ -187,11 +187,11 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
 
   void _precacheGalleryNeighbors(BuildContext context, int index) {
     if (_galleryItems.length < 2) return;
-    for (final offset in const <int>[-2, -1, 0, 1, 2]) {
+    for (final offset in const <int>[-1, 1]) {
       final nextIndex = (index + offset) % _galleryItems.length;
       final wrappedIndex = nextIndex < 0 ? nextIndex + _galleryItems.length : nextIndex;
       final entity = _galleryItems[wrappedIndex];
-      for (final url in <String>[entity.thumbnailUrl.trim(), entity.fullUrl.trim()]) {
+      for (final url in <String>[entity.thumbnailUrl.trim()]) {
         if (url.isEmpty || _isVideoUrl(url) || _isArchiveUrl(url) || PrismSeedMediaStore.instance.hasUrlSync(url)) continue;
         unawaited(precacheImage(CachedNetworkImageProvider(url), context).catchError((Object _) {}));
       }
@@ -305,11 +305,6 @@ class _WallpaperDetailScreenState extends State<WallpaperDetailScreen> with Sing
           });
     _contentLoadTracker.start();
     _hydrateGalleryContext();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _precacheGalleryNeighbors(context, _galleryIndex);
-      }
-    });
 
     final bloc = context.read<WallpaperDetailBloc>();
     if (widget.entity != null) {

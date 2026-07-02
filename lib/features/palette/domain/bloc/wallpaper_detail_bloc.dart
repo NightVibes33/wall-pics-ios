@@ -42,8 +42,7 @@ class WallpaperDetailBloc extends Bloc<WallpaperDetailEvent, WallpaperDetailStat
 
   Future<void> _onLoadFromEntity(LoadFromEntity event, Emitter<WallpaperDetailState> emit) async {
     emit(WallpaperDetailLoaded(entity: event.entity));
-    _requestPalette(event.entity.thumbnailUrl);
-    _fetchAndUpdateViews(event.entity);
+    _scheduleDeferredMetadataLoad(event.entity);
   }
 
   Future<void> _onLoadFromId(LoadFromId event, Emitter<WallpaperDetailState> emit) async {
@@ -53,8 +52,7 @@ class WallpaperDetailBloc extends Bloc<WallpaperDetailEvent, WallpaperDetailStat
       final result = await _fetchWallpaper(wallId: event.wallId, source: event.source);
 
       emit(WallpaperDetailLoaded(entity: result));
-      _requestPalette(result.thumbnailUrl);
-      _fetchAndUpdateViews(result);
+      _scheduleDeferredMetadataLoad(result);
     } catch (e) {
       emit(WallpaperDetailError(message: e.toString()));
     }
@@ -226,6 +224,13 @@ class WallpaperDetailBloc extends Bloc<WallpaperDetailEvent, WallpaperDetailStat
       default:
         throw Exception('Only Prism wallpapers are supported.');
     }
+  }
+
+  void _scheduleDeferredMetadataLoad(WallpaperDetailEntity entity) {
+    Future<void>.delayed(const Duration(milliseconds: 120), () {
+      _requestPalette(entity.thumbnailUrl);
+      _fetchAndUpdateViews(entity);
+    });
   }
 
   void _requestPalette(String imageUrl) {

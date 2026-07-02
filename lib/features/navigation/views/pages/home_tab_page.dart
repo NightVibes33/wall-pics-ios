@@ -364,7 +364,7 @@ class _HomeTabPageState extends State<HomeTabPage> {
           catalogSlug: slug,
           catalogContentType: contentType,
         ),
-        refresh: true,
+        refresh: false,
       );
       return _HomeSection(
         title: title,
