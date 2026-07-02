@@ -152,6 +152,7 @@ class PrismCatalogDataSource {
   Future<Map<String, Map<String, List<String>>>>? _categoryIdsFuture;
   Future<Map<String, Map<String, int>>>? _itemLocationsFuture;
   Future<List<_SearchIndexEntry>>? _searchIndexFuture;
+  Future<_PreparedSearchIndex>? _preparedSearchIndexFuture;
 
   bool supports(CategoryEntity category) {
     final slug = category.catalogSlug?.trim();
@@ -623,13 +624,11 @@ class PrismCatalogDataSource {
     }
 
     var ordinal = rankedRefs.length;
-    final searchIndex = await _loadSearchIndex();
-    for (final entry in searchIndex) {
-      if (!_catalogPagePrefixesByContentType.containsKey(entry.contentType) ||
-          _hiddenContentTypes.contains(entry.contentType)) {
-        continue;
-      }
-      final score = _scoreSearchEntry(entry, normalizedQuery);
+    final preparedIndex = await _loadPreparedSearchIndex();
+    final candidateIndices = _candidateSearchIndices(preparedIndex, normalizedQuery);
+    for (final candidateIndex in candidateIndices) {
+      final entry = preparedIndex.entries[candidateIndex];
+      final score = _scorePreparedSearchEntry(entry, normalizedQuery);
       if (score <= 0) {
         continue;
       }
@@ -932,6 +931,80 @@ class PrismCatalogDataSource {
     } catch (_) {
       return _buildSearchIndexFromCompactCatalogs();
     }
+  }
+
+
+  Future<_PreparedSearchIndex> _loadPreparedSearchIndex() {
+    return _preparedSearchIndexFuture ??= _loadPreparedSearchIndexInternal();
+  }
+
+  Future<_PreparedSearchIndex> _loadPreparedSearchIndexInternal() async {
+    final rawEntries = await _loadSearchIndex();
+    final entries = <_PreparedSearchIndexEntry>[];
+    final exactName = <String, List<int>>{};
+    final exactSlug = <String, List<int>>{};
+    final exactCategory = <String, List<int>>{};
+    final exactCategorySlug = <String, List<int>>{};
+    final exactTag = <String, List<int>>{};
+    final tokenBuckets = <String, List<int>>{};
+    final titleTokenBuckets = <String, List<int>>{};
+    final prefixBuckets = <String, List<int>>{};
+
+    void addBucket(Map<String, List<int>> target, String key, int index) {
+      if (key.isEmpty) {
+        return;
+      }
+      final bucket = target.putIfAbsent(key, () => <int>[]);
+      if (bucket.isEmpty || bucket.last != index) {
+        bucket.add(index);
+      }
+    }
+
+    for (final rawEntry in rawEntries) {
+      if (!_catalogPagePrefixesByContentType.containsKey(rawEntry.contentType) ||
+          _hiddenContentTypes.contains(rawEntry.contentType)) {
+        continue;
+      }
+      final prepared = _PreparedSearchIndexEntry.fromEntry(rawEntry);
+      final index = entries.length;
+      entries.add(prepared);
+
+      addBucket(exactName, prepared.normalizedName, index);
+      addBucket(exactSlug, prepared.normalizedSlug, index);
+      for (final value in prepared.normalizedCategories) {
+        addBucket(exactCategory, value, index);
+      }
+      for (final value in prepared.normalizedCategorySlugs) {
+        addBucket(exactCategorySlug, value, index);
+      }
+      for (final value in prepared.normalizedTags) {
+        addBucket(exactTag, value, index);
+      }
+      for (final token in prepared.allTokens) {
+        addBucket(tokenBuckets, token, index);
+        if (token.length >= 3) {
+          final maxPrefix = token.length < 8 ? token.length : 8;
+          for (var length = 3; length <= maxPrefix; length++) {
+            addBucket(prefixBuckets, token.substring(0, length), index);
+          }
+        }
+      }
+      for (final token in prepared.titleTokens) {
+        addBucket(titleTokenBuckets, token, index);
+      }
+    }
+
+    return _PreparedSearchIndex(
+      entries: entries,
+      exactName: exactName,
+      exactSlug: exactSlug,
+      exactCategory: exactCategory,
+      exactCategorySlug: exactCategorySlug,
+      exactTag: exactTag,
+      tokenBuckets: tokenBuckets,
+      titleTokenBuckets: titleTokenBuckets,
+      prefixBuckets: prefixBuckets,
+    );
   }
 
   Future<_PrismCatalogPage> _loadCatalogPage(String contentType, int page) {
@@ -1594,6 +1667,90 @@ class _SearchIndexEntry {
       categorySlugs: _strings(json['category_slugs']),
       tags: _strings(json['tags']),
       createdAt: DateTime.tryParse(_string(json['created_at']))?.toUtc(),
+    );
+  }
+}
+
+
+class _PreparedSearchIndex {
+  const _PreparedSearchIndex({
+    required this.entries,
+    required this.exactName,
+    required this.exactSlug,
+    required this.exactCategory,
+    required this.exactCategorySlug,
+    required this.exactTag,
+    required this.tokenBuckets,
+    required this.titleTokenBuckets,
+    required this.prefixBuckets,
+  });
+
+  final List<_PreparedSearchIndexEntry> entries;
+  final Map<String, List<int>> exactName;
+  final Map<String, List<int>> exactSlug;
+  final Map<String, List<int>> exactCategory;
+  final Map<String, List<int>> exactCategorySlug;
+  final Map<String, List<int>> exactTag;
+  final Map<String, List<int>> tokenBuckets;
+  final Map<String, List<int>> titleTokenBuckets;
+  final Map<String, List<int>> prefixBuckets;
+}
+
+class _PreparedSearchIndexEntry {
+  const _PreparedSearchIndexEntry({
+    required this.id,
+    required this.contentType,
+    required this.page,
+    required this.createdAt,
+    required this.normalizedName,
+    required this.normalizedSlug,
+    required this.normalizedCategories,
+    required this.normalizedCategorySlugs,
+    required this.normalizedTags,
+    required this.titleTokens,
+    required this.allTokens,
+  });
+
+  final String id;
+  final String contentType;
+  final int? page;
+  final DateTime? createdAt;
+  final String normalizedName;
+  final String normalizedSlug;
+  final List<String> normalizedCategories;
+  final List<String> normalizedCategorySlugs;
+  final List<String> normalizedTags;
+  final Set<String> titleTokens;
+  final Set<String> allTokens;
+
+  factory _PreparedSearchIndexEntry.fromEntry(_SearchIndexEntry entry) {
+    final normalizedName = _normalizeForSearch(entry.name);
+    final normalizedSlug = _normalizeForSearch(entry.slug);
+    final normalizedCategories = entry.categoryNames.map(_normalizeForSearch).where((value) => value.isNotEmpty).toList(growable: false);
+    final normalizedCategorySlugs = entry.categorySlugs.map(_normalizeForSearch).where((value) => value.isNotEmpty).toList(growable: false);
+    final normalizedTags = entry.tags.map(_normalizeForSearch).where((value) => value.isNotEmpty).toList(growable: false);
+    final titleTokens = <String>{
+      ...normalizedName.split(' ').where((value) => value.isNotEmpty),
+      ...normalizedSlug.split(' ').where((value) => value.isNotEmpty),
+    };
+    final allTokens = <String>{
+      ...titleTokens,
+      for (final value in normalizedCategories) ...value.split(' ').where((token) => token.isNotEmpty),
+      for (final value in normalizedCategorySlugs) ...value.split(' ').where((token) => token.isNotEmpty),
+      for (final value in normalizedTags) ...value.split(' ').where((token) => token.isNotEmpty),
+    };
+    return _PreparedSearchIndexEntry(
+      id: entry.id,
+      contentType: entry.contentType,
+      page: entry.page,
+      createdAt: entry.createdAt,
+      normalizedName: normalizedName,
+      normalizedSlug: normalizedSlug,
+      normalizedCategories: normalizedCategories,
+      normalizedCategorySlugs: normalizedCategorySlugs,
+      normalizedTags: normalizedTags,
+      titleTokens: titleTokens,
+      allTokens: allTokens,
     );
   }
 }
@@ -2725,6 +2882,68 @@ int _scoreSearchEntry(_SearchIndexEntry entry, String normalizedQuery) {
   );
 }
 
+
+Set<int> _candidateSearchIndices(_PreparedSearchIndex index, String normalizedQuery) {
+  final candidates = <int>{};
+
+  void addAll(Iterable<int> values) {
+    candidates.addAll(values);
+  }
+
+  Set<int> intersectionForTokens(Map<String, List<int>> buckets, List<String> tokens) {
+    Set<int>? intersection;
+    for (final token in tokens) {
+      final bucket = buckets[token];
+      if (bucket == null || bucket.isEmpty) {
+        return <int>{};
+      }
+      final current = bucket.toSet();
+      if (intersection == null) {
+        intersection = current;
+      } else {
+        intersection = intersection.intersection(current);
+        if (intersection.isEmpty) {
+          return intersection;
+        }
+      }
+    }
+    return intersection ?? <int>{};
+  }
+
+  for (final query in _expandedSearchQueries(normalizedQuery)) {
+    addAll(index.exactName[query] ?? const <int>[]);
+    addAll(index.exactSlug[query] ?? const <int>[]);
+    addAll(index.exactCategory[query] ?? const <int>[]);
+    addAll(index.exactCategorySlug[query] ?? const <int>[]);
+    addAll(index.exactTag[query] ?? const <int>[]);
+
+    final tokens = query.split(' ').where((token) => token.isNotEmpty).toList(growable: false);
+    if (tokens.isEmpty) {
+      continue;
+    }
+
+    addAll(intersectionForTokens(index.tokenBuckets, tokens));
+    addAll(intersectionForTokens(index.titleTokenBuckets, tokens));
+
+    if (tokens.length == 1 && tokens.first.length >= 3) {
+      addAll(index.prefixBuckets[tokens.first] ?? const <int>[]);
+    }
+  }
+
+  return candidates;
+}
+
+int _scorePreparedSearchEntry(_PreparedSearchIndexEntry entry, String normalizedQuery) {
+  var best = 0;
+  for (final query in _expandedSearchQueries(normalizedQuery)) {
+    final score = _scorePreparedSearchFields(entry, query);
+    if (score > best) {
+      best = score;
+    }
+  }
+  return best;
+}
+
 int _scoreSearchFieldsWithAliases({
   required String normalizedQuery,
   required String name,
@@ -2870,6 +3089,103 @@ int _scoreSearchFields({
   return 0;
 }
 
+
+int _scorePreparedSearchFields(_PreparedSearchIndexEntry entry, String normalizedQuery) {
+  final tokens = normalizedQuery.split(' ').where((token) => token.isNotEmpty).toList(growable: false);
+  if (tokens.isEmpty) {
+    return 0;
+  }
+
+  final normalizedName = entry.normalizedName;
+  final normalizedSlug = entry.normalizedSlug;
+  final normalizedCategories = entry.normalizedCategories;
+  final normalizedCategorySlugs = entry.normalizedCategorySlugs;
+  final normalizedTags = entry.normalizedTags;
+  final fields = <String>[
+    normalizedName,
+    normalizedSlug,
+    ...normalizedCategories,
+    ...normalizedCategorySlugs,
+    ...normalizedTags,
+  ].where((value) => value.isNotEmpty).toList(growable: false);
+  final compactQuery = normalizedQuery.replaceAll(' ', '');
+  final compactFields = fields.map((value) => value.replaceAll(' ', '')).toList(growable: false);
+  final singleToken = tokens.length == 1 ? tokens.first : null;
+  final allowCompactMatch = compactQuery.length >= 4;
+  final exactTagMatch = normalizedTags.any((value) => value == normalizedQuery);
+  final exactCategoryMatch = normalizedCategories.any((value) => value == normalizedQuery) ||
+      normalizedCategorySlugs.any((value) => value == normalizedQuery);
+  final titlePhraseMatch = _containsSearchPhrase(normalizedName, normalizedQuery) || _containsSearchPhrase(normalizedSlug, normalizedQuery);
+  final titleTokenCoverage = tokens.every(
+    (token) => _containsSearchToken(normalizedName, token) ||
+        _containsSearchToken(normalizedSlug, token) ||
+        _containsSearchPhrase(normalizedName, token) ||
+        _containsSearchPhrase(normalizedSlug, token),
+  );
+  if (normalizedName == normalizedQuery || normalizedSlug == normalizedQuery) {
+    return 10000;
+  }
+  if (titlePhraseMatch) {
+    return 9600;
+  }
+  if (titleTokenCoverage && tokens.length > 1) {
+    return 9000;
+  }
+  if (exactTagMatch) {
+    return tokens.length > 1 && !titleTokenCoverage ? 7000 : 8800;
+  }
+  if (exactCategoryMatch) {
+    return tokens.length > 1 && !titleTokenCoverage ? 6200 : 7600;
+  }
+  if (singleToken == null
+      ? (normalizedName.startsWith(normalizedQuery) || normalizedSlug.startsWith(normalizedQuery))
+      : (_containsSearchTokenPrefix(normalizedName, singleToken) || _containsSearchTokenPrefix(normalizedSlug, singleToken))) {
+    return 6800;
+  }
+  if (singleToken == null
+      ? normalizedTags.any((value) => value.startsWith(normalizedQuery))
+      : normalizedTags.any((value) => _containsSearchTokenPrefix(value, singleToken))) {
+    return 6200;
+  }
+  if (singleToken == null
+      ? (normalizedCategories.any((value) => value.startsWith(normalizedQuery)) ||
+          normalizedCategorySlugs.any((value) => value.startsWith(normalizedQuery)))
+      : (normalizedCategories.any((value) => _containsSearchTokenPrefix(value, singleToken)) ||
+          normalizedCategorySlugs.any((value) => _containsSearchTokenPrefix(value, singleToken)))) {
+    return 5600;
+  }
+  if (allowCompactMatch && (compactFields.any((value) => value.contains(compactQuery)))) {
+    return 5200;
+  }
+  if (tokens.length > 1) {
+    final titleFieldMatch = tokens.every(
+      (token) => _containsSearchToken(normalizedName, token) ||
+          _containsSearchToken(normalizedSlug, token) ||
+          _containsSearchPhrase(normalizedName, token) ||
+          _containsSearchPhrase(normalizedSlug, token),
+    );
+    if (titleFieldMatch) {
+      return 5100;
+    }
+    if (normalizedTags.any((value) => tokens.every((token) => _containsSearchToken(value, token) || _containsSearchPhrase(value, token)))) {
+      return 4300;
+    }
+    if (fields.any((value) => tokens.every((token) => _containsSearchToken(value, token) || _containsSearchPhrase(value, token)))) {
+      return 3200;
+    }
+    return 0;
+  }
+  if (singleToken != null) {
+    if (fields.any((value) => _containsSearchToken(value, singleToken))) {
+      return 3000;
+    }
+    if (singleToken.length >= 3 && fields.any((value) => _containsSearchTokenPrefix(value, singleToken))) {
+      return 2200;
+    }
+  }
+  return 0;
+}
+
 List<_RankedItemReference> _dedupeReferences(Iterable<_RankedItemReference> refs) {
   final seen = <String>{};
   final deduped = <_RankedItemReference>[];
@@ -2888,7 +3204,22 @@ int _compareRankedReferences(_RankedItemReference a, _RankedItemReference b) {
   if (scoreCompare != 0) {
     return scoreCompare;
   }
+  final contentTypeCompare = _searchContentTypePriority(a.contentType).compareTo(_searchContentTypePriority(b.contentType));
+  if (contentTypeCompare != 0) {
+    return contentTypeCompare;
+  }
   return _compareNewestReferences(a, b);
+}
+
+int _searchContentTypePriority(String contentType) {
+  return switch (contentType) {
+    PrismCatalogDataSource.regularContentType => 0,
+    PrismCatalogDataSource.parallaxContentType => 1,
+    PrismCatalogDataSource.matchingContentType => 2,
+    PrismCatalogDataSource.doubleContentType => 2,
+    PrismCatalogDataSource.profilePictureContentType => 3,
+    _ => 4,
+  };
 }
 
 int _compareNewestReferences(_RankedItemReference a, _RankedItemReference b) {
