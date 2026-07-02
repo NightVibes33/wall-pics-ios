@@ -1665,7 +1665,7 @@ class _MatchingCatalogHeader extends StatelessWidget {
   }
 }
 
-class _MatchingCatalogTabs extends StatelessWidget {
+class _MatchingCatalogTabs extends StatefulWidget {
   const _MatchingCatalogTabs({required this.tabs, required this.activeIndex, required this.onSelected});
 
   final List<_MatchingCatalogTab> tabs;
@@ -1673,23 +1673,74 @@ class _MatchingCatalogTabs extends StatelessWidget {
   final ValueChanged<int> onSelected;
 
   @override
+  State<_MatchingCatalogTabs> createState() => _MatchingCatalogTabsState();
+}
+
+class _MatchingCatalogTabsState extends State<_MatchingCatalogTabs> {
+  late final ScrollController _scrollController;
+  late List<GlobalKey> _tabKeys;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController();
+    _tabKeys = List<GlobalKey>.generate(widget.tabs.length, (_) => GlobalKey());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _ensureActiveTabVisible());
+  }
+
+  @override
+  void didUpdateWidget(covariant _MatchingCatalogTabs oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.tabs.length != widget.tabs.length) {
+      _tabKeys = List<GlobalKey>.generate(widget.tabs.length, (_) => GlobalKey());
+    }
+    if (oldWidget.activeIndex != widget.activeIndex || oldWidget.tabs.length != widget.tabs.length) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _ensureActiveTabVisible());
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _ensureActiveTabVisible() {
+    if (!mounted || widget.activeIndex < 0 || widget.activeIndex >= _tabKeys.length) {
+      return;
+    }
+    final context = _tabKeys[widget.activeIndex].currentContext;
+    if (context == null) {
+      return;
+    }
+    Scrollable.ensureVisible(
+      context,
+      alignment: 0.5,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     return SizedBox(
       height: 54,
       child: ListView.separated(
+        controller: _scrollController,
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 18),
-        itemCount: tabs.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 26),
+        itemCount: widget.tabs.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 22),
         itemBuilder: (context, index) {
-          final active = index == activeIndex;
+          final active = index == widget.activeIndex;
           return PrismTapScale(
+            key: _tabKeys[index],
             pressedScale: 0.96,
             child: InkWell(
               borderRadius: BorderRadius.circular(4),
               onTap: () {
                 PrismHaptics.selection();
-                onSelected(index);
+                widget.onSelected(index);
               },
               child: SizedBox(
                 height: 52,
@@ -1698,13 +1749,13 @@ class _MatchingCatalogTabs extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      tabs[index].label,
+                      widget.tabs[index].label,
                       maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                      overflow: TextOverflow.visible,
                       style: TextStyle(
                         color: active ? Colors.white : Colors.white.withValues(alpha: 0.5),
                         fontFamily: 'Satoshi',
-                        fontSize: 20,
+                        fontSize: 19,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -1739,11 +1790,41 @@ class _MatchingPairListItem extends StatelessWidget {
       return const SizedBox.shrink();
     }
     final width = MediaQuery.sizeOf(context).width - 36;
-    final sideWidth = (width - 3) / 2;
+    const gap = 3.0;
+    final pixelRatio = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 3.0);
+
+    if (sideItems.length <= 5) {
+      final sideWidth = (width - gap * (sideItems.length - 1)) / sideItems.length;
+      final rowHeight = sideWidth * 1.78;
+      final cacheWidth = (sideWidth * pixelRatio).ceil();
+      final cacheHeight = (rowHeight * pixelRatio).ceil();
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 18),
+        child: SizedBox(
+          height: rowHeight,
+          child: Row(
+            children: <Widget>[
+              for (var i = 0; i < sideItems.length; i++) ...<Widget>[
+                if (i > 0) const SizedBox(width: gap),
+                Expanded(
+                  child: _MatchingCatalogSide(
+                    item: sideItems[i],
+                    galleryItems: galleryItems,
+                    cacheWidth: cacheWidth,
+                    cacheHeight: cacheHeight,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
+
+    final sideWidth = (width - gap) / 2;
     final rowHeight = sideWidth * 1.78;
     final rowCount = (sideItems.length / 2).ceil();
-    final height = rowHeight * rowCount + (rowCount - 1) * 3;
-    final pixelRatio = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 3.0);
+    final height = rowHeight * rowCount + (rowCount - 1) * gap;
     final cacheWidth = (sideWidth * pixelRatio).ceil();
     final cacheHeight = (rowHeight * pixelRatio).ceil();
     final rows = <Widget>[];
@@ -1754,7 +1835,7 @@ class _MatchingPairListItem extends StatelessWidget {
           child: Row(
             children: <Widget>[
               Expanded(child: _MatchingCatalogSide(item: sideItems[sideIndex], galleryItems: galleryItems, cacheWidth: cacheWidth, cacheHeight: cacheHeight)),
-              const SizedBox(width: 3),
+              const SizedBox(width: gap),
               if (sideIndex + 1 < sideItems.length)
                 Expanded(child: _MatchingCatalogSide(item: sideItems[sideIndex + 1], galleryItems: galleryItems, cacheWidth: cacheWidth, cacheHeight: cacheHeight))
               else
@@ -1763,7 +1844,7 @@ class _MatchingPairListItem extends StatelessWidget {
           ),
         ),
       );
-      if (sideIndex + 2 < sideItems.length) rows.add(const SizedBox(height: 3));
+      if (sideIndex + 2 < sideItems.length) rows.add(const SizedBox(height: gap));
     }
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 18),
