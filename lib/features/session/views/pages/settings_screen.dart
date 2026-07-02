@@ -98,6 +98,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
     };
   }
 
+  String get _downloadAccessLabel {
+    if (_subscriptionTier.isPaid || app_state.prismUser.premium) {
+      return 'Unlimited downloads';
+    }
+    final int limit = app_state.prismUser.freeDownloadsLimit > 0 ? app_state.prismUser.freeDownloadsLimit : 3;
+    final int used = app_state.prismUser.freeDownloadsToday < 0 ? 0 : app_state.prismUser.freeDownloadsToday;
+    final int remaining = limit - used < 0 ? 0 : limit - used;
+    return '$remaining of $limit free downloads left today';
+  }
+
+  String get _planUnlocksLabel {
+    return switch (_subscriptionTier) {
+      SubscriptionTier.free => '3 free downloads per day',
+      SubscriptionTier.pro => 'Infinite downloads',
+      SubscriptionTier.lifetime => 'Infinite downloads',
+    };
+  }
+
   String _normalizedDownloadQuality(String raw) {
     final value = raw.trim().toLowerCase();
     return value == 'compressed' ? 'compressed' : 'original';
@@ -295,7 +313,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ListTile(
             leading: const Icon(Icons.info_outline),
             title: Text('What account access enables', style: _titleStyle),
-            subtitle: const Text('Sync preferences, in-app notifications, favorites and creator activity across devices', style: _subtitleStyle),
+            subtitle: const Text('Sync preferences and unlock 3 free downloads per day after sign-in.', style: _subtitleStyle),
           ),
         ],
       );
@@ -316,6 +334,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           leading: Icon(isPaid ? Icons.workspace_premium_outlined : Icons.lock_outline),
           title: Text('Entitlement status', style: _titleStyle),
           subtitle: Text(_entitlementLabel, style: _subtitleStyle),
+        ),
+        ListTile(
+          leading: Icon(isPaid ? JamIcons.infinite : Icons.download_outlined),
+          title: Text('Download access', style: _titleStyle),
+          subtitle: Text('$_planUnlocksLabel • $_downloadAccessLabel', style: _subtitleStyle),
         ),
         if (!isPaid)
           ListTile(
