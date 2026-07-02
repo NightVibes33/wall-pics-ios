@@ -150,7 +150,7 @@ class _CategoryFeedContentState extends State<_CategoryFeedContent> {
     }
   }
 
-  Future<void> _loadInitial() async {
+  Future<void> _loadInitial({bool refresh = false}) async {
     final generation = ++_generation;
     setState(() {
       _loadingInitial = true;
@@ -160,7 +160,7 @@ class _CategoryFeedContentState extends State<_CategoryFeedContent> {
       _rawItems.clear();
     });
     try {
-      final page = await PrismCatalogDataSource.instance.fetchCategoryFeed(category: widget.category, refresh: true);
+      final page = await PrismCatalogDataSource.instance.fetchCategoryFeed(category: widget.category, refresh: refresh);
       if (!mounted || generation != _generation) return;
       setState(() {
         _rawItems.addAll(_uniqueItems(page?.items ?? const <FeedItemEntity>[]));
@@ -216,10 +216,11 @@ class _CategoryFeedContentState extends State<_CategoryFeedContent> {
     }
   }
 
-  Future<void> _refresh() => _loadInitial();
+  Future<void> _refresh() => _loadInitial(refresh: true);
 
   double _gridAspectRatio(List<FeedItemEntity> items) {
-    if (widget.category.catalogContentType == PrismCatalogDataSource.profilePictureContentType) {
+    if (widget.category.catalogContentType == PrismCatalogDataSource.profilePictureContentType ||
+        widget.category.catalogContentType == PrismCatalogDataSource.parallaxContentType) {
       return 1.0;
     }
     final sample = items.take(18).toList(growable: false);
@@ -265,7 +266,7 @@ class _CategoryFeedContentState extends State<_CategoryFeedContent> {
       onRefresh: _refresh,
       child: GridView.builder(
         controller: _scrollController,
-        cacheExtent: 18000,
+        cacheExtent: MediaQuery.sizeOf(context).height * 2,
         padding: const EdgeInsets.fromLTRB(0, 5, 0, 140),
         itemCount: items.length + loadingTileCount,
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(

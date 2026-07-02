@@ -335,7 +335,17 @@ class WallpaperTile extends StatelessWidget {
   }
 
   static double aspectRatioForItem(FeedItemEntity item) {
-    return isProfilePictureItem(item) ? 1.0 : 0.5;
+    return item.when(
+      prism: (_, wallpaper) {
+        final contentType = wallpaper.aiMetadata?['catalogContentType'];
+        if (contentType == PrismCatalogDataSource.parallaxContentType) {
+          return 1.0;
+        }
+        return isProfilePictureItem(item) ? 1.0 : 0.5;
+      },
+      wallhaven: (_, _) => 0.5,
+      pexels: (_, _) => 0.5,
+    );
   }
 
   Widget _cachedTileImage(

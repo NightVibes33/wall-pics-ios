@@ -27,9 +27,9 @@ class WallpaperGrid extends StatefulWidget {
 }
 
 class _WallpaperGridState extends State<WallpaperGrid> {
-  static const int _lookAheadPrecacheCount = 144;
-  static const int _lookAheadVideoPrecacheCount = 72;
-  static const Duration _thumbnailPrecacheTimeout = Duration(seconds: 5);
+  static const int _lookAheadPrecacheCount = 48;
+  static const int _lookAheadVideoPrecacheCount = 24;
+  static const Duration _thumbnailPrecacheTimeout = Duration(seconds: 3);
 
   final GlobalKey<RefreshIndicatorState> refreshHomeKey = GlobalKey<RefreshIndicatorState>();
   final ScrollMilestoneTracker _scrollMilestoneTracker = ScrollMilestoneTracker();
@@ -147,7 +147,9 @@ class _WallpaperGridState extends State<WallpaperGrid> {
   }
 
   double _gridAspectRatio(CategoryFeedState state, List<FeedItemEntity> displayItems) {
-    if (state.selectedCategory?.catalogContentType == PrismCatalogDataSource.profilePictureContentType) {
+    final contentType = state.selectedCategory?.catalogContentType;
+    if (contentType == PrismCatalogDataSource.profilePictureContentType ||
+        contentType == PrismCatalogDataSource.parallaxContentType) {
       return 1.0;
     }
     final sample = displayItems.take(18).toList(growable: false);
@@ -239,7 +241,7 @@ class _WallpaperGridState extends State<WallpaperGrid> {
           },
           child: GridView.builder(
             physics: const ScrollPhysics(),
-            cacheExtent: 16000,
+            cacheExtent: MediaQuery.sizeOf(context).height * 2.5,
             padding: EdgeInsets.zero,
             itemCount: showSkeletonTiles ? 20 : subWalls.length + (state.hasMore ? 1 : 0),
             shrinkWrap: true,
