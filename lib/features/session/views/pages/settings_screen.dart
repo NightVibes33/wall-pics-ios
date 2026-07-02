@@ -14,10 +14,12 @@ import 'package:Prism/core/persistence/data_sources/settings_local_data_source.d
 import 'package:Prism/core/persistence/persistence_keys.dart';
 import 'package:Prism/core/platform/pigeon/prism_media_api.g.dart';
 import 'package:Prism/core/purchases/paywall_orchestrator.dart';
+import 'package:Prism/core/purchases/purchases_service.dart';
 import 'package:Prism/core/purchases/subscription_tier.dart';
 import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/state/auth_runtime.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
+import 'package:Prism/core/utils/url_launcher_compat.dart' as launcher_compat;
 import 'package:Prism/env/env.dart';
 import 'package:Prism/features/navigation/views/widgets/personalized_feed_settings_bottom_sheet.dart';
 import 'package:Prism/core/widgets/home/core/headingChipBar.dart';
@@ -327,6 +329,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
               source: 'settings_account_upgrade',
             ),
           ),
+        if (isPaid)
+          ListTile(
+            leading: const Icon(Icons.open_in_new_outlined),
+            title: Text('Manage subscription', style: _titleStyle),
+            subtitle: const Text('Open Apple subscription settings for renewals and cancellations', style: _subtitleStyle),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: _openManageSubscription,
+          ),
+        ListTile(
+          leading: const Icon(Icons.restore_outlined),
+          title: Text('Restore purchases', style: _titleStyle),
+          subtitle: const Text('Restore Prism Pro access from this Apple account', style: _subtitleStyle),
+          onTap: _restorePurchases,
+        ),
         ListTile(
           leading: const Icon(Icons.cloud_sync_outlined),
           title: Text('Sync mode', style: _titleStyle),
@@ -666,6 +682,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (mounted) {
         setState(() => _authBusy = false);
       }
+    }
+  }
+
+  Future<void> _restorePurchases() async {
+    _trackSettingsAction(AnalyticsActionValue.restorePurchaseTapped);
+    final restored = await PurchasesService.instance.restore(source: 'settings_account_restore');
+    if (!mounted) return;
+    if (restored) {
+      toasts.codeSend('Purchases restored.');
+      main.RestartWidget.restartApp(context);
+      return;
+    }
+    toasts.error(PurchasesService.instance.availabilityMessage ?? 'No active Pro purchase found.');
+  }
+
+  Future<void> _openManageSubscription() async {
+    const uri = 'https://apps.apple.com/account/subscriptions';
+    final opened = await launcher_compat.launch(uri);
+    if (!mounted) return;
+    if (!opened) {
+      toasts.error('Unable to open Apple subscription settings.');
     }
   }
 
