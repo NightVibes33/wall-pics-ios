@@ -97,6 +97,7 @@ class PrismUsersV2 {
   String freeDownloadDay;
   int freeDownloadsToday;
   int freeDownloadsLimit;
+  String authProvider;
 
   PrismUsersV2({
     required this.username,
@@ -123,6 +124,7 @@ class PrismUsersV2 {
     this.freeDownloadDay = '',
     this.freeDownloadsToday = 0,
     this.freeDownloadsLimit = 3,
+    this.authProvider = '',
   }) {
     logger.d("Default constructor !!!!");
   }
@@ -158,6 +160,7 @@ class PrismUsersV2 {
       freeDownloadDay: data['freeDownloadDay']?.toString() ?? '',
       freeDownloadsToday: data['freeDownloadsToday'] as int? ?? 0,
       freeDownloadsLimit: data['freeDownloadsLimit'] as int? ?? 3,
+      authProvider: data['authProvider']?.toString() ?? '',
     );
   }
 
@@ -193,6 +196,7 @@ class PrismUsersV2 {
       freeDownloadDay: data['freeDownloadDay']?.toString() ?? '',
       freeDownloadsToday: data['freeDownloadsToday'] as int? ?? 0,
       freeDownloadsLimit: data['freeDownloadsLimit'] as int? ?? 3,
+      authProvider: data['authProvider']?.toString() ?? '',
     );
   }
   Map<String, dynamic> toJson() => _$PrismUsersV2ToJson(this);

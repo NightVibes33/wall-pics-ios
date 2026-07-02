@@ -10,6 +10,7 @@ import 'package:Prism/core/constants/app_constants.dart';
 import 'package:Prism/core/di/injection.dart';
 import 'package:Prism/core/persistence/data_sources/cache_maintenance_service.dart';
 import 'package:Prism/core/persistence/data_sources/favorites_local_data_source.dart';
+import 'package:Prism/core/persistence/data_sources/notifications_local_data_source.dart';
 import 'package:Prism/core/persistence/data_sources/settings_local_data_source.dart';
 import 'package:Prism/core/persistence/persistence_keys.dart';
 import 'package:Prism/core/platform/pigeon/prism_media_api.g.dart';
@@ -48,6 +49,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final CacheMaintenanceService _cacheMaintenance = getIt<CacheMaintenanceService>();
   final SettingsLocalDataSource _settingsLocal = getIt<SettingsLocalDataSource>();
   final FavoritesLocalDataSource _favoritesLocal = getIt<FavoritesLocalDataSource>();
+  final NotificationsLocalDataSource _notificationsLocal = getIt<NotificationsLocalDataSource>();
 
   late bool _notifWotd;
   late bool _notifPromo;
@@ -60,6 +62,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _downloadCount = 0;
   int _favoriteWallCount = 0;
   int _favoriteSetupCount = 0;
+  int _notificationCount = 0;
+  int _unreadNotificationCount = 0;
 
   @override
   void initState() {
@@ -116,6 +120,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
     };
   }
 
+  String get _authProviderLabel {
+    final provider = app_state.prismUser.authProvider.trim().toLowerCase();
+    switch (provider) {
+      case 'google':
+        return 'Google';
+      case 'apple':
+        return 'Apple';
+      default:
+        return _isSignedIn ? 'Connected account' : 'Not signed in';
+    }
+  }
+
+  String get _privacySummary {
+    if (_isSignedIn) {
+      return 'Account profile, favorites, download quota and feed preferences are tied to this account. Downloads and caches remain on this device until removed.';
+    }
+    return 'You are in local-only mode. Downloads, caches and settings stay on this device until you sign in or clear them.';
+  }
+
   String _normalizedDownloadQuality(String raw) {
     final value = raw.trim().toLowerCase();
     return value == 'compressed' ? 'compressed' : 'original';
@@ -152,11 +175,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final wallScope = _userScope;
     final wallCount = _favoritesLocal.wallFavouriteCount(wallScope);
     final setupCount = _favoritesLocal.setupFavouriteCount(wallScope);
+    int totalNotifications = _notificationCount;
+    int unreadNotifications = _unreadNotificationCount;
+    try {
+      final items = await _notificationsLocal.readAll();
+      totalNotifications = items.length;
+      unreadNotifications = items.where((item) => !item.read).length;
+    } catch (error, stackTrace) {
+      logger.w('Failed to load notification stats.', error: error, stackTrace: stackTrace);
+    }
     if (!mounted) return;
     setState(() {
       _downloadCount = downloads;
       _favoriteWallCount = wallCount;
       _favoriteSetupCount = setupCount;
+      _notificationCount = totalNotifications;
+      _unreadNotificationCount = unreadNotifications;
       _loadingStorage = false;
     });
   }
@@ -315,6 +349,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: Text('What account access enables', style: _titleStyle),
             subtitle: const Text('Sync preferences and unlock 3 free downloads per day after sign-in.', style: _subtitleStyle),
           ),
+          ListTile(
+            leading: const Icon(Icons.badge_outlined),
+            title: Text('Connected provider', style: _titleStyle),
+            subtitle: const Text('Sign in with Google or Apple to link this device to a Prism account.', style: _subtitleStyle),
+          ),
         ],
       );
     }
@@ -329,6 +368,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
           leading: const Icon(Icons.verified_user_outlined),
           title: Text('Plan', style: _titleStyle),
           subtitle: Text('$_subscriptionLabel • $syncLabel', style: _subtitleStyle),
+        ),
+        ListTile(
+          leading: const Icon(Icons.badge_outlined),
+          title: Text('Connected provider', style: _titleStyle),
+          subtitle: Text(_authProviderLabel, style: _subtitleStyle),
+        ),
+        ListTile(
+          leading: const Icon(Icons.fact_check_outlined),
+          title: Text('Plan benefits', style: _titleStyle),
+          subtitle: Text(
+            _subscriptionTier.isPaid
+                ? 'Infinite downloads with premium access and paid-tier content unlocks.'
+                : '3 free downloads per day. Upgrade for infinite downloads and premium access.',
+            style: _subtitleStyle,
+          ),
         ),
         ListTile(
           leading: Icon(isPaid ? Icons.workspace_premium_outlined : Icons.lock_outline),
@@ -487,6 +541,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Widget _notificationInboxSection() {
+    final String subtitle = _notificationCount == 0
+        ? 'No saved notifications on this device'
+        : '$_unreadNotificationCount unread • $_notificationCount total saved notifications';
+    return _sectionCard(
+      title: 'NOTIFICATION INBOX',
+      children: <Widget>[
+        ListTile(
+          leading: const Icon(Icons.inbox_outlined),
+          title: Text('Notification inbox', style: _titleStyle),
+          subtitle: Text(subtitle, style: _subtitleStyle),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: () => context.router.push(const NotificationRoute()),
+        ),
+        ListTile(
+          leading: const Icon(Icons.mark_email_read_outlined),
+          title: Text('Mark all as read', style: _titleStyle),
+          subtitle: const Text('Keep notifications but clear the unread count', style: _subtitleStyle),
+          onTap: _markAllNotificationsRead,
+        ),
+        ListTile(
+          leading: const Icon(Icons.delete_sweep_outlined),
+          title: Text('Clear notification inbox', style: _titleStyle),
+          subtitle: const Text('Delete saved in-app notifications from this device', style: _subtitleStyle),
+          onTap: _clearNotificationInbox,
+        ),
+      ],
+    );
+  }
+
   Widget _storageSection() {
     final String subtitle = _loadingStorage
         ? 'Loading device usage…'
@@ -524,6 +608,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
           subtitle: const Text('Remove locally saved favorite walls and setups', style: _subtitleStyle),
           onTap: _showClearFavoritesDialog,
         ),
+      ],
+    );
+  }
+
+  Widget _privacySection() {
+    return _sectionCard(
+      title: 'PRIVACY & DATA',
+      children: <Widget>[
+        ListTile(
+          leading: const Icon(Icons.privacy_tip_outlined),
+          title: Text('Data overview', style: _titleStyle),
+          subtitle: Text(_privacySummary, style: _subtitleStyle),
+        ),
+        ListTile(
+          leading: const Icon(Icons.download_done_outlined),
+          title: Text('Stored on this device', style: _titleStyle),
+          subtitle: Text('$_downloadCount downloads • cache files • $_notificationCount saved notifications', style: _subtitleStyle),
+        ),
+        if (_isSignedIn)
+          ListTile(
+            leading: const Icon(Icons.cloud_outlined),
+            title: Text('Stored with your account', style: _titleStyle),
+            subtitle: Text('Favorites, account profile, subscription tier and daily download quota state', style: _subtitleStyle),
+          ),
       ],
     );
   }
@@ -923,6 +1031,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Future<void> _markAllNotificationsRead() async {
+    final items = await _notificationsLocal.readAll();
+    if (items.isEmpty) {
+      toasts.codeSend('No notifications to update.');
+      return;
+    }
+    await _notificationsLocal.writeAll(items.map((item) => item.copyWith(read: true)).toList(growable: false));
+    if (!mounted) return;
+    toasts.codeSend('Marked all notifications as read.');
+    unawaited(_reloadStorageStats());
+  }
+
+  Future<void> _clearNotificationInbox() async {
+    await _notificationsLocal.clearAll();
+    await _notificationsLocal.clearLastFetchAtUtc();
+    if (!mounted) return;
+    toasts.codeSend('Cleared notification inbox.');
+    unawaited(_reloadStorageStats());
+  }
+
   Future<void> _sendBugReport() async {
     final deviceBody = await _bugReportDeviceBody();
     final String zipPath = await zipLogs();
@@ -970,7 +1098,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _personalizationSection(),
           _downloadsSection(),
           _notificationsSection(),
+          _notificationInboxSection(),
           _storageSection(),
+          _privacySection(),
           _adminSection(),
           _supportSection(),
         ],

@@ -33,6 +33,7 @@ PrismUsersV2 _$PrismUsersV2FromJson(Map<String, dynamic> json) => PrismUsersV2(
   freeDownloadDay: json['freeDownloadDay'] as String? ?? '',
   freeDownloadsToday: (json['freeDownloadsToday'] as num?)?.toInt() ?? 0,
   freeDownloadsLimit: (json['freeDownloadsLimit'] as num?)?.toInt() ?? 3,
+  authProvider: json['authProvider'] as String? ?? '',
 );
 
 Map<String, dynamic> _$PrismUsersV2ToJson(PrismUsersV2 instance) => <String, dynamic>{
@@ -60,4 +61,5 @@ Map<String, dynamic> _$PrismUsersV2ToJson(PrismUsersV2 instance) => <String, dyn
   'freeDownloadDay': instance.freeDownloadDay,
   'freeDownloadsToday': instance.freeDownloadsToday,
   'freeDownloadsLimit': instance.freeDownloadsLimit,
+  'authProvider': instance.authProvider,
 };
