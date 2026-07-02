@@ -1869,11 +1869,11 @@ class _PrismItem {
     final fastFullSizeImage = _fastTileOrOriginal(fullImage, width: 3840, quality: 98);
     final fastLivePoster = _fastTileOrOriginal(liveOriginalStill);
     final previewThumbImage = _firstString(<Object?>[
-      isActualImageUrl(staticThumbnail) ? staticThumbnail : '',
-      isActualImageUrl(hqThumbnail) ? hqThumbnail : '',
-      isActualImageUrl(thumbnail) ? thumbnail : '',
-      isActualImageUrl(firstFrameThumbnail) ? firstFrameThumbnail : '',
-      isActualImageUrl(previewImage) ? previewImage : '',
+      isDisplayImageUrl(staticThumbnail) ? staticThumbnail : '',
+      isDisplayImageUrl(hqThumbnail) ? hqThumbnail : '',
+      isDisplayImageUrl(thumbnail) ? thumbnail : '',
+      isDisplayImageUrl(firstFrameThumbnail) ? firstFrameThumbnail : '',
+      isDisplayImageUrl(previewImage) ? previewImage : '',
     ]);
     final parallaxFallbackThumbImage = isParallaxContent
         ? _firstString(<Object?>[
@@ -1906,24 +1906,24 @@ class _PrismItem {
     final tileImage = _firstString(<Object?>[
       isMatchingContent ? _firstString(<Object?>[...pairedDisplayUrls]) : '',
       isLiveContent ? '' : fastPreviewThumbImage,
-      fastFullImage,
-      fastLivePoster,
+      isDisplayImageUrl(fastFullImage) ? fastFullImage : '',
+      isDisplayImageUrl(fastLivePoster) ? fastLivePoster : '',
     ]);
     final thumb = isLiveContent
         ? _firstString(<Object?>[fastLivePoster, tileImage])
         : isParallaxContent
-            ? _firstString(<Object?>[parallaxTileImage, fastParallaxLayerPreview, fastPreviewThumbImage, parallaxFallbackThumbImage, fastFullImage])
+            ? _firstString(<Object?>[parallaxTileImage, fastParallaxLayerPreview, fastPreviewThumbImage, parallaxFallbackThumbImage, isDisplayImageUrl(fastFullImage) ? fastFullImage : ''])
             : tileImage;
     final staticThumb = isLiveContent
         ? _firstString(<Object?>[fastLivePoster, thumb])
         : isParallaxContent
             ? _firstString(<Object?>[parallaxTileImage, fastParallaxLayerPreview, thumb, fastPreviewThumbImage, parallaxFallbackThumbImage])
             : _firstString(<Object?>[
-                isActualImageUrl(staticThumbnail) ? _fastTileOrOriginal(staticThumbnail) : '',
-                isActualImageUrl(hqThumbnail) ? _fastTileOrOriginal(hqThumbnail) : '',
-                isActualImageUrl(previewImage) ? _fastTileOrOriginal(previewImage) : '',
+                isDisplayImageUrl(staticThumbnail) ? _fastTileOrOriginal(staticThumbnail) : '',
+                isDisplayImageUrl(hqThumbnail) ? _fastTileOrOriginal(hqThumbnail) : '',
+                isDisplayImageUrl(previewImage) ? _fastTileOrOriginal(previewImage) : '',
                 thumb,
-                fastFullImage,
+                isDisplayImageUrl(fastFullImage) ? fastFullImage : '',
               ]);
     final preview = isMatchingContent
         ? _firstString(<Object?>[...pairedDisplayUrls, fullImage, thumb])

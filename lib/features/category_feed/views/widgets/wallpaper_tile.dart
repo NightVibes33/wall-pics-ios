@@ -127,13 +127,14 @@ class WallpaperTile extends StatelessWidget {
         if (contentType == PrismCatalogDataSource.parallaxContentType) {
           final parallaxPreferred = _firstStringValue(
             <Object?>[
-              metadata['catalogPreviewUrl'],
               metadata['catalogStaticThumbnailUrl'],
+              metadata['catalogPreviewUrl'],
+              metadata['catalogOriginalStillUrl'],
               wallpaper.core.thumbnailUrl,
               wallpaper.core.fullUrl,
             ],
             imageOnly: true,
-            excludeCatalogPreviews: false,
+            excludeCatalogPreviews: true,
             excludeCatalogBranded: true,
           );
           final fast = PrismCatalogDataSource.fastImageTileUrl(parallaxPreferred);
@@ -141,7 +142,10 @@ class WallpaperTile extends StatelessWidget {
         }
         final preferred = _firstStringValue(
           <Object?>[
+            metadata['catalogStaticThumbnailUrl'],
             metadata['catalogOriginalStillUrl'],
+            metadata['catalogPreviewUrl'],
+            metadata['catalogFirstFrameThumbnailUrl'],
             wallpaper.core.thumbnailUrl,
             wallpaper.core.fullUrl,
           ],
