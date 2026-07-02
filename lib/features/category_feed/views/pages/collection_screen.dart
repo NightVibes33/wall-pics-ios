@@ -19,7 +19,7 @@ class CollectionScreen extends StatelessWidget {
     return BlocBuilder<CategoryFeedBloc, CategoryFeedState>(
       builder: (context, state) {
         if (state.status == LoadStatus.initial || (state.status == LoadStatus.loading && state.categories.isEmpty)) {
-          return const Center(child: Loader());
+          return Center(child: Loader());
         }
         if (state.status == LoadStatus.failure && state.categories.isEmpty) {
           return RefreshIndicator(
