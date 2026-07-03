@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:Prism/auth/apple_auth.dart';
 import 'package:Prism/auth/google_auth.dart';
+import 'package:Prism/core/state/app_state.dart' as app_state;
 
 final GoogleAuth globalGoogleAuth = GoogleAuth();
 final AppleAuth globalAppleAuth = AppleAuth();
@@ -27,5 +28,16 @@ Future<void> waitForAuthBootstrap({Duration timeout = const Duration(millisecond
     await authBootstrapCompleter.future.timeout(timeout);
   } catch (_) {
     // Keep startup moving if auth reconciliation stalls.
+  }
+}
+
+
+Future<bool> signOutCurrentAuthProvider() async {
+  switch (app_state.prismUser.authProvider.trim().toLowerCase()) {
+    case 'apple':
+      return globalAppleAuth.signOutApple();
+    case 'google':
+    default:
+      return globalGoogleAuth.signOutGoogle();
   }
 }

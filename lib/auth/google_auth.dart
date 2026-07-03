@@ -4,6 +4,7 @@ import 'package:Prism/analytics/analytics_service.dart';
 import 'package:Prism/auth/github_user_store.dart';
 import 'package:Prism/auth/userModel.dart';
 import 'package:Prism/core/analytics/events/events.dart';
+import 'package:Prism/core/constants/app_constants.dart';
 import 'package:Prism/core/monitoring/sentry_user_scope.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:Prism/data/notifications/notifications.dart';
@@ -132,20 +133,7 @@ class GoogleAuth {
       );
     }
 
-    app_state.prismUser
-      ..loggedIn = false
-      ..premium = false
-      ..subscriptionTier = 'free'
-      ..id = ''
-      ..email = ''
-      ..username = ''
-      ..name = ''
-      ..bio = ''
-      ..profilePhoto = app_state.defaultProfilePhotoUrl
-      ..coverPhoto = ''
-      ..followers = <String>[]
-      ..following = <String>[]
-      ..links = <String, String>{};
+    app_state.prismUser = createGuestPrismUser();
     await syncSentryUserScope(loggedIn: false, id: '', email: '');
     await app_state.persistPrismUser();
     await _userStore.markLoggedOut(existingUserId);

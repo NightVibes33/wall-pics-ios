@@ -4,8 +4,10 @@ import 'package:Prism/analytics/analytics_service.dart';
 import 'package:Prism/auth/github_user_store.dart';
 import 'package:Prism/auth/userModel.dart';
 import 'package:Prism/core/analytics/events/events.dart';
+import 'package:Prism/core/constants/app_constants.dart';
 import 'package:Prism/core/monitoring/sentry_user_scope.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
+import 'package:Prism/data/notifications/notifications.dart';
 import 'package:Prism/env/env.dart';
 import 'package:Prism/logger/logger.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
@@ -14,6 +16,20 @@ class AppleAuth {
   static const String signInCancelledResult = 'signInWithApple canceled';
 
   final GitHubUserStore _userStore = const GitHubUserStore();
+
+  Future<bool> signOutApple() async {
+    clearInAppNotificationSyncGateAll();
+    final String existingUserId = app_state.prismUser.id;
+    app_state.prismUser = createGuestPrismUser();
+    await syncSentryUserScope(loggedIn: false, id: '', email: '');
+    await app_state.persistPrismUser();
+    await _userStore.markLoggedOut(existingUserId);
+    await analytics.setUserId(null);
+    await analytics.setUserProperty(name: AnalyticsUserProperty.subscriptionTier.wireName, value: 'free');
+    await analytics.setUserProperty(name: AnalyticsUserProperty.isPremium.wireName, value: '0');
+    logger.d('Apple user sign out');
+    return true;
+  }
 
   Future<String> signInWithApple() async {
     logger.i('signInWithApple start', tag: 'AppleAuth');

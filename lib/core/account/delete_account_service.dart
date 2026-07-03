@@ -2,7 +2,10 @@ import 'package:Prism/core/di/injection.dart';
 import 'package:Prism/core/remote_store/remote_store_client.dart';
 import 'package:Prism/core/remote_store/remote_collections.dart';
 import 'package:Prism/core/remote_store/remote_store_query_specs.dart';
+import 'package:Prism/core/persistence/data_sources/favorites_local_data_source.dart';
+import 'package:Prism/core/persistence/data_sources/notifications_local_data_source.dart';
 import 'package:Prism/core/persistence/data_sources/settings_local_data_source.dart';
+import 'package:Prism/core/state/auth_runtime.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:Prism/features/onboarding_v2/src/common/onboarding_v2_keys.dart';
 import 'package:Prism/logger/logger.dart';
@@ -13,6 +16,8 @@ class DeleteAccountService {
   static final DeleteAccountService instance = DeleteAccountService._();
 
   RemoteStoreClient get _remoteStore => getIt<RemoteStoreClient>();
+  FavoritesLocalDataSource get _favoritesLocal => getIt<FavoritesLocalDataSource>();
+  NotificationsLocalDataSource get _notificationsLocal => getIt<NotificationsLocalDataSource>();
   SettingsLocalDataSource get _settingsLocal => getIt<SettingsLocalDataSource>();
 
   /// Performs a full account deletion:
@@ -73,16 +78,21 @@ class DeleteAccountService {
     // 6. Clear local account state
     logger.i('[DeleteAccount] Step 6: Clearing local account state', tag: 'DeleteAccount');
 
-    // 6b. Sign out from local auth runtime
-    logger.i('[DeleteAccount] Step 6b: Signing out locally', tag: 'DeleteAccount');
-    await app_state.gAuth.signOutGoogle();
-
-    // 7. Clear local persistence
-    logger.i('[DeleteAccount] Step 7: Clearing local persistence', tag: 'DeleteAccount');
+    // 6b. Clear local account-linked persistence before local sign-out reset.
+    logger.i('[DeleteAccount] Step 6b: Clearing local account-linked persistence', tag: 'DeleteAccount');
+    await _favoritesLocal.clearWallFavourites(userId);
+    await _favoritesLocal.clearSetupFavourites(userId);
+    await _favoritesLocal.setSeeded(userId, false);
+    await _notificationsLocal.clearAll();
+    await _notificationsLocal.clearLastFetchAtUtc();
     await _settingsLocal.set(OnboardingV2Keys.onboardedNew, false);
     await _settingsLocal.set(OnboardingV2Keys.selectedInterests, '');
     await _settingsLocal.set(OnboardingV2Keys.followedCreators, '');
     await _settingsLocal.set('session.current_user', '');
+
+    // 7. Sign out from local auth runtime after cleanup.
+    logger.i('[DeleteAccount] Step 7: Signing out locally', tag: 'DeleteAccount');
+    await signOutCurrentAuthProvider();
 
     logger.i('[DeleteAccount] Done — account deleted successfully', tag: 'DeleteAccount');
   }

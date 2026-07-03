@@ -161,7 +161,7 @@ class SessionRepositoryImpl implements SessionRepository {
   @override
   Future<Result<SessionEntity>> signOut() async {
     try {
-      await _gAuth.signOutGoogle();
+      await signOutCurrentAuthProvider();
       _syncFromPrefs();
       return Result.success(_toEntity());
     } catch (error) {

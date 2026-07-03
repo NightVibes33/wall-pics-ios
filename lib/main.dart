@@ -25,6 +25,7 @@ import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/router/deep_link_navigation.dart';
 import 'package:Prism/core/router/deep_link_parser.dart';
 import 'package:Prism/core/router/notification_route_mapper.dart';
+import 'package:Prism/core/state/auth_runtime.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:Prism/core/utils/edge_to_edge_overlay_style.dart';
 import 'package:Prism/core/utils/status.dart';
@@ -466,7 +467,7 @@ class _MyAppState extends State<_MyApp> with WidgetsBindingObserver {
     if (value) {
       if (localPrefs.get("logouteveryoneaugust2021", defaultValue: false) == false) {
         try {
-          await app_state.gAuth.signOutGoogle();
+          await signOutCurrentAuthProvider();
         } catch (e, st) {
           logger.w(
             'Forced sign-out migration failed; continuing with signed-out state.',

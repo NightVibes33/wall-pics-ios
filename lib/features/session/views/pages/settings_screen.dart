@@ -450,7 +450,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ListTile(
           leading: Icon(Icons.delete_forever_rounded, color: Colors.red[400]),
           title: Text('Delete account', style: _titleStyle.copyWith(color: Colors.red[400])),
-          subtitle: const Text('Permanently delete your Prism account and remote data', style: _subtitleStyle),
+          subtitle: const Text(
+            'Delete your Prism account data and sign out. Published submissions may remain as anonymized content.',
+            style: _subtitleStyle,
+          ),
           onTap: _showDeleteAccountDialog,
         ),
       ],
@@ -841,7 +844,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _trackSettingsAction(AnalyticsActionValue.logoutTapped);
     setState(() => _authBusy = true);
     try {
-      final bool signedOut = await app_state.gAuth.signOutGoogle();
+      final bool signedOut = await signOutCurrentAuthProvider();
       _trackSettingsAuthResult(
         action: AnalyticsActionValue.logoutTapped,
         result: signedOut ? EventResultValue.success : EventResultValue.failure,
@@ -969,7 +972,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         content: const SizedBox(
           width: 250,
           child: Text(
-            'This will permanently delete your account data, remove cloud access and sign you out. This action cannot be undone.',
+            'This will permanently delete your account data, remove cloud access and sign you out. If you have already published content, it may remain in the app as anonymized content. This action cannot be undone.',
           ),
         ),
         actions: <Widget>[

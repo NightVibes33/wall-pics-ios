@@ -6,6 +6,7 @@ import 'package:Prism/core/analytics/events/events.dart';
 import 'package:Prism/core/di/injection.dart';
 import 'package:Prism/core/persistence/data_sources/settings_local_data_source.dart';
 import 'package:Prism/core/router/app_router.dart';
+import 'package:Prism/core/state/auth_runtime.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
 import 'package:Prism/core/widgets/popup/enterCodePanel.dart';
 import 'package:Prism/data/share/createDynamicLink.dart';
@@ -179,7 +180,7 @@ class ProfileDrawer extends StatelessWidget {
               onTap: () async {
                 _trackDrawerAction(AnalyticsActionValue.drawerLogoutTapped, sourceContext: 'profile_drawer_logout');
                 Navigator.pop(context);
-                app_state.gAuth.signOutGoogle();
+                await signOutCurrentAuthProvider();
                 toasts.codeSend('Log out Successful!');
                 final settingsLocal = getIt<SettingsLocalDataSource>();
                 await settingsLocal.set('onboarded_v2_new', false);
