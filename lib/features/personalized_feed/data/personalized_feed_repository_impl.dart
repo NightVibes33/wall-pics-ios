@@ -238,13 +238,16 @@ class PersonalizedFeedRepositoryImpl implements PersonalizedFeedRepository {
   }
 
   List<String> _resolveInterests(Map<String, dynamic> userDoc, List<PersonalizedInterest> catalog) {
-    final remote = _toStringList(userDoc['interestCategories']);
+    final remote = PersonalizedInterestsCatalog.sanitizeSelection(_toStringList(userDoc['interestCategories']), catalog);
     if (remote.isNotEmpty) {
       return remote;
     }
 
     final localRaw = _settingsLocal.get<String>('onboarding_v2_interests', defaultValue: '');
-    final local = localRaw.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList(growable: false);
+    final local = PersonalizedInterestsCatalog.sanitizeSelection(
+      localRaw.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty),
+      catalog,
+    );
     if (local.isNotEmpty) {
       return local;
     }

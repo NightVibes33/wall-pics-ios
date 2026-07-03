@@ -1,16 +1,24 @@
-import 'dart:convert';
-
-import 'package:Prism/core/constants/app_constants.dart';
 import 'package:Prism/core/persistence/data_sources/settings_local_data_source.dart';
 import 'package:Prism/core/wallpaper/wallpaper_source.dart';
+import 'package:Prism/data/categories/categories.dart';
+import 'package:Prism/data/categories/category_definition.dart';
 
 class PersonalizedInterest {
-  const PersonalizedInterest({required this.name, required this.query, required this.imageUrl, required this.sources});
+  const PersonalizedInterest({
+    required this.name,
+    required this.query,
+    required this.imageUrl,
+    required this.sources,
+    this.catalogSlug,
+    this.catalogContentType,
+  });
 
   final String name;
   final String query;
   final String imageUrl;
   final List<WallpaperSource> sources;
+  final String? catalogSlug;
+  final String? catalogContentType;
 
   bool supports(WallpaperSource source) => sources.contains(source);
 }
@@ -18,16 +26,30 @@ class PersonalizedInterest {
 class PersonalizedInterestsCatalog {
   const PersonalizedInterestsCatalog._();
 
+  static const List<String> _preferredDefaultNames = <String>[
+    'Aesthetic',
+    'Anime',
+    'Gaming',
+    'Nature',
+  ];
+
+  static final List<CategoryDefinition> _appInterestCategories = _buildAppInterestCategories();
+
   static Future<List<PersonalizedInterest>> load({
     required SettingsLocalDataSource settingsLocal,
   }) async {
-    final cachedRaw = settingsLocal.get<String>(personalizedInterestsLocalCacheKey, defaultValue: '').trim();
-    final cached = _decode(cachedRaw);
-    if (cached.isNotEmpty) {
-      return cached;
-    }
-
-    return _decode(defaultPersonalizedInterestsJson);
+    return _appInterestCategories
+        .map(
+          (category) => PersonalizedInterest(
+            name: normalizeInterestName(category.name),
+            query: _queryForCategory(category),
+            imageUrl: '',
+            sources: const <WallpaperSource>[WallpaperSource.wallhaven, WallpaperSource.pexels],
+            catalogSlug: category.catalogSlug,
+            catalogContentType: category.catalogContentType,
+          ),
+        )
+        .toList(growable: false);
   }
 
   static List<String> selectedFromLocal(SettingsLocalDataSource settingsLocal) {
@@ -35,55 +57,79 @@ class PersonalizedInterestsCatalog {
     return raw.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toSet().toList(growable: false);
   }
 
-  static List<String> defaultSelection(List<PersonalizedInterest> catalog) {
-    if (catalog.isEmpty) {
-      return const <String>['Nature', 'Abstract', 'Architecture', 'Minimal'];
-    }
-    return catalog.take(4).map((e) => e.name).toList(growable: false);
+  static List<String> sanitizeSelection(Iterable<String> values, List<PersonalizedInterest> catalog) {
+    final valid = catalog.map((entry) => entry.name.toLowerCase()).toSet();
+    return values
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty && valid.contains(value.toLowerCase()))
+        .toSet()
+        .toList(growable: false);
   }
 
-  static List<PersonalizedInterest> _decode(String raw) {
-    if (raw.isEmpty) {
-      return const <PersonalizedInterest>[];
+  static List<String> defaultSelection(List<PersonalizedInterest> catalog) {
+    if (catalog.isEmpty) {
+      return const <String>['Aesthetic', 'Anime', 'Gaming', 'Nature'];
     }
-    try {
-      final decoded = json.decode(raw);
-      if (decoded is! List) {
-        return const <PersonalizedInterest>[];
+    final byName = <String, PersonalizedInterest>{for (final entry in catalog) entry.name.toLowerCase(): entry};
+    final defaults = <String>[];
+    for (final preferred in _preferredDefaultNames) {
+      final match = byName[preferred.toLowerCase()];
+      if (match != null) {
+        defaults.add(match.name);
       }
-      final out = <PersonalizedInterest>[];
-      for (final item in decoded) {
-        if (item is! Map) {
-          continue;
-        }
-        final map = item.map((key, value) => MapEntry(key.toString(), value));
-        final name = map['name']?.toString().trim() ?? '';
-        final query = (map['query']?.toString().trim() ?? name).trim();
-        final imageUrl = map['imageUrl']?.toString().trim() ?? '';
-        final sourceValues =
-            (map['sources'] as List?)?.map((e) => e?.toString() ?? '').toList(growable: false) ?? const <String>[];
-        if (name.isEmpty || query.isEmpty || imageUrl.isEmpty) {
-          continue;
-        }
-        final sources = sourceValues
-            .map(WallpaperSourceX.fromWire)
-            .where((source) => source == WallpaperSource.wallhaven || source == WallpaperSource.pexels)
-            .toSet()
-            .toList(growable: false);
-        out.add(
-          PersonalizedInterest(
-            name: name,
-            query: query,
-            imageUrl: imageUrl,
-            sources: sources.isEmpty
-                ? const <WallpaperSource>[WallpaperSource.wallhaven, WallpaperSource.pexels]
-                : sources,
-          ),
-        );
-      }
-      return out;
-    } catch (_) {
-      return const <PersonalizedInterest>[];
     }
+    if (defaults.length >= 4) {
+      return defaults.take(4).toList(growable: false);
+    }
+    for (final entry in catalog) {
+      if (defaults.contains(entry.name)) {
+        continue;
+      }
+      defaults.add(entry.name);
+      if (defaults.length >= 4) {
+        break;
+      }
+    }
+    return defaults;
+  }
+
+  static List<CategoryDefinition> appCategoryDefinitions() => List<CategoryDefinition>.unmodifiable(_appInterestCategories);
+
+  static String normalizeInterestName(String raw) {
+    final cleaned = raw.replaceAll(RegExp(r'[^A-Za-z0-9 &]+'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    return cleaned.isEmpty ? raw.trim() : cleaned;
+  }
+
+  static List<CategoryDefinition> _buildAppInterestCategories() {
+    const excludedSlugs = <String>{'for-you', 'new', 'newest'};
+    final seen = <String>{};
+    final categories = <CategoryDefinition>[];
+    for (final category in categoryDefinitions) {
+      final slug = (category.catalogSlug ?? '').trim();
+      final contentType = (category.catalogContentType ?? '').trim();
+      if (slug.isEmpty || contentType != 'regular_wallpaper' || excludedSlugs.contains(slug)) {
+        continue;
+      }
+      final normalizedName = normalizeInterestName(category.name);
+      if (normalizedName.isEmpty || !seen.add(normalizedName.toLowerCase())) {
+        continue;
+      }
+      categories.add(category);
+    }
+    return categories;
+  }
+
+  static String _queryForCategory(CategoryDefinition category) {
+    final normalizedName = normalizeInterestName(category.name).trim();
+    if (normalizedName.isNotEmpty) {
+      return normalizedName.toLowerCase();
+    }
+    final slug = (category.catalogSlug ?? '').trim();
+    return slug
+        .replaceAll(RegExp(r'[-_]+'), ' ')
+        .replaceAll(RegExp(r'[0-9]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim()
+        .toLowerCase();
   }
 }

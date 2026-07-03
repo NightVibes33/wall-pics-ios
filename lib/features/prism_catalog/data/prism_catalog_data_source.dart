@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:Prism/core/di/injection.dart';
+import 'package:Prism/core/persistence/data_sources/settings_local_data_source.dart';
 import 'package:Prism/core/persistence/persistence_keys.dart';
+import 'package:Prism/core/personalization/personalized_interests_catalog.dart';
 import 'package:Prism/core/persistence/store_adapters/lazy_file_cache.dart';
 import 'package:Prism/core/wallpaper/wallpaper_core.dart';
 import 'package:Prism/core/wallpaper/wallpaper_source.dart';
@@ -172,6 +175,12 @@ class PrismCatalogDataSource {
     final scope = _scope(slug: slug, contentType: contentType);
 
     if (slug == 'for-you') {
+      if (contentType == regularContentType) {
+        final personalizedFeed = await _fetchPersonalizedRegularForYouFeed(refresh: refresh);
+        if (personalizedFeed != null && personalizedFeed.items.isNotEmpty) {
+          return personalizedFeed;
+        }
+      }
       final catalogFeed = await _fetchSequentialPageFeed(contentType: contentType, scope: scope, refresh: refresh);
       if (catalogFeed.items.isNotEmpty) {
         return catalogFeed;
@@ -209,6 +218,88 @@ class PrismCatalogDataSource {
       hasMore: nextOffset < categoryIds.length,
       nextOffset: nextOffset,
     );
+  }
+
+
+  Future<CategoryFeedPage?> _fetchPersonalizedRegularForYouFeed({required bool refresh}) async {
+    final settingsLocal = getIt<SettingsLocalDataSource>();
+    final catalog = await PersonalizedInterestsCatalog.load(settingsLocal: settingsLocal);
+    final selectedNames = PersonalizedInterestsCatalog.sanitizeSelection(
+      PersonalizedInterestsCatalog.selectedFromLocal(settingsLocal),
+      catalog,
+    );
+    final effectiveSelection = selectedNames.isEmpty
+        ? PersonalizedInterestsCatalog.defaultSelection(catalog)
+        : selectedNames;
+    if (effectiveSelection.isEmpty) {
+      return null;
+    }
+
+    final selectedSet = effectiveSelection.map((name) => name.toLowerCase()).toSet();
+    final selectedCategories = PersonalizedInterestsCatalog.appCategoryDefinitions()
+        .where(
+          (category) => selectedSet.contains(
+            PersonalizedInterestsCatalog.normalizeInterestName(category.name).toLowerCase(),
+          ),
+        )
+        .toList(growable: false);
+    if (selectedCategories.isEmpty) {
+      return null;
+    }
+
+    final feedScope = _scope(
+      slug: 'for-you::personalized::${selectedCategories.map((category) => category.catalogSlug).join(',')}',
+      contentType: regularContentType,
+    );
+    final start = refresh ? 0 : (_offsets[feedScope] ?? 0);
+
+    final categoryIds = <List<String>>[];
+    for (final category in selectedCategories) {
+      final slug = (category.catalogSlug ?? '').trim();
+      if (slug.isEmpty) {
+        continue;
+      }
+      final ids = await _categoryIdsFor(regularContentType, slug);
+      if (ids.isNotEmpty) {
+        categoryIds.add(ids);
+      }
+    }
+    if (categoryIds.isEmpty) {
+      return null;
+    }
+
+    final mergedIds = _interleaveCategoryIds(categoryIds);
+    if (mergedIds.isEmpty) {
+      return null;
+    }
+
+    final pageIds = mergedIds.skip(start).take(_pageSize).toList(growable: false);
+    final items = await _itemsByIds(contentType: regularContentType, ids: pageIds);
+    final nextOffset = start + pageIds.length;
+    _offsets[feedScope] = nextOffset;
+    return _toFeedPage(items, hasMore: nextOffset < mergedIds.length, nextOffset: nextOffset);
+  }
+
+  List<String> _interleaveCategoryIds(List<List<String>> lists) {
+    final merged = <String>[];
+    final seen = <String>{};
+    var added = true;
+    var depth = 0;
+    while (added) {
+      added = false;
+      for (final ids in lists) {
+        if (depth >= ids.length) {
+          continue;
+        }
+        final id = ids[depth];
+        if (seen.add(id)) {
+          merged.add(id);
+        }
+        added = true;
+      }
+      depth += 1;
+    }
+    return merged;
   }
 
   Future<CategoryFeedPage?> fetchFullCategoryFeed({required CategoryEntity category}) {

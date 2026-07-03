@@ -8,6 +8,7 @@ import 'package:Prism/features/onboarding_v2/src/domain/usecases/save_interests_
 import 'package:Prism/features/onboarding_v2/src/utils/onboarding_v2_config.dart';
 import 'package:Prism/theme/app_tokens.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:characters/characters.dart';
 import 'package:flutter/material.dart';
 
 const String _kDefaultFeedMix = 'balanced';
@@ -21,7 +22,10 @@ Future<void> openPersonalizedFeedSettingsBottomSheet(BuildContext context, {Void
     return;
   }
 
-  Set<String> selected = PersonalizedInterestsCatalog.selectedFromLocal(settingsLocal).toSet();
+  Set<String> selected = PersonalizedInterestsCatalog.sanitizeSelection(
+    PersonalizedInterestsCatalog.selectedFromLocal(settingsLocal),
+    catalog,
+  ).toSet();
   if (selected.isEmpty) {
     selected = PersonalizedInterestsCatalog.defaultSelection(catalog).toSet();
   }
@@ -275,10 +279,21 @@ class _InterestChip extends StatelessWidget {
         color: selected ? PrismColors.brandPink : cs.onSurface,
         fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
       ),
-      avatar: CircleAvatar(
-        backgroundColor: cs.surfaceContainerHighest,
-        backgroundImage: CachedNetworkImageProvider(entry.imageUrl),
-      ),
+      avatar: entry.imageUrl.trim().isEmpty
+          ? CircleAvatar(
+              backgroundColor: cs.surfaceContainerHighest,
+              child: Text(
+                entry.name.isEmpty ? '?' : entry.name.characters.first.toUpperCase(),
+                style: TextStyle(
+                  color: selected ? PrismColors.brandPink : cs.onSurfaceVariant,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            )
+          : CircleAvatar(
+              backgroundColor: cs.surfaceContainerHighest,
+              backgroundImage: CachedNetworkImageProvider(entry.imageUrl),
+            ),
       onSelected: onToggle,
     );
   }
