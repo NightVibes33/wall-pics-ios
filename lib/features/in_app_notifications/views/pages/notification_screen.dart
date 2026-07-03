@@ -2,6 +2,7 @@ import 'package:Prism/analytics/analytics_service.dart';
 import 'package:Prism/core/analytics/events/events.dart';
 import 'package:Prism/core/di/injection.dart';
 import 'package:Prism/core/persistence/data_sources/settings_local_data_source.dart';
+import 'package:Prism/core/persistence/persistence_keys.dart';
 import 'package:Prism/core/router/app_router.dart';
 import 'package:Prism/core/router/notification_route_mapper.dart';
 import 'package:Prism/core/state/app_state.dart' as app_state;
@@ -10,7 +11,6 @@ import 'package:Prism/core/utils/url_launcher_compat.dart';
 import 'package:Prism/features/in_app_notifications/biz/bloc/in_app_notifications_bloc.j.dart';
 import 'package:Prism/features/in_app_notifications/domain/entities/in_app_notification_entity.dart';
 import 'package:Prism/features/in_app_notifications/domain/notification_grouping.dart';
-import 'package:Prism/notifications/topic_subscription.dart';
 import 'package:Prism/theme/jam_icons_icons.dart';
 import 'package:Prism/theme/toasts.dart' as toasts;
 import 'package:auto_route/auto_route.dart';
@@ -845,13 +845,10 @@ class NotificationSettingsSheet extends StatefulWidget {
 
 class _NotificationSettingsSheetState extends State<NotificationSettingsSheet> {
   final SettingsLocalDataSource _settingsLocal = getIt<SettingsLocalDataSource>();
-  bool? followersSubscriber;
-  bool? postsSubscriber;
-  bool? inappSubscriber;
-  bool? recommendationsSubscriber;
-  bool? streakReminderSubscriber;
+  bool? notifWotd;
+  bool? notifPromo;
+  bool? inAppInbox;
 
-  /// Matches list tile title styling used in [SettingsScreen].
   TextStyle get _listTileTitleStyle => TextStyle(
     color: Theme.of(context).colorScheme.secondary,
     fontWeight: FontWeight.w500,
@@ -864,18 +861,16 @@ class _NotificationSettingsSheetState extends State<NotificationSettingsSheet> {
   @override
   void initState() {
     super.initState();
-    followersSubscriber = _settingsLocal.get<bool>('followersSubscriber', defaultValue: true);
-    postsSubscriber = _settingsLocal.get<bool>('postsSubscriber', defaultValue: true);
-    inappSubscriber = _settingsLocal.get<bool>('inappSubscriber', defaultValue: true);
-    recommendationsSubscriber = _settingsLocal.get<bool>('recommendationsSubscriber', defaultValue: true);
-    streakReminderSubscriber = _settingsLocal.get<bool>('streakReminderSubscriber', defaultValue: true);
+    notifWotd = _settingsLocal.get<bool>(PersistenceKeys.notifWotd, defaultValue: true);
+    notifPromo = _settingsLocal.get<bool>(PersistenceKeys.notifPromo, defaultValue: true);
+    inAppInbox = _settingsLocal.get<bool>('inappSubscriber', defaultValue: true);
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final bottomInset = MediaQuery.paddingOf(context).bottom;
-    final sheetHeight = MediaQuery.sizeOf(context).height / 2.3 > 380 ? MediaQuery.sizeOf(context).height / 2.3 : 380.0;
+    final sheetHeight = MediaQuery.sizeOf(context).height / 2.5 > 340 ? MediaQuery.sizeOf(context).height / 2.5 : 340.0;
 
     return Padding(
       padding: EdgeInsets.only(bottom: bottomInset),
@@ -896,11 +891,17 @@ class _NotificationSettingsSheetState extends State<NotificationSettingsSheet> {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Text('Notification preferences', style: theme.textTheme.titleMedium),
             ),
-            _buildFollowersToggle(context),
-            _buildPostsToggle(context),
-            _buildInAppToggle(context),
-            _buildRecommendationsToggle(context),
-            _buildStreakToggle(context),
+            ListTile(
+              leading: const Icon(Icons.info_outline),
+              title: Text('What this app uses', style: _listTileTitleStyle),
+              subtitle: Text(
+                'Prism uses Wall of the Day alerts, product announcements and the in-app inbox. Social follower controls are not part of this build.',
+                style: _listTileSubtitleStyle(),
+              ),
+            ),
+            _buildWotdToggle(context),
+            _buildPromoToggle(context),
+            _buildInAppInboxToggle(context),
             const SizedBox(height: 24),
           ],
         ),
@@ -908,169 +909,47 @@ class _NotificationSettingsSheetState extends State<NotificationSettingsSheet> {
     );
   }
 
-  Widget _buildFollowersToggle(BuildContext context) {
+  Widget _buildWotdToggle(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return SwitchListTile(
       activeThumbColor: cs.error,
-      secondary: Icon(JamIcons.user_plus, color: cs.secondary),
-      value: followersSubscriber ?? true,
-      title: Text('Followers', style: _listTileTitleStyle),
-      subtitle: Text('Alerts when someone new follows you.', style: _listTileSubtitleStyle()),
+      secondary: Icon(Icons.wb_sunny_outlined, color: cs.secondary),
+      value: notifWotd ?? true,
+      title: Text('Wall of the Day', style: _listTileTitleStyle),
+      subtitle: Text('Daily wallpaper recommendation alert.', style: _listTileSubtitleStyle()),
       onChanged: (bool value) async {
-        if (app_state.prismUser.loggedIn) {
-          await _settingsLocal.set('followersSubscriber', value);
-          setState(() => followersSubscriber = value);
-          analytics.track(
-            NotificationPreferenceChangedEvent(preference: NotificationPreferenceValue.followers, value: value),
-          );
-          if (value) {
-            await subscribeToTopicSafely(
-              app_state.prismUser.email.split('@')[0],
-              sourceTag: 'notification.settings.followers.enable',
-            );
-          } else {
-            await unsubscribeFromTopicSafely(
-              app_state.prismUser.email.split('@')[0],
-              sourceTag: 'notification.settings.followers.disable',
-            );
-            await _settingsLocal.set('postsSubscriber', false);
-            setState(() => postsSubscriber = false);
-            analytics.track(
-              const NotificationPreferenceChangedEvent(preference: NotificationPreferenceValue.posts, value: false),
-            );
-            await unsubscribeFromTopicSafely(
-              'posts',
-              sourceTag: 'notification.settings.posts.disable_from_followers',
-            );
-          }
-        } else {
-          analytics.track(
-            const NotificationActionBlockedEvent(
-              action: AnalyticsActionValue.notificationSettingsOpened,
-              reason: AnalyticsReasonValue.notSignedIn,
-            ),
-          );
-          toasts.error('Sign in to change this setting.');
-        }
+        await _settingsLocal.set(PersistenceKeys.notifWotd, value);
+        setState(() => notifWotd = value);
       },
     );
   }
 
-  Widget _buildPostsToggle(BuildContext context) {
+  Widget _buildPromoToggle(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return SwitchListTile(
       activeThumbColor: cs.error,
-      secondary: Icon(JamIcons.pictures, color: cs.secondary),
-      value: postsSubscriber ?? true,
-      title: Text('Posts', style: _listTileTitleStyle),
-      subtitle: Text('Alerts when new wallpapers are available.', style: _listTileSubtitleStyle()),
-      onChanged: (followersSubscriber ?? true)
-          ? (bool value) async {
-              if (app_state.prismUser.loggedIn) {
-                await _settingsLocal.set('postsSubscriber', value);
-                setState(() => postsSubscriber = value);
-                analytics.track(
-                  NotificationPreferenceChangedEvent(preference: NotificationPreferenceValue.posts, value: value),
-                );
-                if (value) {
-                  await subscribeToTopicSafely(
-                    'posts',
-                    sourceTag: 'notification.settings.posts.enable',
-                  );
-                } else {
-                  await unsubscribeFromTopicSafely(
-                    'posts',
-                    sourceTag: 'notification.settings.posts.disable',
-                  );
-                }
-              } else {
-                analytics.track(
-                  const NotificationActionBlockedEvent(
-                    action: AnalyticsActionValue.notificationSettingsOpened,
-                    reason: AnalyticsReasonValue.notSignedIn,
-                  ),
-                );
-                toasts.error('Sign in to change this setting.');
-              }
-            }
-          : null,
+      secondary: Icon(Icons.campaign_outlined, color: cs.secondary),
+      value: notifPromo ?? true,
+      title: Text('Product announcements', style: _listTileTitleStyle),
+      subtitle: Text('New features, releases and Prism updates.', style: _listTileSubtitleStyle()),
+      onChanged: (bool value) async {
+        await _settingsLocal.set(PersistenceKeys.notifPromo, value);
+        setState(() => notifPromo = value);
+      },
     );
   }
 
-  Widget _buildInAppToggle(BuildContext context) {
+  Widget _buildInAppInboxToggle(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return SwitchListTile(
       activeThumbColor: cs.error,
-      secondary: Icon(JamIcons.picture, color: cs.secondary),
-      value: inappSubscriber ?? true,
-      title: Text('Prism updates', style: _listTileTitleStyle),
-      subtitle: Text('Giveaways, contests, and news inside the app.', style: _listTileSubtitleStyle()),
+      secondary: Icon(Icons.inbox_outlined, color: cs.secondary),
+      value: inAppInbox ?? true,
+      title: Text('In-app inbox', style: _listTileTitleStyle),
+      subtitle: Text('Keep Prism alerts and announcements saved inside the app.', style: _listTileSubtitleStyle()),
       onChanged: (bool value) async {
         await _settingsLocal.set('inappSubscriber', value);
-        setState(() => inappSubscriber = value);
-        analytics.track(
-          NotificationPreferenceChangedEvent(preference: NotificationPreferenceValue.inApp, value: value),
-        );
-      },
-    );
-  }
-
-  Widget _buildRecommendationsToggle(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return SwitchListTile(
-      activeThumbColor: cs.error,
-      secondary: Icon(JamIcons.lightbulb, color: cs.secondary),
-      value: recommendationsSubscriber ?? true,
-      title: Text('Recommendations', style: _listTileTitleStyle),
-      subtitle: Text('Tips and wallpaper picks from Prism.', style: _listTileSubtitleStyle()),
-      onChanged: (bool value) async {
-        await _settingsLocal.set('recommendationsSubscriber', value);
-        setState(() => recommendationsSubscriber = value);
-        analytics.track(
-          NotificationPreferenceChangedEvent(preference: NotificationPreferenceValue.recommendations, value: value),
-        );
-        if (value) {
-          await subscribeToTopicSafely(
-            'recommendations',
-            sourceTag: 'notification.settings.recommendations.enable',
-          );
-        } else {
-          await unsubscribeFromTopicSafely(
-            'recommendations',
-            sourceTag: 'notification.settings.recommendations.disable',
-          );
-        }
-      },
-    );
-  }
-
-  Widget _buildStreakToggle(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return SwitchListTile(
-      activeThumbColor: cs.error,
-      secondary: Icon(Icons.local_fire_department_rounded, color: cs.secondary),
-      value: streakReminderSubscriber ?? true,
-      title: Text('Streak reminders', style: _listTileTitleStyle),
-      subtitle: Text(
-        'Evening heads-up around 8 PM if your login streak is about to break.',
-        style: _listTileSubtitleStyle(),
-      ),
-      onChanged: (bool value) async {
-        if (app_state.prismUser.loggedIn) {
-          await _settingsLocal.set('streakReminderSubscriber', value);
-          setState(() => streakReminderSubscriber = value);
-          analytics.track(
-            NotificationPreferenceChangedEvent(preference: NotificationPreferenceValue.streakReminders, value: value),
-          );
-        } else {
-          analytics.track(
-            const NotificationActionBlockedEvent(
-              action: AnalyticsActionValue.notificationSettingsOpened,
-              reason: AnalyticsReasonValue.notSignedIn,
-            ),
-          );
-          toasts.error('Sign in to change this setting.');
-        }
+        setState(() => inAppInbox = value);
       },
     );
   }

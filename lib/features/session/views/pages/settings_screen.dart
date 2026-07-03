@@ -263,9 +263,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final user = app_state.prismUser;
     final ColorScheme cs = Theme.of(context).colorScheme;
     final String tier = _subscriptionLabel;
-    final String syncState = _isSignedIn ? 'Cloud sync enabled' : 'Local-only mode';
+    final String syncState = _isSignedIn ? 'Account linked on this device' : 'Local-only mode';
     final String headline = _isSignedIn ? (user.name.trim().isEmpty ? 'Your account' : user.name.trim()) : 'Settings';
-    final String subhead = _isSignedIn ? (user.email.trim().isEmpty ? syncState : user.email.trim()) : 'Control app behavior, storage and account access';
+    final String subhead = _isSignedIn ? (user.email.trim().isEmpty ? syncState : user.email.trim()) : 'Control account access, downloads, storage and app behavior';
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
@@ -314,7 +314,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _StatPill(label: tier, icon: user.premium ? Icons.workspace_premium_outlined : Icons.lock_open_outlined),
                   _StatPill(label: syncState, icon: _isSignedIn ? Icons.cloud_done_outlined : Icons.phone_iphone_outlined),
                   _StatPill(label: _entitlementLabel, icon: user.premium ? Icons.verified_outlined : Icons.lock_outline),
-                  _StatPill(label: '${user.followers.length} followers', icon: Icons.people_outline),
+                  _StatPill(label: _planUnlocksLabel, icon: Icons.download_outlined),
                 ],
               ),
             ],
@@ -332,7 +332,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ListTile(
             leading: const Icon(JamIcons.log_in),
             title: Text('Sign in with Google', style: _titleStyle),
-            subtitle: const Text('Enable cloud sync for favorites, profile and notifications', style: _subtitleStyle),
+            subtitle: const Text('Link this device to your Prism account for synced access and purchases', style: _subtitleStyle),
             trailing: _authBusy ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : null,
             onTap: _authBusy ? null : () => _signInWithGoogle(),
           ),
@@ -347,7 +347,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ListTile(
             leading: const Icon(Icons.info_outline),
             title: Text('What account access enables', style: _titleStyle),
-            subtitle: const Text('Sync preferences and unlock 3 free downloads per day after sign-in.', style: _subtitleStyle),
+            subtitle: const Text('Sync favorites, feed preferences and subscription access after sign-in.', style: _subtitleStyle),
           ),
           ListTile(
             leading: const Icon(Icons.badge_outlined),
@@ -427,17 +427,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         ListTile(
           leading: const Icon(Icons.manage_accounts_outlined),
-          title: Text('Profile data', style: _titleStyle),
-          subtitle: Text(
-            '${user.following.length} following • ${user.followers.length} followers • ${user.badges.length} badges • ${user.subPrisms.length} subscriptions',
+          title: Text('Account data', style: _titleStyle),
+          subtitle: const Text(
+            'Email, sign-in provider, subscription tier and daily download access are tied to this account.',
             style: _subtitleStyle,
           ),
         ),
         ListTile(
-          leading: const Icon(Icons.history_outlined),
-          title: Text('Account activity', style: _titleStyle),
+          leading: const Icon(Icons.download_for_offline_outlined),
+          title: Text('Daily download rule', style: _titleStyle),
           subtitle: Text(
-            '${user.transactions.length} account records • ${user.uploadsThisWeek} uploads this week',
+            _downloadAccessLabel,
             style: _subtitleStyle,
           ),
         ),
