@@ -5,6 +5,7 @@ import 'package:Prism/core/router/not_found_page.dart';
 import 'package:Prism/core/router/route_guards.dart';
 import 'package:Prism/core/wallpaper/wallpaper_source.dart';
 import 'package:Prism/features/admin_review/views/pages/remote_store_telemetry_screen.dart';
+import 'package:Prism/features/category_feed/domain/entities/feed_item_entity.dart';
 import 'package:Prism/features/category_feed/views/pages/collection_view_screen.dart';
 import 'package:Prism/features/charging_animations/views/pages/charging_animation_player_screen.dart';
 import 'package:Prism/features/debug_panel/views/pages/debug_panel_page.dart';

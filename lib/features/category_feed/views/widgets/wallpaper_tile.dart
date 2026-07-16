@@ -361,7 +361,7 @@ class WallpaperTile extends StatelessWidget {
       return PrismSeedMediaImage(
         url: url,
         fit: BoxFit.cover,
-        filterQuality: FilterQuality.high,
+        filterQuality: FilterQuality.low,
         cacheWidth: cacheWidth,
         cacheHeight: cacheHeight,
         placeholder: (ctx) => ColoredBox(color: Theme.of(ctx).colorScheme.surfaceContainerHighest),
@@ -375,7 +375,7 @@ class WallpaperTile extends StatelessWidget {
       fadeOutDuration: Duration.zero,
       placeholderFadeInDuration: Duration.zero,
       useOldImageOnUrlChange: true,
-      filterQuality: FilterQuality.high,
+      filterQuality: FilterQuality.low,
       memCacheWidth: cacheWidth,
       memCacheHeight: cacheHeight,
       placeholder: (ctx, _) => ColoredBox(color: Theme.of(ctx).colorScheme.surfaceContainerHighest),
@@ -389,7 +389,7 @@ class WallpaperTile extends StatelessWidget {
     final width = (MediaQuery.sizeOf(context).width / columns).toInt();
     final aspectRatio = aspectRatioForItem(item);
     final height = memCacheHeight ?? (width / aspectRatio).ceil();
-    final pixelRatio = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 3.0);
+    final pixelRatio = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 2.0);
     final cacheWidth = (width * pixelRatio).ceil();
     final cacheHeight = (height * pixelRatio).ceil();
     final videoUrl = videoUrlForItem(item);

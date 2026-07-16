@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:Prism/core/wallpaper/wallpaper_source.dart';
 import 'package:Prism/data/categories/category_definition.dart';
 import 'package:Prism/features/category_feed/domain/entities/category_entity.dart';
@@ -10,9 +12,14 @@ import 'package:flutter/material.dart';
 
 @RoutePage()
 class CollectionViewScreen extends StatefulWidget {
-  const CollectionViewScreen({super.key, required this.collectionName});
+  const CollectionViewScreen({
+    super.key,
+    required this.collectionName,
+    this.initialItems = const <FeedItemEntity>[],
+  });
 
   final String collectionName;
+  final List<FeedItemEntity> initialItems;
 
   @override
   State<CollectionViewScreen> createState() => _CollectionViewScreenState();
@@ -190,7 +197,10 @@ class _CollectionViewScreenState extends State<CollectionViewScreen> {
                 const SizedBox(height: 14),
                 Expanded(
                   child: _isCategoryView
-                      ? _CategoryFeedContent(category: _categoryEntityFromPayload(_decodedCategoryPayload))
+                      ? _CategoryFeedContent(
+                          category: _categoryEntityFromPayload(_decodedCategoryPayload),
+                          initialItems: widget.initialItems,
+                        )
                       : _buildCollectionContent(),
                 ),
               ],
@@ -216,9 +226,10 @@ class _CollectionViewScreenState extends State<CollectionViewScreen> {
 }
 
 class _CategoryFeedContent extends StatefulWidget {
-  const _CategoryFeedContent({required this.category});
+  const _CategoryFeedContent({required this.category, required this.initialItems});
 
   final CategoryEntity category;
+  final List<FeedItemEntity> initialItems;
 
   @override
   State<_CategoryFeedContent> createState() => _CategoryFeedContentState();
@@ -230,6 +241,7 @@ class _CategoryFeedContentState extends State<_CategoryFeedContent> {
   int _generation = 0;
   bool _loadingInitial = true;
   bool _loadingMore = false;
+  bool _synchronizing = false;
   bool _hasMore = true;
   Object? _error;
 
@@ -237,7 +249,13 @@ class _CategoryFeedContentState extends State<_CategoryFeedContent> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
-    _loadInitial();
+    if (widget.initialItems.isNotEmpty) {
+      _rawItems.addAll(_uniqueItems(widget.initialItems));
+      _loadingInitial = false;
+      unawaited(_synchronizeInitialPage());
+    } else {
+      _loadInitial(refresh: true);
+    }
   }
 
   @override
@@ -252,17 +270,36 @@ class _CategoryFeedContentState extends State<_CategoryFeedContent> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.category.catalogSlug != widget.category.catalogSlug ||
         oldWidget.category.catalogContentType != widget.category.catalogContentType) {
-      _loadInitial();
+      _loadInitial(refresh: true);
     }
   }
 
   void _onScroll() {
-    if (!_scrollController.hasClients || _loadingInitial || _loadingMore || !_hasMore) {
+    if (!_scrollController.hasClients || _loadingInitial || _loadingMore || _synchronizing || !_hasMore) {
       return;
     }
     final remaining = _scrollController.position.maxScrollExtent - _scrollController.position.pixels;
     if (remaining < 1800) {
       _loadMore();
+    }
+  }
+
+  Future<void> _synchronizeInitialPage() async {
+    _synchronizing = true;
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    try {
+      final page = await PrismCatalogDataSource.instance.fetchCategoryFeed(
+        category: widget.category,
+        refresh: true,
+      );
+      if (!mounted) return;
+      setState(() {
+        _appendUnique(page?.items ?? const <FeedItemEntity>[]);
+        _hasMore = page?.hasMore ?? false;
+        _synchronizing = false;
+      });
+    } catch (_) {
+      _synchronizing = false;
     }
   }
 
@@ -294,7 +331,7 @@ class _CategoryFeedContentState extends State<_CategoryFeedContent> {
   }
 
   Future<void> _loadMore() async {
-    if (_loadingInitial || _loadingMore || !_hasMore) {
+    if (_loadingInitial || _loadingMore || _synchronizing || !_hasMore) {
       return;
     }
     setState(() => _loadingMore = true);
@@ -391,7 +428,7 @@ class _CategoryFeedContentState extends State<_CategoryFeedContent> {
         onRefresh: _refresh,
         child: GridView.builder(
           controller: _scrollController,
-          cacheExtent: MediaQuery.sizeOf(context).height * 1.5,
+          cacheExtent: MediaQuery.sizeOf(context).height * 0.75,
           padding: const EdgeInsets.fromLTRB(8, 12, 8, 160),
           itemCount: items.length + loadingTileCount,
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(

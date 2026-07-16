@@ -51,7 +51,7 @@ class PrismCatalogDataSource {
     return _isCatalogBrandedAssetUrl(url);
   }
 
-  static const int _pageSize = 144;
+  static const int _pageSize = 48;
   static const int _catalogShardSize = 100;
   static const Duration _metadataTimeout = Duration(seconds: 10);
   static const Duration _pageTimeout = Duration(seconds: 8);

@@ -410,18 +410,33 @@ class _HomeTabPageState extends State<HomeTabPage> {
     _openCatalog(title: title, contentType: contentType, slug: slug);
   }
 
-  void _openCatalog({required String title, required String contentType, String slug = 'for-you'}) {
+  void _openCatalog({
+    required String title,
+    required String contentType,
+    String slug = 'for-you',
+    List<FeedItemEntity> initialItems = const <FeedItemEntity>[],
+  }) {
     if (contentType == PrismCatalogDataSource.matchingContentType ||
         contentType == PrismCatalogDataSource.doubleContentType) {
       Navigator.of(context).push(
         _buildPrismRoute<void>(
-          _MatchingCatalogScreen(title: title, contentType: contentType, slug: slug),
+          _MatchingCatalogScreen(
+            title: title,
+            contentType: contentType,
+            slug: slug,
+            initialItems: initialItems,
+          ),
         ),
       );
       return;
     }
     final encodedName = Uri.encodeComponent('$contentType|$slug|$title');
-    context.router.push(CollectionViewRoute(collectionName: 'category:$encodedName'));
+    context.router.push(
+      CollectionViewRoute(
+        collectionName: 'category:$encodedName',
+        initialItems: initialItems,
+      ),
+    );
   }
 
   void _precacheDashboardMedia(_HomeDashboardData data) {
@@ -537,6 +552,7 @@ class _HomeTabPageState extends State<HomeTabPage> {
                             title: section.title,
                             contentType: section.contentType,
                             slug: section.slug,
+                            initialItems: section.items,
                           ),
                         ),
                       ),
@@ -1348,11 +1364,17 @@ class _EmptyDashboard extends StatelessWidget {
 
 
 class _MatchingCatalogScreen extends StatefulWidget {
-  const _MatchingCatalogScreen({required this.title, required this.contentType, required this.slug});
+  const _MatchingCatalogScreen({
+    required this.title,
+    required this.contentType,
+    required this.slug,
+    required this.initialItems,
+  });
 
   final String title;
   final String contentType;
   final String slug;
+  final List<FeedItemEntity> initialItems;
 
   @override
   State<_MatchingCatalogScreen> createState() => _MatchingCatalogScreenState();
@@ -1370,6 +1392,7 @@ class _MatchingCatalogScreenState extends State<_MatchingCatalogScreen> {
   List<FeedItemEntity> _items = <FeedItemEntity>[];
   bool _loading = true;
   bool _loadingMore = false;
+  bool _synchronizing = false;
   bool _hasMore = true;
   int _activeTabIndex = 0;
   int _sortIndex = 0;
@@ -1380,8 +1403,19 @@ class _MatchingCatalogScreenState extends State<_MatchingCatalogScreen> {
   void initState() {
     super.initState();
     _scrollController.addListener(_maybeLoadMore);
+    final initial = widget.initialItems
+        .where((item) => WallpaperTile.pairedImageUrlsForItem(item).length >= 2)
+        .where((item) => _seenIds.add(item.id))
+        .toList(growable: false);
+    if (initial.isNotEmpty) {
+      _items = initial;
+      _loading = false;
+      unawaited(_synchronizeInitialPage());
+    }
     unawaited(_loadTabs());
-    unawaited(_loadPage(refresh: true));
+    if (initial.isEmpty) {
+      unawaited(_loadPage(refresh: true));
+    }
   }
 
   @override
@@ -1389,6 +1423,37 @@ class _MatchingCatalogScreenState extends State<_MatchingCatalogScreen> {
     _scrollController.removeListener(_maybeLoadMore);
     _scrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _synchronizeInitialPage() async {
+    _synchronizing = true;
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    try {
+      final page = await PrismCatalogDataSource.instance.fetchCategoryFeed(
+        category: CategoryEntity(
+          name: widget.title,
+          source: WallpaperSource.prism,
+          searchType: CategorySearchType.nonSearch,
+          image: '',
+          image2: '',
+          catalogSlug: widget.slug,
+          catalogContentType: widget.contentType,
+        ),
+        refresh: true,
+      );
+      final incoming = (page?.items ?? const <FeedItemEntity>[])
+          .where((item) => WallpaperTile.pairedImageUrlsForItem(item).length >= 2)
+          .where((item) => _seenIds.add(item.id))
+          .toList(growable: false);
+      if (!mounted) return;
+      setState(() {
+        _items = <FeedItemEntity>[..._items, ...incoming];
+        _hasMore = page?.hasMore ?? false;
+        _synchronizing = false;
+      });
+    } catch (_) {
+      _synchronizing = false;
+    }
   }
 
   Future<void> _loadTabs() async {
@@ -1424,7 +1489,7 @@ class _MatchingCatalogScreenState extends State<_MatchingCatalogScreen> {
       if (!mounted) return;
       final requestedIndex = tabs.indexWhere((tab) => tab.slug == widget.slug);
       final nextIndex = requestedIndex >= 0 ? requestedIndex : 0;
-      final shouldReload = nextIndex != _activeTabIndex;
+      final shouldReload = widget.initialItems.isEmpty && nextIndex != _activeTabIndex;
       setState(() {
         _tabs = tabs;
         _activeTabIndex = nextIndex;
@@ -1442,7 +1507,7 @@ class _MatchingCatalogScreenState extends State<_MatchingCatalogScreen> {
   }
 
   Future<void> _loadPage({required bool refresh}) async {
-    if (_loadingMore || (!refresh && !_hasMore)) return;
+    if (_synchronizing || _loadingMore || (!refresh && !_hasMore)) return;
     if (refresh) {
       setState(() {
         _loading = true;
@@ -1455,7 +1520,7 @@ class _MatchingCatalogScreenState extends State<_MatchingCatalogScreen> {
     }
 
     try {
-      final page = await PrismCatalogDataSource.instance.fetchFullCategoryFeed(
+      final page = await PrismCatalogDataSource.instance.fetchCategoryFeed(
         category: CategoryEntity(
           name: _activeTab.label,
           source: WallpaperSource.prism,
@@ -1465,6 +1530,7 @@ class _MatchingCatalogScreenState extends State<_MatchingCatalogScreen> {
           catalogSlug: _activeTab.slug,
           catalogContentType: _activeTab.contentType ?? widget.contentType,
         ),
+        refresh: refresh,
       );
       final incoming = (page?.items ?? const <FeedItemEntity>[])
           .where((item) => WallpaperTile.pairedImageUrlsForItem(item).length >= 2)
@@ -1473,7 +1539,7 @@ class _MatchingCatalogScreenState extends State<_MatchingCatalogScreen> {
       if (!mounted) return;
       setState(() {
         _items = refresh ? incoming : <FeedItemEntity>[..._items, ...incoming];
-        _hasMore = false;
+        _hasMore = page?.hasMore ?? false;
         _loading = false;
         _loadingMore = false;
       });
@@ -1489,7 +1555,7 @@ class _MatchingCatalogScreenState extends State<_MatchingCatalogScreen> {
   }
 
   void _maybeLoadMore() {
-    if (!_scrollController.hasClients || _loading || _loadingMore || !_hasMore) return;
+    if (!_scrollController.hasClients || _loading || _loadingMore || _synchronizing || !_hasMore) return;
     final remaining = _scrollController.position.maxScrollExtent - _scrollController.offset;
     if (remaining < 700) {
       unawaited(_loadPage(refresh: false));
@@ -1509,10 +1575,10 @@ class _MatchingCatalogScreenState extends State<_MatchingCatalogScreen> {
 
   void _precacheVisiblePairs() {
     final urls = _items
-        .take(72)
+        .take(6)
         .expand((item) => WallpaperTile.matchingSideItemsForItem(item).map((side) => side.thumbnailUrl))
         .where((url) => url.trim().isNotEmpty)
-        .take(96)
+        .take(8)
         .toList(growable: false);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;

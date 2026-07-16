@@ -64,12 +64,14 @@ class CollectionViewRoute extends PageRouteInfo<CollectionViewRouteArgs> {
   CollectionViewRoute({
     Key? key,
     required String collectionName,
+    List<FeedItemEntity> initialItems = const <FeedItemEntity>[],
     List<PageRouteInfo>? children,
   }) : super(
          CollectionViewRoute.name,
          args: CollectionViewRouteArgs(
            key: key,
            collectionName: collectionName,
+           initialItems: initialItems,
          ),
          initialChildren: children,
        );
@@ -83,32 +85,42 @@ class CollectionViewRoute extends PageRouteInfo<CollectionViewRouteArgs> {
       return CollectionViewScreen(
         key: args.key,
         collectionName: args.collectionName,
+        initialItems: args.initialItems,
       );
     },
   );
 }
 
 class CollectionViewRouteArgs {
-  const CollectionViewRouteArgs({this.key, required this.collectionName});
+  const CollectionViewRouteArgs({
+    this.key,
+    required this.collectionName,
+    this.initialItems = const <FeedItemEntity>[],
+  });
 
   final Key? key;
 
   final String collectionName;
 
+  final List<FeedItemEntity> initialItems;
+
   @override
   String toString() {
-    return 'CollectionViewRouteArgs{key: $key, collectionName: $collectionName}';
+    return 'CollectionViewRouteArgs{key: $key, collectionName: $collectionName, initialItems: $initialItems}';
   }
 
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
     if (other is! CollectionViewRouteArgs) return false;
-    return key == other.key && collectionName == other.collectionName;
+    return key == other.key &&
+        collectionName == other.collectionName &&
+        listEquals(initialItems, other.initialItems);
   }
 
   @override
-  int get hashCode => key.hashCode ^ collectionName.hashCode;
+  int get hashCode =>
+      Object.hash(key, collectionName, Object.hashAll(initialItems));
 }
 
 /// generated route for
