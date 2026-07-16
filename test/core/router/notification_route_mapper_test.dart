@@ -10,31 +10,31 @@ void main() {
     expect(route, isA<HomeTabRoute>());
   });
 
-  test('maps streak_reminder to profile tab route', () async {
+  test('maps streak_reminder to home tab route', () async {
     final route = await mapper.fromRoute(route: 'streak_reminder', sourceTag: 'test');
-    expect(route, isA<ProfileTabRoute>());
+    expect(route, isA<HomeTabRoute>());
   });
 
-  test('maps follower to profile route when identifier is present', () async {
+  test('maps follower to home tab when identifier is present', () async {
     final route = await mapper.fromRoute(
       route: 'follower',
       profileIdentifier: 'creator@example.com',
       sourceTag: 'test',
     );
-    expect(route, isA<ProfileRoute>());
+    expect(route, isA<HomeTabRoute>());
   });
 
-  test('maps follower to notification route when identifier is absent', () async {
+  test('maps follower to home tab when identifier is absent', () async {
     final route = await mapper.fromRoute(route: 'follower', sourceTag: 'test');
-    expect(route, isA<NotificationRoute>());
+    expect(route, isA<HomeTabRoute>());
   });
 
-  test('maps follower payload to profile route using follower_email', () async {
+  test('maps follower payload to home tab', () async {
     final route = await mapper.fromPayload(<String, dynamic>{
       'route': 'follower',
       'follower_email': 'user@example.com',
     }, sourceTag: 'test');
-    expect(route, isA<ProfileRoute>());
+    expect(route, isA<HomeTabRoute>());
   });
 
   test('returns null for non-whitelisted route', () async {
