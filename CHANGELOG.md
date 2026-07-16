@@ -1,5 +1,9 @@
 ## Changelog
 
+### Unreleased
+- Fix core wallpaper app behavior and account controls (`496e00d`)
+
+
 ### v3.0.8
 - Refined the edit profile flow and redesigned the profile completeness widget
 - Applied minor profile UI polish and layout rework
