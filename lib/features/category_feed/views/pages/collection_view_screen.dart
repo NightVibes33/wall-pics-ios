@@ -372,8 +372,7 @@ class _CategoryFeedContentState extends State<_CategoryFeedContent> {
   Future<void> _refresh() => _loadInitial(refresh: true);
 
   double _gridAspectRatio(List<FeedItemEntity> items) {
-    if (widget.category.catalogContentType == PrismCatalogDataSource.profilePictureContentType ||
-        widget.category.catalogContentType == PrismCatalogDataSource.parallaxContentType) {
+    if (widget.category.catalogContentType == PrismCatalogDataSource.profilePictureContentType) {
       return 1.0;
     }
     final sample = items.take(18).toList(growable: false);
