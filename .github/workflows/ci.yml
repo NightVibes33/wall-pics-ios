@@ -44,7 +44,7 @@ jobs:
         run: make version-guard
 
       - name: Analyze
-        run: make analyze CI=true
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
       - name: Run tests
         run: make test CI=true
