@@ -1405,20 +1405,18 @@ class PrismCatalogDataSource {
     bool preferCache = false,
   }) async {
     final cacheKey = PersistenceKeys.cachePrismCatalog(fileName);
-    final bundled = await _readBundledCatalogJson(fileName);
-    if (bundled != null && _looksLikeJson(bundled) && _shouldServeBundledCatalogFirst(fileName)) {
-      unawaited(_writeCachedCatalogJson(cacheKey, bundled));
-      return bundled;
-    }
-
     final cached = await _readCachedCatalogJson(cacheKey);
     if (cached != null && _looksLikeJson(cached) && (preferCache || _shouldServeCachedCatalogFirst(fileName))) {
       unawaited(_refreshCatalogJsonCache(fileName: fileName, cacheKey: cacheKey, timeout: timeout));
       return cached;
     }
 
-    if (preferCache && fileName == _homeBootstrapFile && bundled != null && _looksLikeJson(bundled)) {
-      unawaited(_writeCachedCatalogJson(cacheKey, bundled));
+    final bundled = await _readBundledCatalogJson(fileName);
+    if (bundled != null && _looksLikeJson(bundled) && _shouldServeBundledCatalogFirst(fileName)) {
+      // First install stays instant and offline-safe. The refreshed scraper catalog
+      // becomes the cache-first source on the next app launch.
+      await _writeCachedCatalogJson(cacheKey, bundled);
+      unawaited(_refreshCatalogJsonCache(fileName: fileName, cacheKey: cacheKey, timeout: timeout));
       return bundled;
     }
 
@@ -1495,7 +1493,7 @@ class PrismCatalogDataSource {
   }
 
   bool _shouldServeCachedCatalogFirst(String fileName) {
-    return fileName != _homeBootstrapFile && fileName.startsWith('prism_') && fileName.endsWith('.json');
+    return fileName.startsWith('prism_') && fileName.endsWith('.json');
   }
 
   bool _shouldServeBundledCatalogFirst(String fileName) {
