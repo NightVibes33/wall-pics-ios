@@ -229,7 +229,7 @@ void main() {
       ],
     );
     expect(groupedListCountActionLine(wallGroup, expanded: false), '2 walls went live · Show all');
-    expect(collapsedGroupSummaryLine(wallGroup), 'From Diogo López and 1 other creator.');
+    expect(collapsedGroupSummaryLine(wallGroup), 'From Diogo López and 1 other item.');
     expect(notificationGroupHasUniformBody(wallGroup), isFalse);
   });
 

@@ -7,11 +7,11 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 void main() {
-  test('maps canonical user link to profile route', () async {
+  test('rejects unsupported canonical user links', () async {
     const DeepLinkNavigation navigation = DeepLinkNavigation();
     final route = await navigation.mapUriToRoute(Uri.parse('https://prismwalls.com/user/alice'));
 
-    expect(route, isA<ProfileRoute>());
+    expect(route, isA<NotFoundRoute>());
   });
 
   test('resolves /l short code and maps to share wallpaper route', () async {
