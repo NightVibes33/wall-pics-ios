@@ -1,3 +1,4 @@
+import 'package:Prism/auth/github_user_store.dart';
 import 'package:Prism/core/di/injection.dart';
 import 'package:Prism/core/remote_store/remote_store_client.dart';
 import 'package:Prism/core/remote_store/remote_collections.dart';
@@ -14,6 +15,8 @@ class DeleteAccountService {
   DeleteAccountService._();
 
   static final DeleteAccountService instance = DeleteAccountService._();
+
+  final GitHubUserStore _userStore = const GitHubUserStore();
 
   RemoteStoreClient get _remoteStore => getIt<RemoteStoreClient>();
   FavoritesLocalDataSource get _favoritesLocal => getIt<FavoritesLocalDataSource>();
@@ -33,6 +36,10 @@ class DeleteAccountService {
     logger.i('[DeleteAccount] Starting deletion for userId=$userId email=$email', tag: 'DeleteAccount');
 
     if (userId.isEmpty) throw Exception('No signed-in user to delete.');
+
+    // The authenticated backend deletion is authoritative. Do not report
+    // success if the private account record could not be removed.
+    await _userStore.deleteCurrentUser();
 
     // 1. Favourite subcollections
     logger.i('[DeleteAccount] Step 1: Deleting favourite subcollections', tag: 'DeleteAccount');

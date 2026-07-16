@@ -34,8 +34,8 @@ class _SearchFilterSpec {
 class _SearchGridState extends State<SearchGrid> {
   final GlobalKey<RefreshIndicatorState> _refreshKey = GlobalKey<RefreshIndicatorState>();
   static const Duration _thumbnailPrecacheTimeout = Duration(seconds: 2);
-  static const int _maxWarmImages = 36;
-  static const int _maxWarmVideos = 8;
+  static const int _maxWarmImages = 8;
+  static const int _maxWarmVideos = 0;
   static const List<_SearchFilterSpec> _filters = <_SearchFilterSpec>[
     _SearchFilterSpec(filter: _SearchResultFilter.all, label: 'All', icon: JamIcons.grid_f),
     _SearchFilterSpec(filter: _SearchResultFilter.wallpapers, label: 'Wallpapers', icon: JamIcons.picture_f),
@@ -71,40 +71,16 @@ class _SearchGridState extends State<SearchGrid> {
   Future<void> _load() async {
     final query = widget.query;
     try {
-      final firstPage = await PrismCatalogDataSource.instance.search(query: query, refresh: true, scanFullIndex: false);
-      final firstItems = firstPage.items.whereType<PrismFeedItem>().toList(growable: false);
-      _replaceResults(query: query, incoming: firstItems, trackPage: 1);
-      unawaited(_loadCompleteResults(query));
+      final page = await PrismCatalogDataSource.instance.search(
+        query: query,
+        refresh: true,
+        scanFullIndex: true,
+      );
+      final items = page.items.whereType<PrismFeedItem>().toList(growable: false);
+      _replaceResults(query: query, incoming: items, trackPage: 1);
     } catch (_) {
-      await _loadCompleteResults(query, trackPage: 1, allowRethrow: true);
+      rethrow;
     }
-  }
-
-  Future<void> _loadCompleteResults(String query, {int trackPage = 2, bool allowRethrow = false}) async {
-    try {
-      final page = await PrismCatalogDataSource.instance.searchAll(query: query);
-      final incoming = page.items.whereType<PrismFeedItem>().toList(growable: false);
-      if (_sameResultIds(incoming)) {
-        return;
-      }
-      _replaceResults(query: query, incoming: incoming, trackPage: trackPage);
-    } catch (_) {
-      if (allowRethrow && _items.isEmpty) {
-        rethrow;
-      }
-    }
-  }
-
-  bool _sameResultIds(List<PrismFeedItem> incoming) {
-    if (_items.length != incoming.length) {
-      return false;
-    }
-    for (var index = 0; index < incoming.length; index++) {
-      if (_items[index].id != incoming[index].id) {
-        return false;
-      }
-    }
-    return true;
   }
 
   void _replaceResults({required String query, required List<PrismFeedItem> incoming, required int trackPage}) {
@@ -177,7 +153,7 @@ class _SearchGridState extends State<SearchGrid> {
   }
 
   double _gridAspectRatio(List<FeedItemEntity> displayItems) {
-    if (_activeFilter == _SearchResultFilter.profile || _activeFilter == _SearchResultFilter.spatial) {
+    if (_activeFilter == _SearchResultFilter.profile) {
       return 1.0;
     }
     final sample = displayItems.take(12).toList(growable: false);

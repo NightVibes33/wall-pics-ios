@@ -171,6 +171,19 @@ class GitHubUserStore {
     }
   }
 
+  Future<void> deleteCurrentUser() async {
+    final PrismUsersV2 user = app_state.prismUser;
+    await _ensureSessionTokenLoaded();
+    if (!_isApiConfigured || user.id.trim().isEmpty || !_hasSessionToken) {
+      throw StateError('Sign in again before deleting your account.');
+    }
+    final http.Response response = await http
+        .delete(_apiUri('/v1/users/${Uri.encodeComponent(user.id)}'), headers: _headers)
+        .timeout(_timeout);
+    _decodeApiResponse(response);
+    await _clearSessionToken();
+  }
+
   Future<void> markLoggedOut(String userId) async {
     final String trimmedUserId = userId.trim();
     await _ensureSessionTokenLoaded();

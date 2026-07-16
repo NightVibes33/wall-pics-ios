@@ -1,10 +1,14 @@
 import 'package:Prism/analytics/analytics_service.dart';
 import 'package:Prism/core/analytics/events/events.dart';
+import 'package:Prism/core/di/injection.dart';
 import 'package:Prism/core/interaction/prism_haptics.dart';
 import 'package:Prism/core/interaction/prism_tap_scale.dart';
+import 'package:Prism/core/persistence/data_sources/settings_local_data_source.dart';
+import 'package:Prism/core/persistence/persistence_keys.dart';
 import 'package:Prism/core/platform/pigeon/prism_media_api.g.dart';
 import 'package:Prism/core/platform/wallpaper_capability.dart';
 import 'package:Prism/core/purchases/download_access_service.dart';
+import 'package:Prism/features/prism_catalog/data/prism_catalog_data_source.dart';
 import 'package:Prism/features/prism_catalog/data/prism_seed_media_store.dart';
 import 'package:Prism/features/startup/services/notification_permission_prompt_service.dart';
 import 'package:Prism/logger/logger.dart';
@@ -114,8 +118,9 @@ class _DownloadButtonState extends State<DownloadButton> {
     try {
       final sourceContext = widget.sourceContext ?? 'download_button';
       final contentId = widget.contentId ?? _filenameBaseFromUrl(link);
-      final canStartDownload = await DownloadAccessService.instance.ensureCanStartDownload(
+      final canStartDownload = await DownloadAccessService.instance.ensureCanDownload(
         context,
+        contentId: contentId,
         sourceContext: sourceContext,
         isPremiumContent: widget.isPremiumContent,
       );
@@ -124,8 +129,14 @@ class _DownloadButtonState extends State<DownloadButton> {
       }
 
       logger.d(link);
-      final bundledFile = await PrismSeedMediaStore.instance.fileForUrl(link);
-      final effectiveLink = bundledFile?.path ?? link;
+      final settings = getIt<SettingsLocalDataSource>();
+      final quality = settings.get<String>(PersistenceKeys.downloadQuality, defaultValue: 'original').trim();
+      var effectiveLink = link;
+      if (quality == 'compressed') {
+        final bundledFile = await PrismSeedMediaStore.instance.fileForUrl(link);
+        final compressedUrl = PrismCatalogDataSource.fastImageTileUrl(link, width: 1920, quality: 82);
+        effectiveLink = bundledFile?.path ?? (compressedUrl.isNotEmpty ? compressedUrl : link);
+      }
       if (hideSetWallpaperUi || _isLocalMediaPath(effectiveLink)) {
         final OperationResult result = await PrismMediaHostApi()
             .saveMedia(
@@ -152,14 +163,6 @@ class _DownloadButtonState extends State<DownloadButton> {
           toasts.error(result.message ?? "Couldn't download! Please retry.");
           return false;
         }
-      }
-
-      final claimed = await DownloadAccessService.instance.claimSuccessfulFreeDownload(
-        contentId: contentId,
-        sourceContext: sourceContext,
-      );
-      if (!claimed) {
-        return false;
       }
 
       analytics.track(

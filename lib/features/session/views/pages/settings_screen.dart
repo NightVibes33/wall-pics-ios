@@ -10,7 +10,6 @@ import 'package:Prism/core/constants/app_constants.dart';
 import 'package:Prism/core/di/injection.dart';
 import 'package:Prism/core/persistence/data_sources/cache_maintenance_service.dart';
 import 'package:Prism/core/persistence/data_sources/favorites_local_data_source.dart';
-import 'package:Prism/core/persistence/data_sources/notifications_local_data_source.dart';
 import 'package:Prism/core/persistence/data_sources/settings_local_data_source.dart';
 import 'package:Prism/core/persistence/persistence_keys.dart';
 import 'package:Prism/core/platform/pigeon/prism_media_api.g.dart';
@@ -49,10 +48,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final CacheMaintenanceService _cacheMaintenance = getIt<CacheMaintenanceService>();
   final SettingsLocalDataSource _settingsLocal = getIt<SettingsLocalDataSource>();
   final FavoritesLocalDataSource _favoritesLocal = getIt<FavoritesLocalDataSource>();
-  final NotificationsLocalDataSource _notificationsLocal = getIt<NotificationsLocalDataSource>();
 
-  late bool _notifWotd;
-  late bool _notifPromo;
   late String _downloadQuality;
   late String _feedMix;
   late List<String> _selectedInterests;
@@ -61,15 +57,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _authBusy = false;
   int _downloadCount = 0;
   int _favoriteWallCount = 0;
-  int _favoriteSetupCount = 0;
-  int _notificationCount = 0;
-  int _unreadNotificationCount = 0;
 
   @override
   void initState() {
     super.initState();
-    _notifWotd = _settingsLocal.get<bool>(PersistenceKeys.notifWotd, defaultValue: true);
-    _notifPromo = _settingsLocal.get<bool>(PersistenceKeys.notifPromo, defaultValue: true);
     _downloadQuality = _normalizedDownloadQuality(
       _settingsLocal.get<String>(PersistenceKeys.downloadQuality, defaultValue: 'original'),
     );
@@ -174,23 +165,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     final wallScope = _userScope;
     final wallCount = _favoritesLocal.wallFavouriteCount(wallScope);
-    final setupCount = _favoritesLocal.setupFavouriteCount(wallScope);
-    int totalNotifications = _notificationCount;
-    int unreadNotifications = _unreadNotificationCount;
-    try {
-      final items = await _notificationsLocal.readAll();
-      totalNotifications = items.length;
-      unreadNotifications = items.where((item) => !item.read).length;
-    } catch (error, stackTrace) {
-      logger.w('Failed to load notification stats.', error: error, stackTrace: stackTrace);
-    }
     if (!mounted) return;
     setState(() {
       _downloadCount = downloads;
       _favoriteWallCount = wallCount;
-      _favoriteSetupCount = setupCount;
-      _notificationCount = totalNotifications;
-      _unreadNotificationCount = unreadNotifications;
       _loadingStorage = false;
     });
   }
@@ -398,7 +376,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ListTile(
             leading: const Icon(Icons.upgrade_outlined),
             title: Text('Upgrade to Prism Pro', style: _titleStyle),
-            subtitle: const Text('Unlock premium wallpapers, premium setup access and Pro-only perks', style: _subtitleStyle),
+            subtitle: const Text('Unlock exclusive wallpapers and unlimited downloads', style: _subtitleStyle),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () => PaywallOrchestrator.instance.present(
               context,
@@ -423,7 +401,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ListTile(
           leading: const Icon(Icons.cloud_sync_outlined),
           title: Text('Sync mode', style: _titleStyle),
-          subtitle: const Text('Favorites, profile and feed preferences are tied to this account', style: _subtitleStyle),
+          subtitle: const Text('Favorites, subscription access and feed preferences are tied to this account', style: _subtitleStyle),
         ),
         ListTile(
           leading: const Icon(Icons.manage_accounts_outlined),
@@ -451,7 +429,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           leading: Icon(Icons.delete_forever_rounded, color: Colors.red[400]),
           title: Text('Delete account', style: _titleStyle.copyWith(color: Colors.red[400])),
           subtitle: const Text(
-            'Delete your Prism account data and sign out. Published submissions may remain as anonymized content.',
+            'Delete your Prism account data, preferences and cloud access, then sign out.',
             style: _subtitleStyle,
           ),
           onTap: _showDeleteAccountDialog,
@@ -504,80 +482,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _notificationsSection() {
-    return _sectionCard(
-      title: 'NOTIFICATIONS',
-      children: <Widget>[
-        ListTile(
-          leading: const Icon(Icons.notifications_active_outlined),
-          title: Text('Notification delivery', style: _titleStyle),
-          subtitle: Text(
-            _isSignedIn
-                ? 'This build uses in-app and local alerts. Remote topic subscriptions are not active here.'
-                : 'Available as local preferences now. Sign in if you want them tied to your account later.',
-            style: _subtitleStyle,
-          ),
-        ),
-        SwitchListTile(
-          activeThumbColor: _accentColor,
-          secondary: const Icon(Icons.wb_sunny_outlined),
-          value: _notifWotd,
-          title: Text('Wall of the Day', style: _titleStyle),
-          subtitle: const Text('Daily wallpaper recommendation alert', style: _subtitleStyle),
-          onChanged: (value) async {
-            setState(() => _notifWotd = value);
-            await _settingsLocal.set(PersistenceKeys.notifWotd, value);
-          },
-        ),
-        SwitchListTile(
-          activeThumbColor: _accentColor,
-          secondary: const Icon(Icons.campaign_outlined),
-          value: _notifPromo,
-          title: Text('Promotional alerts', style: _titleStyle),
-          subtitle: const Text('New features, events and release announcements', style: _subtitleStyle),
-          onChanged: (value) async {
-            setState(() => _notifPromo = value);
-            await _settingsLocal.set(PersistenceKeys.notifPromo, value);
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _notificationInboxSection() {
-    final String subtitle = _notificationCount == 0
-        ? 'No saved notifications on this device'
-        : '$_unreadNotificationCount unread • $_notificationCount total saved notifications';
-    return _sectionCard(
-      title: 'NOTIFICATION INBOX',
-      children: <Widget>[
-        ListTile(
-          leading: const Icon(Icons.inbox_outlined),
-          title: Text('Notification inbox', style: _titleStyle),
-          subtitle: Text(subtitle, style: _subtitleStyle),
-          trailing: const Icon(Icons.chevron_right_rounded),
-          onTap: () => context.router.push(const NotificationRoute()),
-        ),
-        ListTile(
-          leading: const Icon(Icons.mark_email_read_outlined),
-          title: Text('Mark all as read', style: _titleStyle),
-          subtitle: const Text('Keep notifications but clear the unread count', style: _subtitleStyle),
-          onTap: _markAllNotificationsRead,
-        ),
-        ListTile(
-          leading: const Icon(Icons.delete_sweep_outlined),
-          title: Text('Clear notification inbox', style: _titleStyle),
-          subtitle: const Text('Delete saved in-app notifications from this device', style: _subtitleStyle),
-          onTap: _clearNotificationInbox,
-        ),
-      ],
-    );
-  }
-
   Widget _storageSection() {
     final String subtitle = _loadingStorage
         ? 'Loading device usage…'
-        : '$_downloadCount downloads • $_favoriteWallCount favorite walls • $_favoriteSetupCount favorite setups';
+        : '$_downloadCount downloads â¢ $_favoriteWallCount favorite wallpapers';
     return _sectionCard(
       title: 'STORAGE',
       children: <Widget>[
@@ -590,7 +498,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ListTile(
           leading: const Icon(Icons.cleaning_services_outlined),
           title: Text('Clear cache', style: _titleStyle),
-          subtitle: const Text('Remove cached images, feed cache and notification cache', style: _subtitleStyle),
+          subtitle: const Text('Remove cached images and wallpaper feed data', style: _subtitleStyle),
           onTap: () async {
             _trackSettingsAction(AnalyticsActionValue.clearCacheTapped);
             await _cacheMaintenance.clearTransientCache();
@@ -608,7 +516,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ListTile(
           leading: const Icon(JamIcons.heart),
           title: Text('Clear favorites', style: _titleStyle),
-          subtitle: const Text('Remove locally saved favorite walls and setups', style: _subtitleStyle),
+          subtitle: const Text('Remove locally saved favorite wallpapers', style: _subtitleStyle),
           onTap: _showClearFavoritesDialog,
         ),
       ],
@@ -627,13 +535,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ListTile(
           leading: const Icon(Icons.download_done_outlined),
           title: Text('Stored on this device', style: _titleStyle),
-          subtitle: Text('$_downloadCount downloads • cache files • $_notificationCount saved notifications', style: _subtitleStyle),
+          subtitle: Text('$_downloadCount downloads â¢ cached wallpaper files', style: _subtitleStyle),
         ),
         if (_isSignedIn)
           ListTile(
             leading: const Icon(Icons.cloud_outlined),
             title: Text('Stored with your account', style: _titleStyle),
-            subtitle: Text('Favorites, account profile, subscription tier and daily download quota state', style: _subtitleStyle),
+            subtitle: Text('Favorites, subscription tier, feed preferences and daily download quota', style: _subtitleStyle),
           ),
       ],
     );
@@ -930,7 +838,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         content: const SizedBox(
           height: 60,
           width: 250,
-          child: Center(child: Text('Do you want to remove all your favorite walls and setups?')),
+          child: Center(child: Text('Do you want to remove all your favorite wallpapers?')),
         ),
         actions: <Widget>[
           MaterialButton(
@@ -1034,26 +942,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Future<void> _markAllNotificationsRead() async {
-    final items = await _notificationsLocal.readAll();
-    if (items.isEmpty) {
-      toasts.codeSend('No notifications to update.');
-      return;
-    }
-    await _notificationsLocal.writeAll(items.map((item) => item.copyWith(read: true)).toList(growable: false));
-    if (!mounted) return;
-    toasts.codeSend('Marked all notifications as read.');
-    unawaited(_reloadStorageStats());
-  }
-
-  Future<void> _clearNotificationInbox() async {
-    await _notificationsLocal.clearAll();
-    await _notificationsLocal.clearLastFetchAtUtc();
-    if (!mounted) return;
-    toasts.codeSend('Cleared notification inbox.');
-    unawaited(_reloadStorageStats());
-  }
-
   Future<void> _sendBugReport() async {
     final deviceBody = await _bugReportDeviceBody();
     final String zipPath = await zipLogs();
@@ -1100,8 +988,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _accountSection(),
           _personalizationSection(),
           _downloadsSection(),
-          _notificationsSection(),
-          _notificationInboxSection(),
           _storageSection(),
           _privacySection(),
           _adminSection(),

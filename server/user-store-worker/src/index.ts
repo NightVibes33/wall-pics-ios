@@ -93,6 +93,9 @@ export default {
       if (userMatch && request.method === 'PATCH') {
         return jsonResponse(await handlePatchUser(userMatch[1], request, env), env);
       }
+      if (userMatch && request.method === 'DELETE') {
+        return jsonResponse(await handleDeleteUser(userMatch[1], request, env), env);
+      }
 
       const logoutMatch = url.pathname.match(/^\/v1\/users\/([^/]+)\/logout$/);
       if (logoutMatch && request.method === 'POST') {
@@ -440,6 +443,18 @@ async function handlePatchUser(encodedUserId: string, request: Request, env: Env
   return { user };
 }
 
+async function handleDeleteUser(encodedUserId: string, request: Request, env: Env): Promise<JsonMap> {
+  const userId = decodeURIComponent(encodedUserId);
+  await requireSession(request, env, userId);
+  const path = userPath(userId);
+  const existing = await readGithubJson(path, env);
+  if (!existing) {
+    throw new Error('User not found');
+  }
+  await deleteGithubJson(path, existing.sha, 'Delete Prism user ' + userId, env);
+  return { ok: true };
+}
+
 async function handleGetDownloadQuota(encodedUserId: string, request: Request, env: Env): Promise<JsonMap> {
   const userId = decodeURIComponent(encodedUserId);
   await requireSession(request, env, userId);
@@ -662,6 +677,17 @@ async function writeGithubJson(path: string, data: JsonMap, sha: string | undefi
   }
 }
 
+async function deleteGithubJson(path: string, sha: string, message: string, env: Env): Promise<void> {
+  const response = await fetch(githubContentsUrl(path, env), {
+    method: 'DELETE',
+    headers: { ...githubHeaders(env), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, sha }),
+  });
+  if (!response.ok) {
+    throw new Error(`GitHub delete failed: ${response.status}`);
+  }
+}
+
 function defaultUserData(userId: string, identity: VerifiedIdentity, now: string): JsonMap {
   return {
     name: identity.displayName,
@@ -854,7 +880,7 @@ function jsonResponse(body: JsonMap, env: Env, status = 200): Response {
 function corsHeaders(env: Env): HeadersInit {
   return {
     'Access-Control-Allow-Origin': env.CORS_ORIGIN || '*',
-    'Access-Control-Allow-Methods': 'GET,POST,PATCH,OPTIONS',
+    'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
     'Access-Control-Allow-Headers': 'Authorization,Content-Type',
     'Access-Control-Max-Age': '86400',
   };

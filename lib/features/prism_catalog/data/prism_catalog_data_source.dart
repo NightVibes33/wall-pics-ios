@@ -1350,7 +1350,7 @@ class PrismCatalogDataSource {
           _RankedCategory(
             contentType: contentType,
             slug: slug,
-            score: score + 1000,
+            score: score + 100,
             position: _int(row['position']) ?? 999999,
           ),
         );
@@ -1369,7 +1369,7 @@ class PrismCatalogDataSource {
     for (final hit in hits) {
       final ids = categoryIds[hit.contentType]?[hit.slug] ?? const <String>[];
       final pages = locations[hit.contentType] ?? const <String, int>{};
-      for (final id in ids) {
+      for (final id in ids.take(12)) {
         refs.add(
           _RankedItemReference(
             contentType: hit.contentType,
