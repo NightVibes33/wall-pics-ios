@@ -1,6 +1,7 @@
 ## Changelog
 
 ### Unreleased
+- Keep CI analyzer errors fatal (`cdc629b`)
 - Update stale wallpaper navigation tests (`08c3372`)
 - Run CI checks against normalized sources (`49353ba`)
 - Fix core wallpaper app behavior and account controls (`496e00d`)
