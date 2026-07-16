@@ -1,6 +1,7 @@
 ## Changelog
 
 ### Unreleased
+- Run CI checks against normalized sources (`49353ba`)
 - Fix core wallpaper app behavior and account controls (`496e00d`)
 
 
