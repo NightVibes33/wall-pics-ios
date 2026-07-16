@@ -1,6 +1,7 @@
 ## Changelog
 
 ### Unreleased
+- Align tests with wallpaper-only behavior (`64c4f79`)
 - Keep CI analyzer errors fatal (`cdc629b`)
 - Update stale wallpaper navigation tests (`08c3372`)
 - Run CI checks against normalized sources (`49353ba`)
