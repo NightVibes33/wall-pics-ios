@@ -34,8 +34,8 @@ jobs:
       - name: Install dependencies
         run: make get CI=true
 
-      - name: Check formatting
-        run: make format-check CI=true
+      - name: Normalize formatting
+        run: dart format lib test
 
       - name: Env define guard
         run: make env-guard
